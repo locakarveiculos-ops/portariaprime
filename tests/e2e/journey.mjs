@@ -1,0 +1,200 @@
+// Jornada do síndico iniciante no NAVEGADOR REAL contra Supabase REAL (dados sintéticos).
+// Cadastro → condomínio + mês grátis → marca → local → unidade → convite porteiro/morador →
+// receber → QR do morador → entregar com assinatura → comprovante → relatório.
+// Contas criadas pela service role já confirmadas (não há caixa de e-mail no teste).
+// Limpa tudo ao final. Salva capturas em tests/evidence/journey-*.png (fora do Git).
+//
+// PP_E2E_ALLOW=1 APP=http://127.0.0.1:3017 SUPABASE_URL=... SUPABASE_ANON_KEY=... \
+//   SUPABASE_SERVICE_ROLE_KEY=... node tests/e2e/journey.mjs
+import assert from 'node:assert/strict';
+import { mkdir } from 'node:fs/promises';
+import { chromium } from '@playwright/test';
+import { createClient } from '@supabase/supabase-js';
+
+const { PP_E2E_ALLOW, APP, SUPABASE_URL: url, SUPABASE_ANON_KEY: anon, SUPABASE_SERVICE_ROLE_KEY: secret } = process.env;
+if (PP_E2E_ALLOW !== '1' || !APP || !url || !anon || !secret) throw new Error('Defina PP_E2E_ALLOW=1, APP e chaves do Supabase.');
+const svc = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
+const run = `e2e${Date.now().toString(36)}`;
+const slug = `${run}-jornada`;
+const created = [];
+let tenantId = null;
+const evidence = 'tests/evidence';
+await mkdir(evidence, { recursive: true });
+
+const { count } = await svc.from('tenants').select('id', { count: 'exact', head: true }).not('slug', 'like', 'e2e%');
+assert.equal(count, 0, 'Banco contém condomínios reais: jornada recusada.');
+const { data: plansBefore } = await svc.from('plans').select('code, published');
+await svc.from('plans').update({ published: true }).in('code', ['essencial', 'profissional', 'prime']);
+
+async function account(key) {
+  const email = `${run}-${key}@e2e.portariaprime.invalid`;
+  const password = `S${crypto.randomUUID()}!`;
+  const { data, error } = await svc.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: `Pessoa ${key}` } });
+  if (error) throw error;
+  created.push(data.user.id);
+  return { email, password, id: data.user.id };
+}
+
+const browser = await chromium.launch({ channel: 'msedge', headless: true });
+
+// PP_E2E_RELAY=1: em redes onde o navegador não alcança o Supabase mas o Node alcança,
+// as requisições HTTP ao Supabase são repassadas pelo Node (sem alterar conteúdo).
+// Realtime (WebSocket) não passa pelo repasse; a jornada não depende dele.
+async function relay(context) {
+  if (process.env.PP_E2E_RELAY !== '1') return;
+  await context.route(`${url}/**`, async (route) => {
+    const req = route.request();
+    const res = await fetch(req.url(), { method: req.method(), headers: req.headers(), body: req.postDataBuffer() ?? undefined });
+    const headers = Object.fromEntries(res.headers);
+    delete headers['content-encoding'];
+    delete headers['content-length'];
+    await route.fulfill({ status: res.status, headers, body: Buffer.from(await res.arrayBuffer()) });
+  });
+}
+const newContext = async (options) => { const c = await browser.newContext(options); await relay(c); return c; };
+const step = (name) => console.log(`• ${name}`);
+const shot = (page, name) => page.screenshot({ path: `${evidence}/journey-${name}.png`, fullPage: true });
+async function login(page, who) {
+  await page.goto(`${APP}/entrar`);
+  await page.getByLabel('E-mail', { exact: true }).fill(who.email);
+  await page.getByLabel('Senha', { exact: true }).fill(who.password);
+  await page.getByRole('button', { name: 'Entrar' }).click();
+}
+async function acceptInvite(context, link, who) {
+  const page = await context.newPage();
+  await login(page, who);
+  await page.waitForURL(/\/app|\/c\//);
+  await page.goto(link);
+  await page.getByRole('button', { name: 'Aceitar convite' }).click();
+  await page.waitForURL(/\/c\//);
+  return page;
+}
+
+try {
+  const sindico = await account('sindico');
+  const porteiro = await account('porteiro');
+  const morador = await account('morador');
+  const errors = [];
+
+  const sCtx = await newContext({ viewport: { width: 1440, height: 900 }, permissions: [] });
+  const s = await sCtx.newPage();
+  s.on('pageerror', (e) => errors.push(e.message));
+
+  step('síndico entra e cadastra o condomínio com mês grátis (sem cartão)');
+  await login(s, sindico);
+  await s.waitForURL(/\/app/);
+  await s.getByRole('button', { name: 'Cadastrar condomínio' }).click();
+  await s.getByLabel('Nome do condomínio').fill('Residencial Jornada E2E');
+  await s.getByLabel(/Endereço no sistema/).fill(slug);
+  await s.getByLabel(/CNPJ do condomínio/).fill(String(10_000_000_000_000 + (Date.now() % 9_000_000_000_000)).slice(0, 14));
+  await s.getByText('Primeiro mês grátis; depois').waitFor();
+  await shot(s, 'onboarding');
+  await s.getByRole('button', { name: 'Ativar mês grátis' }).click();
+  await s.waitForURL(new RegExp(`/c/${slug}/configuracoes`));
+  await s.getByText('Condomínio criado e mês grátis ativo').waitFor();
+  ({ data: { id: tenantId } } = await svc.from('tenants').select('id').eq('slug', slug).single());
+  const { data: sub } = await svc.from('subscriptions').select('status, trial_started_at, trial_ends_at').eq('tenant_id', tenantId).single();
+  assert.equal(sub.status, 'trialing');
+  assert.equal((await svc.from('billing_orders').select('id').eq('tenant_id', tenantId)).data.length, 0, 'nenhuma cobrança no início');
+
+  step('personaliza a marca');
+  await s.getByLabel('Nome exibido').fill('Jornada E2E');
+  await s.getByRole('button', { name: 'Salvar' }).first().click();
+  await s.getByText('Marca salva.').waitFor();
+  await shot(s, 'personalizacao');
+
+  step('cadastra local de guarda');
+  await s.getByLabel('Código').fill('Estante A');
+  await s.getByLabel('Capacidade').fill('10');
+  await s.getByRole('button', { name: 'Adicionar' }).click();
+  await s.getByText('Local adicionado.').waitFor();
+
+  step('cadastra unidade e convida porteiro e morador');
+  await s.goto(`${APP}/c/${slug}/pessoas`);
+  await s.getByLabel('Bloco/Torre (opcional)').fill('A');
+  await s.getByLabel('Unidade', { exact: true }).fill('101');
+  await s.getByRole('button', { name: 'Adicionar' }).click();
+  await s.getByText('Unidade cadastrada.').waitFor();
+
+  const invite = async (button, email) => {
+    await s.getByRole('button', { name: button }).first().click();
+    await s.getByLabel('E-mail da pessoa').fill(email);
+    await s.getByRole('button', { name: 'Enviar convite' }).click();
+    // Sem Resend configurado o sistema entrega o link para envio manual (não finge envio).
+    const field = s.locator('input[readonly]');
+    await field.waitFor();
+    const link = await field.inputValue();
+    await s.getByRole('button', { name: 'Fechar' }).click();
+    return link;
+  };
+  const porteiroLink = await invite('Convidar equipe', porteiro.email);
+  const moradorLink = await invite('Convidar morador', morador.email);
+  assert.match(porteiroLink, /\/convite#[0-9a-f]{64}$/);
+
+  step('porteiro e morador aceitam os convites');
+  const pCtx = await newContext({ viewport: { width: 1024, height: 768 } });
+  const p = await acceptInvite(pCtx, porteiroLink, porteiro);
+  const mCtx = await newContext({ viewport: { width: 390, height: 844 }, isMobile: true });
+  const m = await acceptInvite(mCtx, moradorLink, morador);
+
+  step('porteiro registra a encomenda (digitação manual)');
+  await p.goto(`${APP}/c/${slug}/portaria`);
+  await p.getByLabel(/Unidade de destino/).fill('A 101');
+  await p.getByRole('option', { name: /101/ }).click();
+  await p.getByLabel(/Rastreio/).fill(`${run}BR`);
+  await p.getByLabel(/Destinatário/).fill('Pessoa morador');
+  await p.getByRole('button', { name: 'Registrar encomenda' }).click();
+  await p.getByText(/Encomenda registrada para/).waitFor();
+  await shot(p, 'recebimento');
+
+  step('morador vê a encomenda e gera o QR');
+  await m.goto(`${APP}/c/${slug}/morador`);
+  await m.getByText('Para retirar (1)').waitFor();
+  await shot(m, 'morador');
+  const { data: pkg } = await svc.from('packages').select('id').eq('tenant_id', tenantId).single();
+  await m.getByRole('button', { name: 'Mostrar QR de retirada' }).click();
+  await m.getByText('Uso único').waitFor();
+
+  step('porteiro entrega com assinatura (sem QR: justificativa auditada)');
+  await p.getByRole('tab', { name: 'Buscar' }).click();
+  await p.getByRole('button', { name: 'Entregar sem QR' }).click();
+  await p.getByLabel('Quem está retirando').fill('Pessoa morador');
+  await p.getByLabel('Justificativa').fill('Teste automatizado: QR exibido em outro aparelho');
+  const box = await p.locator('canvas').boundingBox();
+  await p.mouse.move(box.x + 30, box.y + 40);
+  await p.mouse.down();
+  await p.mouse.move(box.x + 160, box.y + 90, { steps: 8 });
+  await p.mouse.move(box.x + 260, box.y + 50, { steps: 8 });
+  await p.mouse.up();
+  await p.getByRole('button', { name: 'Confirmar entrega' }).click();
+  await p.getByRole('dialog', { name: 'Comprovante de retirada' }).waitFor();
+  await p.getByText('Retirada por').waitFor();
+  await shot(p, 'comprovante');
+  const { data: receipt } = await svc.from('receipts').select('protocol, snapshot').eq('package_id', pkg.id).single();
+  assert.match(receipt.protocol, /^PP-/);
+  assert.equal(receipt.snapshot.method, 'manual');
+
+  step('persistência após recarregar e relatório do síndico');
+  await p.reload();
+  await p.getByRole('tab', { name: 'Buscar' }).waitFor();
+  await s.goto(`${APP}/c/${slug}/painel`);
+  await s.getByText('Retiradas no período').waitFor();
+  await shot(s, 'painel');
+
+  step('assinatura mostra mês grátis com término e bloqueia cobrança antecipada');
+  await s.goto(`${APP}/c/${slug}/assinatura`);
+  await s.getByText(/Mês grátis de/).waitFor();
+  await shot(s, 'assinatura');
+  assert.equal(await s.getByRole('button', { name: /Pagar assinatura/ }).count(), 0, 'sem botão de pagar durante o teste');
+
+  assert.deepEqual(errors, [], 'erros JavaScript na jornada do síndico');
+  console.log('PASS jornada completa: cadastro, trial, marca, local, unidade, convites, recebimento, QR, entrega, comprovante, relatório, assinatura.');
+} finally {
+  await browser.close();
+  if (tenantId) {
+    const { error } = await svc.rpc('e2e_cleanup', { p_tenants: [tenantId] });
+    if (error) console.error('Limpeza falhou:', error.message);
+  }
+  for (const id of created) await svc.auth.admin.deleteUser(id);
+  for (const pl of plansBefore || []) await svc.from('plans').update({ published: pl.published }).eq('code', pl.code);
+}
