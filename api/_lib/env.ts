@@ -15,6 +15,15 @@ export function optionalEnv(name: string): string | null {
   return v || null;
 }
 
+/** Primeiro nome configurado (nomes do projeto ou os da integração Supabase da Vercel). */
+export function envAny(...names: string[]): string {
+  for (const n of names) {
+    const v = optionalEnv(n);
+    if (v) return v;
+  }
+  throw new ConfigError(`Variável de ambiente ${names[0]} não configurada no servidor.`);
+}
+
 /** URL pública confiável do app (nunca derivada do Host da requisição). */
 export function appUrl(): string {
   const u = new URL(env('APP_URL'));

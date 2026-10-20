@@ -1,12 +1,16 @@
 import { createClient } from '@supabase/supabase-js';
 
-const url = import.meta.env.VITE_SUPABASE_URL;
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY;
+const env = import.meta.env;
+// Aceita os nomes do Vite e os que a integração Supabase da Vercel cria (NEXT_PUBLIC_*).
+export const supabaseUrl: string | undefined = env.VITE_SUPABASE_URL || env.NEXT_PUBLIC_SUPABASE_URL;
+const anonKey: string | undefined =
+  env.VITE_SUPABASE_ANON_KEY || env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY || env.NEXT_PUBLIC_SUPABASE_ANON_KEY;
 
 /** Configuração ausente é erro visível — nunca fallback para um projeto antigo. */
-export const configError: string | null =
-  !url || !anonKey ? 'VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY não estão configuradas neste ambiente.' : null;
+export const configError: string | null = !supabaseUrl || !anonKey
+  ? 'Configuração do Supabase ausente: defina VITE_SUPABASE_URL e VITE_SUPABASE_ANON_KEY (ou NEXT_PUBLIC_SUPABASE_URL e NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY) e refaça o deploy.'
+  : null;
 
-export const supabase = createClient(url || 'http://config-ausente.invalid', anonKey || 'config-ausente', {
+export const supabase = createClient(supabaseUrl || 'http://config-ausente.invalid', anonKey || 'config-ausente', {
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });

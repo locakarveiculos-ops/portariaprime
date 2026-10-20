@@ -2,6 +2,8 @@
  * Tema por condomínio: aplica cores do tenant como variáveis CSS na raiz e
  * restaura o padrão Portaria Prime ao sair/trocar de condomínio.
  */
+import { supabaseUrl } from './supabase';
+
 export interface Branding {
   display_name?: string | null;
   logo_path?: string | null;
@@ -48,5 +50,5 @@ export function applyTheme(b: Branding | null) {
 
 export function publicLogoUrl(path: string | null | undefined) {
   if (!path) return null;
-  return `${import.meta.env.VITE_SUPABASE_URL}/storage/v1/object/public/tenant-public/${path}`;
+  return `${supabaseUrl}/storage/v1/object/public/tenant-public/${path}`;
 }

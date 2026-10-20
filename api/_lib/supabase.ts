@@ -1,15 +1,18 @@
 import { createClient, SupabaseClient } from '@supabase/supabase-js';
-import { env } from './env.js';
+import { envAny } from './env.js';
 import { HttpError } from './http.js';
 
 const opts = { auth: { persistSession: false, autoRefreshToken: false } };
+const url = () => envAny('SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_URL');
+const publicKey = () => envAny('SUPABASE_ANON_KEY', 'SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY');
+const serviceKey = () => envAny('SUPABASE_SERVICE_ROLE_KEY', 'SUPABASE_SECRET_KEY');
 
 /**
  * Cliente com service role — SOMENTE backend. Toda chamada que o usa precisa
  * de filtro/validação de tenant explícita (as RPCs de serviço já validam).
  */
 export function serviceClient(): SupabaseClient {
-  return createClient(env('SUPABASE_URL'), env('SUPABASE_SERVICE_ROLE_KEY'), opts);
+  return createClient(url(), serviceKey(), opts);
 }
 
 /**
@@ -19,7 +22,7 @@ export function serviceClient(): SupabaseClient {
 export function userClient(request: Request): { client: SupabaseClient; token: string } {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '').trim();
   if (!token) throw new HttpError(401, 'Faça login novamente.');
-  const client = createClient(env('SUPABASE_URL'), env('SUPABASE_ANON_KEY'), {
+  const client = createClient(url(), publicKey(), {
     ...opts,
     global: { headers: { Authorization: `Bearer ${token}` } },
   });

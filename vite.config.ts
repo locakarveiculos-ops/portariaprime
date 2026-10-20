@@ -24,6 +24,8 @@ export default defineConfig({
     },
     injectManifest: { globPatterns: ['**/*.{js,css,html,png,ico,webmanifest}'] },
   })],
+  // NEXT_PUBLIC_* = nomes criados pela integração Supabase da Vercel (somente chaves públicas).
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_SUPABASE_'],
   resolve: { alias: { '@': path.resolve(__dirname, '.') } },
   build: { sourcemap: false },
   server: {
