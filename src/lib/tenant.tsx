@@ -1,8 +1,10 @@
-import React, { createContext, useCallback, useContext, useEffect, useState } from 'react';
+import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import { supabase } from './supabase';
 import { rpc } from './api';
 import { applyTheme, Branding } from './theme';
 import type { TenantLink } from './session';
+import { loadTenantInfo } from './tenant-data';
+import { Alert, Button, Spinner } from '../components/ui';
 
 export interface TenantInfo {
   link: TenantLink;
@@ -24,18 +26,17 @@ export function TenantProvider({ link, children }: { link: TenantLink; children:
   const [info, setInfo] = useState<Omit<TenantInfo, 'link'> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
+  const generation = useRef(0);
   const load = useCallback(async () => {
+    const current = ++generation.current;
+    setError(null);
     try {
-      const [{ data: tenant, error: te }, { data: branding }, overview] = await Promise.all([
-        supabase.from('tenants').select('id, slug, name, timezone, status').eq('id', link.tenant_id).single(),
-        supabase.from('tenant_branding').select('*').eq('tenant_id', link.tenant_id).maybeSingle(),
-        rpc('subscription_overview', { p_tenant: link.tenant_id }).catch(() => null),
-      ]);
-      if (te || !tenant) throw new Error('Condomínio indisponível.');
-      setInfo({ tenant, branding, overview });
-      applyTheme(branding);
+      const result = await loadTenantInfo(supabase, () => rpc('subscription_overview', { p_tenant: link.tenant_id }), link.tenant_id);
+      if (generation.current !== current) return;
+      setInfo(result);
+      applyTheme(result.branding);
     } catch (e: any) {
-      setError(e.message);
+      if (generation.current === current) setError(e.message);
     }
   }, [link.tenant_id]);
 
@@ -44,13 +45,14 @@ export function TenantProvider({ link, children }: { link: TenantLink; children:
     load();
     // Ao trocar/sair do condomínio: tema padrão e canais encerrados.
     return () => {
+      generation.current++;
       applyTheme(null);
       supabase.removeAllChannels();
     };
   }, [load]);
 
-  if (error) return <div className="p-6 text-danger">{error}</div>;
-  if (!info) return <div className="p-10 text-center text-muted">Carregando condomínio…</div>;
+  if (error) return <div className="p-6 space-y-4"><Alert tone="danger">{error}</Alert><Button onClick={load}>Tentar novamente</Button></div>;
+  if (!info) return <Spinner label="Carregando condomínio…" />;
   return (
     <TenantContext.Provider value={{
       ...info, link, reload: load,

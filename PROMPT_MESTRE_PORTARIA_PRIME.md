@@ -1,5 +1,7 @@
 # Portaria Prime — análise e prompt mestre para Claude Code
 
+> **ATENÇÃO — arquivo histórico V1.** A versão 2 fornecida pelo proprietário em 20/10/2026 prevalece sobre este conteúdo: teste obrigatório de um mês de calendário para todo condomínio elegível, sem cartão; Profissional R$ 149 / R$ 550 / R$ 1.900, 400 unidades; Prime R$ 349 / R$ 899 / R$ 2.699; landing somente depois do gate funcional e de capturas reais. Não executar o fluxo de pagamento antecipado, os preços antigos ou a ordem de execução abaixo. Lacunas de aceite são acompanhadas em `docs/IMPLEMENTACAO_STATUS.md`.
+
 Preparado em 19/10/2026 com base no ZIP Villageazaleia-main(1).zip e no PDF Processo de recebimento de encomendas.pdf.
 
 ## Antes de usar

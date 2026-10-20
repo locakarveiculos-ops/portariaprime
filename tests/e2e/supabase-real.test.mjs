@@ -1,0 +1,160 @@
+// Teste ponta a ponta contra um projeto Supabase REAL (Auth + PostgREST + RLS + Storage).
+// Usa a chave pública como usuário comum; service role só para criar/limpar usuários sintéticos.
+// Cria dois condomínios de teste e remove tudo ao final (inclusive usuários Auth).
+// NÃO roda contra produção com clientes reais: exige PP_E2E_ALLOW=1 e banco sem condomínios reais.
+//
+// PP_E2E_ALLOW=1 SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
+//   node --test tests/e2e/supabase-real.test.mjs
+import { test, before, after } from 'node:test';
+import assert from 'node:assert/strict';
+import { createClient } from '@supabase/supabase-js';
+
+const { SUPABASE_URL: url, SUPABASE_ANON_KEY: anon, SUPABASE_SERVICE_ROLE_KEY: secret } = process.env;
+if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
+  test('e2e real ignorado (defina PP_E2E_ALLOW=1 e as chaves)', { skip: true }, () => {});
+} else {
+  const opts = { auth: { persistSession: false, autoRefreshToken: false } };
+  const svc = createClient(url, secret, opts);
+  const run = `e2e${Date.now().toString(36)}`;
+  const users = {};
+  const created = [];
+  const tenants = {};
+  const doc = (n) => String(10_000_000_000_000 + Number(BigInt(Date.now()) % 9_000_000_000_000n) + n).slice(0, 14);
+
+  async function makeUser(key) {
+    const email = `${run}-${key}@e2e.portariaprime.invalid`;
+    const password = `S${crypto.randomUUID()}!`;
+    const { data, error } = await svc.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { full_name: `E2E ${key}` } });
+    if (error) throw error;
+    created.push(data.user.id);
+    const client = createClient(url, anon, opts);
+    const { error: e2 } = await client.auth.signInWithPassword({ email, password });
+    if (e2) throw e2;
+    users[key] = { id: data.user.id, email, client };
+    return users[key];
+  }
+  const rpc = async (key, fn, args) => {
+    const { data, error } = await users[key].client.rpc(fn, args);
+    if (error) throw Object.assign(new Error(error.message), { code: error.code });
+    return data;
+  };
+
+  before(async () => {
+    const { count } = await svc.from('tenants').select('id', { count: 'exact', head: true }).not('slug', 'like', 'e2e%');
+    assert.equal(count, 0, 'Banco contém condomínios reais: e2e destrutivo-por-limpeza recusado.');
+    // Planos precisam estar publicados para o teste; restaura o estado ao final.
+    const { data: plans } = await svc.from('plans').select('code, published');
+    before.publishedBefore = plans;
+    await svc.from('plans').update({ published: true }).in('code', ['essencial', 'profissional', 'prime']);
+    for (const k of ['adminA', 'adminB', 'porteiroA', 'moradorA', 'moradorB', 'intruso']) await makeUser(k);
+    for (const [key, admin, n] of [['A', 'adminA', 1], ['B', 'adminB', 2]]) {
+      const r = await rpc(admin, 'provision_tenant', {
+        p_request_id: crypto.randomUUID(), p_name: `E2E ${key}`, p_slug: `${run}-${key.toLowerCase()}`, p_document: doc(n),
+        p_timezone: 'America/Sao_Paulo', p_plan_code: 'profissional', p_cycle: 'monthly', p_contact_phone: null,
+      });
+      tenants[key] = r.tenant_id;
+    }
+  });
+
+  after(async () => {
+    const ids = Object.values(tenants);
+    if (ids.length) {
+      // Tabelas append-only bloqueiam delete: remove pela FK dos condomínios de teste via SQL de serviço.
+      const { error } = await svc.rpc('e2e_cleanup', { p_tenants: ids });
+      if (error) console.error('Limpeza SQL falhou:', error.message);
+    }
+    for (const id of created) await svc.auth.admin.deleteUser(id);
+    for (const p of before.publishedBefore || []) await svc.from('plans').update({ published: p.published }).eq('code', p.code);
+  });
+
+  test('trial real de 1 mês criado no servidor, sem cobrança antecipada', async () => {
+    const ov = await rpc('adminA', 'subscription_overview', { p_tenant: tenants.A });
+    assert.equal(ov.status, 'trialing');
+    assert.equal(ov.commercial_state, 'full');
+    const days = (new Date(ov.trial_ends_at) - new Date(ov.trial_started_at)) / 86400000;
+    assert.ok(days >= 28 && days <= 31, `teste de ${days} dias`);
+    await assert.rejects(rpc('adminA', 'prepare_checkout', { p_tenant: tenants.A }), /mês grátis/);
+  });
+
+  let unitA, unitB, pkg;
+  test('mesmo bloco/unidade nos dois condomínios; A não vê nem grava em B', async () => {
+    ({ data: { id: unitA } } = await users.adminA.client.from('units').insert({ tenant_id: tenants.A, block: 'A', label: '101' }).select('id').single());
+    ({ data: { id: unitB } } = await users.adminB.client.from('units').insert({ tenant_id: tenants.B, block: 'A', label: '101' }).select('id').single());
+    assert.ok(unitA && unitB);
+    const { data: seen } = await users.adminA.client.from('units').select('id');
+    assert.ok(seen.every((u) => u.id !== unitB));
+    const { error } = await users.adminA.client.from('units').insert({ tenant_id: tenants.B, label: 'X' });
+    assert.ok(error, 'insert em B deveria falhar');
+    const { data: upd } = await users.adminA.client.from('units').update({ label: 'hack' }).eq('id', unitB).select('id');
+    assert.equal(upd.length, 0);
+    const { data: real } = await svc.from('units').select('label').eq('id', unitB).single();
+    assert.equal(real.label, '101');
+  });
+
+  test('convites: porteiro e morador entram; intruso e endereço não dão acesso', async () => {
+    const p = await rpc('adminA', 'create_invitation', { p_tenant: tenants.A, p_email: users.porteiroA.email, p_role: 'porteiro', p_unit: null, p_permissions: [] });
+    await rpc('porteiroA', 'accept_invitation', { p_token: p.token });
+    const m = await rpc('adminA', 'create_invitation', { p_tenant: tenants.A, p_email: users.moradorA.email, p_role: 'morador', p_unit: unitA, p_permissions: [] });
+    await assert.rejects(rpc('intruso', 'accept_invitation', { p_token: m.token }), /outro e-mail/);
+    await rpc('moradorA', 'accept_invitation', { p_token: m.token });
+    await assert.rejects(rpc('moradorA', 'accept_invitation', { p_token: m.token }), /já foi utilizado/);
+    const mb = await rpc('adminB', 'create_invitation', { p_tenant: tenants.B, p_email: users.moradorB.email, p_role: 'morador', p_unit: unitB, p_permissions: [] });
+    await rpc('moradorB', 'accept_invitation', { p_token: mb.token });
+    const { error } = await users.intruso.client.from('unit_memberships').insert({ tenant_id: tenants.A, unit_id: unitA, user_id: users.intruso.id });
+    assert.ok(error, 'intruso não pode se vincular a unidade sabendo o endereço');
+  });
+
+  test('recebimento, foto no bucket privado, QR, retirada com assinatura e comprovante', async () => {
+    pkg = await rpc('porteiroA', 'receive_package', {
+      p_tenant: tenants.A, p_idempotency_key: `${run}-k1`, p_unit: unitA, p_tracking: `${run}BR1`, p_carrier: 'Correios',
+      p_recipient: 'Destinatário E2E', p_notes: null, p_concierge: null, p_storage_location: null,
+    });
+    const again = await rpc('porteiroA', 'receive_package', {
+      p_tenant: tenants.A, p_idempotency_key: `${run}-k1`, p_unit: unitA, p_tracking: `${run}BR1`, p_carrier: 'Correios',
+      p_recipient: null, p_notes: null, p_concierge: null, p_storage_location: null,
+    });
+    assert.equal(again.id, pkg.id, 'retry não duplica');
+    const png = Uint8Array.from(atob('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg=='), (c) => c.charCodeAt(0));
+    const photo = `${tenants.A}/packages/${pkg.id}/label_photo-${run}abcd.png`;
+    const up = await users.porteiroA.client.storage.from('tenant-private').upload(photo, png, { contentType: 'image/png' });
+    assert.ifError(up.error);
+    await rpc('porteiroA', 'attach_package_file', { p_tenant: tenants.A, p_package: pkg.id, p_kind: 'label_photo', p_path: photo });
+    const cross = await users.adminB.client.storage.from('tenant-private').createSignedUrl(photo, 60);
+    assert.ok(cross.error || !cross.data, 'admin de B não assina URL de A');
+    const { data: notif } = await users.moradorA.client.from('notifications').select('id').eq('tenant_id', tenants.A);
+    assert.ok(notif.length >= 1, 'morador recebeu aviso interno');
+    const { data: leak } = await users.moradorB.client.from('packages').select('id').eq('tenant_id', tenants.A);
+    assert.equal(leak.length, 0);
+
+    const { token } = await rpc('moradorA', 'issue_pickup_token', { p_tenant: tenants.A, p_package: pkg.id });
+    await assert.rejects(rpc('adminB', 'lookup_pickup_token', { p_tenant: tenants.B, p_qr: token }), /não reconhecido/);
+    const sig = `${tenants.A}/packages/${pkg.id}/signature-${run}abcd.png`;
+    assert.ifError((await users.porteiroA.client.storage.from('tenant-private').upload(sig, png, { contentType: 'image/png' })).error);
+    const args = { p_tenant: tenants.A, p_package: pkg.id, p_method: 'qr', p_qr: token, p_picked_up_by: 'Retirante E2E', p_signature_path: sig, p_handover_path: null, p_manual_reason: null };
+    const [r1, r2] = await Promise.allSettled([rpc('porteiroA', 'confirm_pickup', args), rpc('adminA', 'confirm_pickup', args)]);
+    assert.equal([r1, r2].filter((r) => r.status === 'fulfilled').length, 1, 'exatamente uma retirada vence (conexões distintas)');
+    const { data: receipt } = await users.moradorA.client.from('receipts').select('protocol, snapshot').eq('package_id', pkg.id).single();
+    assert.match(receipt.protocol, /^PP-/);
+    assert.equal(receipt.snapshot.picked_up_by, 'Retirante E2E');
+  });
+
+  test('revogação vale imediatamente com JWT ainda válido', async () => {
+    const { data: m } = await svc.from('tenant_memberships').select('id').eq('tenant_id', tenants.A).eq('user_id', users.porteiroA.id).single();
+    await rpc('adminA', 'set_membership_status', { p_membership: m.id, p_status: 'revoked' });
+    const { data } = await users.porteiroA.client.from('packages').select('id').eq('tenant_id', tenants.A);
+    assert.equal(data.length, 0);
+    await assert.rejects(rpc('porteiroA', 'receive_package', {
+      p_tenant: tenants.A, p_idempotency_key: `${run}-k2`, p_unit: unitA, p_tracking: null, p_carrier: 'Outra',
+      p_recipient: null, p_notes: null, p_concierge: null, p_storage_location: null,
+    }), /Sem permissão/);
+  });
+
+  test('anônimo e cliente comum não alcançam funções de serviço nem cobrança', async () => {
+    const anonClient = createClient(url, anon, opts);
+    assert.ok((await anonClient.from('packages').select('id')).error);
+    assert.ok((await users.adminA.client.rpc('apply_verified_payment', { p_order_nsu: 'x', p_transaction_nsu: 'x', p_slug: 'x', p_amount: 1, p_paid_amount: 1, p_installments: 1, p_capture_method: 'pix', p_receipt_url: null })).error);
+    assert.ok((await users.adminA.client.rpc('claim_checkout_link', { p_order: crypto.randomUUID(), p_attempt: crypto.randomUUID() })).error);
+    const { data: subs } = await users.adminA.client.from('subscriptions').update({ status: 'active' }).eq('tenant_id', tenants.A).select('id');
+    assert.equal((subs || []).length, 0, 'gestor não altera assinatura direto');
+  });
+}

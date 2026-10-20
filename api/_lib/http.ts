@@ -15,10 +15,27 @@ export class HttpError extends Error {
 
 /** Lê JSON com limite de tamanho real (não confia em Content-Length). */
 export async function readJson<T = any>(request: Request, maxBytes = 64 * 1024): Promise<T> {
-  const buf = await request.arrayBuffer();
-  if (buf.byteLength > maxBytes) throw new HttpError(413, 'Requisição grande demais.');
+  const reader = request.body?.getReader();
+  const decoder = new TextDecoder();
+  let bytes = 0;
+  let text = '';
+  if (reader) {
+    try {
+      for (;;) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        bytes += value.byteLength;
+        if (bytes > maxBytes) {
+          await reader.cancel();
+          throw new HttpError(413, 'Requisição grande demais.');
+        }
+        text += decoder.decode(value, { stream: true });
+      }
+      text += decoder.decode();
+    } finally { reader.releaseLock(); }
+  }
   try {
-    return JSON.parse(new TextDecoder().decode(buf || new ArrayBuffer(0)) || '{}');
+    return JSON.parse(text || '{}');
   } catch {
     throw new HttpError(400, 'JSON inválido.');
   }
