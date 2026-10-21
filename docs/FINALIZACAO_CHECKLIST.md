@@ -6,7 +6,7 @@ Estados: pendente · implementado · testado localmente · homologado · bloquea
 |---|---|---|---|---|
 | F01 | Projeto/destino confirmados | `docs/FINALIZACAO_CONTEXTO.md` | conteúdo servido em produção | testado |
 | F02 | Migrations reproduzíveis em banco novo | `supabase/migrations` | stack local 16/16 | testado localmente |
-| F03 | Upgrade incremental em produção | idem | — | bloqueado externo (conta dona do projeto) |
+| F03 | Upgrade incremental em produção | idem | estado antes/depois via Management API | homologado (21/10/2026) |
 | F04 | Seed só em dev/homologação, sem senha padrão | `supabase/seed/demo.sql` | flag obrigatória | testado localmente |
 | F05 | Backup criptografado + restore físico + login | `scripts/restore-drill*.mjs` | ensaio completo | testado localmente |
 | F06 | Backup agendado com retenção e alerta | — | — | pendente (ambiente do proprietário) |
@@ -25,7 +25,7 @@ Estados: pendente · implementado · testado localmente · homologado · bloquea
 | F19 | Suporte com formulário persistido e consultável | `api/contact.ts`, `AdminPage` | `landing-tour.mjs` | testado localmente |
 | F20 | Capturas reais com manifesto e script | `scripts/capture-screens.mjs`, `public/screens` | executado | testado localmente |
 | F21 | Landing em `/` | `src/pages/LandingPage.tsx` | `landing-tour.mjs`, Lighthouse | testado localmente; produção: ver contexto |
-| F22 | Funil de conversão sem PII | `api/funnel.ts`, migration 20261021000100 | `funnel.test`, navegador | testado localmente; produção depende da migration |
+| F22 | Funil de conversão sem PII | `api/funnel.ts`, migration 20261021000100 | `funnel.test`, navegador, evento real em produção | homologado |
 | F23 | SEO e privadas fora do índice | `index.html`, `robots.txt`, `sitemap.xml`, `vercel.json` | navegador | testado localmente |
 | F24 | Catálogo publicado em produção | `/admin` | — | bloqueado externo (decisão comercial do superadmin) |
 | F25 | Termos/privacidade revisados | `/termos`, `/privacidade` | — | pendente (revisão jurídica) |

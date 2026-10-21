@@ -24,7 +24,7 @@ O repositório `locakarveiculos-ops/portariaprime` é de outra conta GitHub, mas
 ## Publicação
 
 - Commit anterior (rollback do app): `09063af`. Reverter = `git revert <commit>` e push no mesmo destino; as migrations novas são aditivas e o app antigo funciona com elas.
-- Migrations novas NÃO aplicadas em produção nesta rodada (sem acesso de dono ao projeto). O app novo funciona sem elas; o funil só passa a registrar depois de aplicá-las.
+- Migrations 0300, 0400 e 20261021000100 aplicadas em produção em 21/10/2026, a pedido do proprietário, via Management API com o token que ele forneceu; evento de teste do funil gravado e removido.
 - Push: `6e6207b` em `locakarveiculos-ops/portariaprime` `main` (confirmado por `git ls-remote`).
 - Deploy: a Vercel passou a servir a versão nova (`og:image` presente no HTML de `/`). Painel/logs da Vercel não consultáveis daqui (`api.vercel.com` dá timeout).
 - Site verificado em 21/10/2026, somente leitura: `/` mostra a landing sem sessão (desktop 1440 e celular 390, sem rolagem horizontal, sem erro JS); `/entrar` 200; deep link `/c/.../portaria` com refresh leva ao login; `/robots.txt`, `/sitemap.xml`, `/manifest.webmanifest`, `/screens/*` 200; áreas privadas com `X-Robots-Tag: noindex`; `/api/jobs/tick` 401; `/api/funnel` 204. Planos aparecem como “em revisão” porque o catálogo de produção tem 0 planos publicados. Script: `tests/e2e/prod-smoke.mjs`.

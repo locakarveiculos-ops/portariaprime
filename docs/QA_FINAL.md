@@ -16,7 +16,7 @@ Contagem real desta rodada: **36 testes de banco + 26 de API/unidade** (`npm tes
 | Banco/restore | Migrations em banco novo real | Stack local | ✅ 16/16 | `local-stack.mjs up` |
 | Banco/restore | Backup físico criptografado → cluster novo → contagens, FKs, checksums | Stack local | ✅ 75 tabelas, 822 linhas, 5/5 objetos | `restore-drill.mjs` |
 | Banco/restore | Login com senha original após restore | Stack local | ✅ (após correção, ver D1) | `restore-drill-login.mjs` |
-| Banco/restore | Upgrade incremental em produção | Produção | ⛔ 3 migrations pendentes (conta dona) | `BANCO_E_RESTAURACAO.md` |
+| Banco/restore | Upgrade incremental em produção | Produção | ✅ 3 migrations aplicadas e verificadas | `BANCO_E_RESTAURACAO.md` |
 | Isolamento | A não lê/grava B: tabelas, RPC, Storage, URL assinada; mesmo bloco/unidade | Stack local | ✅ | `supabase-real.test.mjs` |
 | Isolamento | Realtime | — | ❌ não testado (stack sem Realtime) | — |
 | Autenticação | Login, convite certo/errado/reutilizado, revogação com JWT válido | Stack local | ✅ | E2E 3 e 5 |
@@ -70,7 +70,7 @@ Inspeção heurística por tarefa, feita pelo agente sem consultar código duran
 
 - Realtime entre tenants; última vaga simultânea; totem em tablet físico; app interno no tema escuro e em todas as larguras.
 - Integrações reais: InfinitePay, Resend, Evolution, Gemini, Web Push com VAPID e aparelhos reais.
-- Upgrade incremental em produção (3 migrations) e backup do projeto de produção.
+- Backup do projeto de produção.
 
 ## Produção
 

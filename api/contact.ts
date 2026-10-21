@@ -19,10 +19,7 @@ export const POST = handler(async (request) => {
   const { count } = await svc.from('contact_requests').select('id', { count: 'exact', head: true })
     .eq('ip_hash', ipHash).gte('created_at', new Date(Date.now() - 3600_000).toISOString());
   if ((count || 0) >= 3) throw new HttpError(429, 'Recebemos suas mensagens. Aguarde nosso retorno.');
-  const row = { name, email: email.toLowerCase(), phone, message, ip_hash: ipHash };
-  let { error } = await svc.from('contact_requests').insert({ ...row, source });
-  // ponytail: banco ainda sem a migration 20261021000100 (coluna source) grava sem a origem; remover após aplicá-la.
-  if (error && /source/.test(error.message)) ({ error } = await svc.from('contact_requests').insert(row));
+  const { error } = await svc.from('contact_requests').insert({ name, email: email.toLowerCase(), phone, message, ip_hash: ipHash, source });
   if (error) throw new Error(error.message);
   return json({ ok: true });
 });

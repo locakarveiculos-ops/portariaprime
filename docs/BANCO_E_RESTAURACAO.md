@@ -12,16 +12,16 @@ O banco do Village Azaleia foi perdido. **Nenhum dado histórico foi recuperado 
 |---|---|
 | PGlite (testes unitários de banco) | todas aplicadas a cada `npm run test:db` |
 | PostgreSQL 17 real + Supabase Auth/Storage/PostgREST oficiais (stack local, `docs/STACK_LOCAL.md`) | **16 de 16 aplicadas em banco novo**, cada uma em transação única (`psql -1`) |
-| Supabase de produção `zehijyqgqkouzhldeqio` | até `20261020000200`. **Pendentes:** `20261020000300_disable_test_cleanup`, `20261020000400_checkout_completion_guard`, `20261021000100_landing_funnel_support` |
+| Supabase de produção `zehijyqgqkouzhldeqio` | **todas aplicadas** (as três últimas em 21/10/2026, cada uma em transação com registro em `supabase_migrations.schema_migrations`; definições anteriores das funções alteradas guardadas fora do Git para rollback) |
 
-As três pendentes são aditivas (revogam uma RPC de teste, endurecem uma atualização condicional, adicionam colunas com default e uma tabela nova). Aplicar com a conta dona do projeto:
+As três últimas são aditivas (revogam uma RPC de teste, endurecem uma atualização condicional, adicionam colunas com default e uma tabela nova). Próximas migrations, com a conta dona do projeto:
 
 ```
 supabase link --project-ref zehijyqgqkouzhldeqio
 supabase db push        # aplica só as que faltam
 ```
 
-Antes: backup (abaixo). O app publicado funciona sem elas (o formulário de contato grava sem a coluna `source`; o funil fica sem registro até a migration existir).
+Verificado após aplicar: `funnel_events` existe e recebe eventos de `/api/funnel` em produção; anon não lê a tabela nem executa `funnel_summary`; `e2e_cleanup` desabilitada; guarda de checkout ativa.
 
 ## Backup e restauração física — ensaiado
 

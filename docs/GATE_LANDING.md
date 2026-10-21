@@ -27,7 +27,7 @@ Integrações não homologadas (InfinitePay real, Resend, Evolution, Gemini, Web
 |---|---|
 | Landing ativa em `/`, deep links e `/entrar` preservados | ver `docs/QA_FINAL.md` (verificação de produção) |
 | Catálogo publicado em produção | ⛔ **0 planos publicados** no banco de produção; a landing mostra “planos em revisão” até o superadmin publicar em `/admin` |
-| Migrations 0300, 0400 e 20261021000100 em produção | ⛔ pendente (conta dona do projeto) |
+| Migrations 0300, 0400 e 20261021000100 em produção | ✅ aplicadas em 21/10/2026 |
 | `INFINITEPAY_HANDLE` + primeiro pagamento homologado | ⛔ pendente |
 | Resend/SMTP para e-mails de cadastro e convite | ⛔ pendente; sem isso a confirmação de e-mail depende do SMTP padrão do Supabase (limitado) |
 | Termos e privacidade revisados juridicamente | ⛔ minuta |
