@@ -29,6 +29,16 @@ test('createCheckoutLink: handle sem $, preço em centavos do servidor, URLs e o
   assert.equal(f.calls[0].body.order_nsu, 'pp-1');
 });
 
+test('createCheckoutLink: formato real observado em 21/10/2026 e conta sem checkout externo', async () => {
+  // Respostas reais (handle de produção) gravadas na homologação; ver docs/INFINITEPAY.md.
+  const real = 'https://checkout.infinitepay.io/marco-boggian?lenc=Gz.v1.9541fbdc3c44fdf2';
+  const ok = mockFetch(() => ({ body: { url: real } }));
+  assert.equal(await ip.createCheckoutLink({ orderNsu: 'pp-2', amountCents: 9900, description: 'Plano', redirectUrl: 'https://a', webhookUrl: 'https://b' }, ok), real);
+  const disabled = mockFetch(() => ({ status: 404, body: { success: false, error: 'external_checkout_not_enabled' } }));
+  await assert.rejects(ip.createCheckoutLink({ orderNsu: 'pp-3', amountCents: 9900, description: 'Plano', redirectUrl: 'https://a', webhookUrl: 'https://b' }, disabled),
+    (e) => e instanceof ip.ProviderError && !e.ambiguous);
+});
+
 test('createCheckoutLink: erro do provedor não inventa link', async () => {
   const f = mockFetch(() => ({ status: 422, body: { error: 'x' } }));
   await assert.rejects(ip.createCheckoutLink({ orderNsu: 'pp-1', amountCents: 1, description: 'd', redirectUrl: 'https://a', webhookUrl: 'https://b' }, f), /recusou/);

@@ -90,7 +90,8 @@ function Routes() {
 function LegalPage({ privacy }: { privacy: boolean }) {
   return <main className="max-w-2xl mx-auto px-4 py-10 space-y-4"><PortariaPrimeLogo />
     <h1 className="text-2xl font-semibold">{privacy ? 'Política de privacidade' : 'Termos de uso'}</h1>
-    <Alert tone="warning">Minuta para revisão jurídica. Identificação do controlador, contato de privacidade, retenção e condições contratuais precisam ser aprovados antes da operação comercial.</Alert>
+    <Alert tone="warning">Minuta para revisão jurídica. Contato de privacidade, retenção e condições contratuais precisam ser aprovados antes da operação comercial.</Alert>
+    <p className="text-sm text-muted">Portaria Prime · CNPJ 59.760.458/0001-91. Pagamentos processados pela InfinitePay (CloudWalk).</p>
     <p>{privacy ? 'O sistema trata identificação e contatos dos usuários, vínculos com unidades, registros de encomendas, fotos e assinaturas de retirada para operar a portaria. O acesso deve ser restrito às pessoas autorizadas pelo condomínio.' : 'O acesso depende de conta verificada e vínculo autorizado com o condomínio. A equipe deve conferir destinatário, unidade e identidade de quem retira. OCR é uma sugestão que exige revisão humana.'}</p>
     <p>O teste dura um mês de calendário por condomínio. Ao final, a renovação exige pagamento por link, sem débito automático. Inadimplência não autoriza apagar histórico nem provas de retirada.</p>
     <p>Assinatura desenhada na tela é registro operacional, não assinatura digital certificada. Canais externos e conectividade podem ficar indisponíveis.</p>

@@ -235,7 +235,7 @@ export default function LandingPage() {
         <div className="max-w-6xl mx-auto px-4 py-10 flex flex-wrap gap-6 justify-between items-center text-sm">
           <PortariaPrimeLogo onDark className="h-8 w-auto" />
           <nav aria-label="Rodapé" className="flex flex-wrap gap-4"><a href="/entrar" onClick={onLink} className="hover:text-porcelain">Entrar</a><a href="#contato" className="hover:text-porcelain">Contato</a><a href="/termos" onClick={onLink} className="hover:text-porcelain">Termos de uso</a><a href="/privacidade" onClick={onLink} className="hover:text-porcelain">Privacidade</a></nav>
-          <p className="w-full text-xs text-porcelain/50 flex items-center gap-2"><Building2 className="w-4 h-4" aria-hidden />© Portaria Prime · Gestão de encomendas para condomínios</p>
+          <p className="w-full text-xs text-porcelain/50 flex items-center gap-2"><Building2 className="w-4 h-4" aria-hidden />© Portaria Prime · CNPJ 59.760.458/0001-91 · Pagamentos por InfinitePay</p>
         </div>
       </footer>
 
