@@ -45,7 +45,7 @@ export function OnboardingPage() {
   useEffect(() => { void reloadCatalog(); }, []);
   useEffect(() => { if (!slugTouched) setSlug(slugify(name)); }, [name, slugTouched]);
 
-  const selectable = useMemo(() => (plans || []).filter((p) => !p.is_custom && p.prices.length), [plans]);
+  const selectable = useMemo(() => (plans || []).filter((p) => p.published && !p.is_custom && p.prices.length), [plans]);
   const chosen = selectable.find((p) => p.code === plan) || selectable[0];
   const price = chosen?.prices.find((p) => p.cycle === cycle);
   const trialEnd = useMemo(() => {
@@ -92,7 +92,7 @@ export function OnboardingPage() {
           <Card className="space-y-4">
             <Field label="Nome do condomínio"><Input required value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></Field>
             <Field label="Endereço no sistema" hint={`Seu condomínio ficará em ${location.host}/c/${slug || '…'}`}>
-              <Input required pattern="[a-z0-9][a-z0-9-]{1,46}[a-z0-9]" value={slug}
+              <Input required pattern="[a-z0-9][a-z0-9\-]{1,46}[a-z0-9]" value={slug}
                 onChange={(e) => { setSlugTouched(true); setSlug(slugify(e.target.value)); }} />
             </Field>
             <Field label="CNPJ do condomínio (ou CPF do responsável)" hint="Usado para garantir um mês grátis por condomínio.">

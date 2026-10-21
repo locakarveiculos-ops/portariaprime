@@ -31,7 +31,7 @@ export function AssinaturaPage() {
   if (!ov) return <Spinner />;
   const [label, tone] = STATUS[ov.status] || [ov.status, 'neutral'];
   const trialActive = ov.status === 'trialing' && new Date(ov.now) < new Date(ov.trial_ends_at);
-  const selectable = (plans || []).filter((p) => !p.is_custom);
+  const selectable = (plans || []).filter((p) => p.published && !p.is_custom);
   const sel = selectable.find((p) => p.code === plan);
   const selPrice = sel?.prices.find((x) => x.cycle === cycle);
 

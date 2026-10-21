@@ -36,7 +36,7 @@ export default function LandingPage() {
     const q = plan ? `?plano=${plan}&ciclo=${cycle}` : '';
     navigate(session ? `/onboarding${q}` : `/cadastro?next=${encodeURIComponent(`/onboarding${q}`)}`);
   };
-  const selectable = (plans || []).filter((p) => !p.is_custom && p.prices.length);
+  const selectable = (plans || []).filter((p) => p.published && !p.is_custom && p.prices.length);
   const custom = (plans || []).find((p) => p.is_custom);
   const nav: [string, string][] = [['#como-funciona', 'Como funciona'], ['#recursos', 'Recursos'], ['#telas', 'Telas do sistema'], ['#planos', 'Planos'], ['#duvidas', 'Dúvidas']];
 
