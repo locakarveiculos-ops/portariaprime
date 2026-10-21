@@ -31,6 +31,25 @@ Campo ilegível = null; não invente. confidence de 0 a 100, honesta.`;
 
 const MAX_BYTES = 4 * 1024 * 1024;
 
+export async function readLabel(ai: Pick<GoogleGenAI, 'models'>, mimeType: string, data: string) {
+  const models = [optionalEnv('GEMINI_OCR_MODEL') || 'gemini-4-argon', optionalEnv('GEMINI_OCR_FALLBACK_MODEL') || 'gemini-2.5-flash']
+    .filter((v, i, a) => a.indexOf(v) === i);
+  for (const model of models) {
+    try {
+      const r = await ai.models.generateContent({
+        model,
+        contents: [{ role: 'user', parts: [{ text: PROMPT }, { inlineData: { mimeType, data } }] }],
+        config: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0, maxOutputTokens: 8192,
+          httpOptions: { timeout: 12000 } },
+      });
+      const result = JSON.parse(r.text || 'null');
+      if (!result || typeof result !== 'object' || Array.isArray(result)) throw new Error('Resposta inválida');
+      return result;
+    } catch (e) { console.error('[ocr] modelo indisponível', model, (e as any)?.status || ''); }
+  }
+  throw new Error('Leitura indisponível');
+}
+
 export const POST = handler(async (request) => {
   const body = await readJson(request, 6 * 1024 * 1024);
   if (!isUuid(body.tenantId)) throw new HttpError(400, 'Condomínio inválido.');
@@ -39,20 +58,15 @@ export const POST = handler(async (request) => {
   if ((m[2].length * 3) / 4 > MAX_BYTES) throw new HttpError(413, 'Foto grande demais (máx. 4 MB).');
 
   const { client } = await requireUser(request);
+  const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
   const { data: allowed, error } = await client.rpc('consume_ocr', { p_tenant: body.tenantId });
   if (error) rpcError(error);
   if (!allowed) {
     return json({ error: 'Leitura automática indisponível (plano ou franquia do mês). Digite os dados manualmente.', manual: true }, 402);
   }
 
-  const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
   try {
-    const r = await ai.models.generateContent({
-      model: optionalEnv('GEMINI_OCR_MODEL') || 'gemini-2.5-flash',
-      contents: [{ role: 'user', parts: [{ text: PROMPT }, { inlineData: { mimeType: m[1], data: m[2] } }] }],
-      config: { responseMimeType: 'application/json', responseSchema: SCHEMA, temperature: 0, maxOutputTokens: 1024 },
-    });
-    const d = JSON.parse(r.text || '{}');
+    const d = await readLabel(ai, m[1], m[2]);
     const s = (v: unknown, n: number) => (typeof v === 'string' && v.trim() ? v.trim().slice(0, n) : null);
     return json({
       carrier: s(d.carrier, 40) || 'Outra',
@@ -63,7 +77,7 @@ export const POST = handler(async (request) => {
       confidence: Math.max(0, Math.min(100, Number(d.confidence) || 0)),
     });
   } catch (e: any) {
-    console.error('[ocr] falha', e?.status || '', String(e?.message || '').slice(0, 120));
+    console.error('[ocr] leitura indisponível', e?.status || '');
     return json({ error: 'Não foi possível ler a etiqueta agora. Digite os dados manualmente.', manual: true }, 502);
   }
 });
