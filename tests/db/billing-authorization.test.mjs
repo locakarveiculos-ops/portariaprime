@@ -53,6 +53,19 @@ test('checkout reserva uma tentativa externa; resultado ambíguo não permite re
  await assert.rejects(s.db.as(s.admin,'select claim_checkout_link($1,$2)',[o.order_id,crypto.randomUUID()]),/permission denied/);
  } finally {await s.db.raw.close();}
 });
+test('resposta tardia do provedor não reabre pedido cancelado', async () => {
+ const s = await setup(); try {
+   const o = await order(s), attempt = crypto.randomUUID();
+   await s.db.service('select claim_checkout_link($1,$2)', [o.order_id, attempt]);
+   await s.db.rpc(s.admin, 'cancel_subscription', { p_tenant: s.tenant });
+   const [result] = await s.db.service("select finish_checkout_link($1,$2,'https://checkout.infinitepay.io/test','ready') ok", [o.order_id, attempt]);
+   assert.equal(result.ok, false);
+   const [saved] = await s.db.sql('select status, checkout_url from billing_orders where id=$1', [o.order_id]);
+   assert.equal(saved.status, 'canceled');
+   assert.equal(saved.checkout_url, null);
+ } finally { await s.db.raw.close(); }
+});
+
 test('preço publicado é imutável; versionamento continua disponível', async () => {
  const s=await setup(); try {
  await s.db.sql('insert into platform_admins(user_id) values($1)',[s.admin]);

@@ -196,7 +196,7 @@ export const SignaturePad: React.FC<SignaturePadProps> = ({
 
       <div className="flex items-center justify-between text-xs">
         <span className="text-[11px] text-muted font-medium">
-          Validade jurídica nos termos do Art. 10 da MP 2.200-2/2001
+          Registro operacional desenhado na tela; não é assinatura digital certificada.
         </span>
         <button
           type="button"

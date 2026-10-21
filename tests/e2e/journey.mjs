@@ -2,7 +2,8 @@
 // Cadastro → condomínio + mês grátis → marca → local → unidade → convite porteiro/morador →
 // receber → QR do morador → entregar com assinatura → comprovante → relatório.
 // Contas criadas pela service role já confirmadas (não há caixa de e-mail no teste).
-// Limpa tudo ao final. Salva capturas em tests/evidence/journey-*.png (fora do Git).
+// Somente Supabase local isolado. Preserva fixtures para diagnóstico.
+// Capturas de QA em tests/evidence/journey-*.png (fora do Git); não são material comercial.
 //
 // PP_E2E_ALLOW=1 APP=http://127.0.0.1:3017 SUPABASE_URL=... SUPABASE_ANON_KEY=... \
 //   SUPABASE_SERVICE_ROLE_KEY=... node tests/e2e/journey.mjs
@@ -10,9 +11,11 @@ import assert from 'node:assert/strict';
 import { mkdir } from 'node:fs/promises';
 import { chromium } from '@playwright/test';
 import { createClient } from '@supabase/supabase-js';
+import { assertLocalSupabase } from './environment.mjs';
 
 const { PP_E2E_ALLOW, APP, SUPABASE_URL: url, SUPABASE_ANON_KEY: anon, SUPABASE_SERVICE_ROLE_KEY: secret } = process.env;
 if (PP_E2E_ALLOW !== '1' || !APP || !url || !anon || !secret) throw new Error('Defina PP_E2E_ALLOW=1, APP e chaves do Supabase.');
+assertLocalSupabase(url);
 const svc = createClient(url, secret, { auth: { persistSession: false, autoRefreshToken: false } });
 const run = `e2e${Date.now().toString(36)}`;
 const slug = `${run}-jornada`;
@@ -191,10 +194,7 @@ try {
   console.log('PASS jornada completa: cadastro, trial, marca, local, unidade, convites, recebimento, QR, entrega, comprovante, relatório, assinatura.');
 } finally {
   await browser.close();
-  if (tenantId) {
-    const { error } = await svc.rpc('e2e_cleanup', { p_tenants: [tenantId] });
-    if (error) console.error('Limpeza falhou:', error.message);
-  }
-  for (const id of created) await svc.auth.admin.deleteUser(id);
+  // Fixtures permanecem na stack isolada para diagnóstico; nenhuma limpeza destrutiva remota.
+  console.log(`Fixtures locais preservadas: ${slug}; usuários sintéticos: ${created.length}.`);
   for (const pl of plansBefore || []) await svc.from('plans').update({ published: pl.published }).eq('code', pl.code);
 }

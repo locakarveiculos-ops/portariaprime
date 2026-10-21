@@ -34,6 +34,13 @@ test('createCheckoutLink: erro do provedor não inventa link', async () => {
   await assert.rejects(ip.createCheckoutLink({ orderNsu: 'pp-1', amountCents: 1, description: 'd', redirectUrl: 'https://a', webhookUrl: 'https://b' }, f), /recusou/);
 });
 
+test('criação com resposta ambígua não libera retry cego', async () => {
+  const input = { orderNsu: 'pp-1', amountCents: 14900, description: 'Plano', redirectUrl: 'https://app/r', webhookUrl: 'https://app/w' };
+  for (const response of [{ status: 500, body: {} }, { status: 200, body: {} }]) {
+    await assert.rejects(ip.createCheckoutLink(input, mockFetch(() => response)), error => error instanceof ip.ProviderError && error.ambiguous);
+  }
+});
+
 test('paymentCheck: envia os 4 campos documentados e normaliza a resposta', async () => {
   const f = mockFetch(() => ({ body: { success: true, paid: true, amount: 1500, paid_amount: 1510, installments: 1, capture_method: 'pix' } }));
   const r = await ip.paymentCheck({ orderNsu: 'o', transactionNsu: 't', slug: 's' }, f);

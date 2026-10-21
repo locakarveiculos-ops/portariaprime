@@ -6,8 +6,8 @@ Não publicar esta versão antes de resolver o gate em `GATE_LANDING.md`.
 
 1. `npm ci`
 2. Configure `.env.local` a partir de `.env.example`, apontando para Supabase **isolado novo**. Não usar banco antigo sem backup e adaptação incremental.
-3. `npm run dev` executa apenas a interface Vite. `/api/*` não funciona pelo Vite sozinho.
-4. `npm run dev:full` executa `vercel dev --listen 3000`. Primeiro vínculo/configuração do projeto Vercel exige decisão do proprietário; não foi concluído automaticamente.
+3. `npm run dev` serve a interface e encaminha `/api/*` para `127.0.0.1:3019`. Em outro terminal, configure `.env.api.local` com segredos somente de ambiente isolado e execute `npm run dev:api`. Não carregar o `.env` legado de produção. O arquivo `.env.api.local` é ignorado pelo Git.
+4. Alternativa: `npm run dev:full` executa `vercel dev --listen 3000`. O projeto remoto já foi vinculado em rodada anterior; execução local não autoriza deploy. O adaptador Node local serve os mesmos handlers, mas não substitui homologação Vercel.
 5. `npm run typecheck`, `npm test`, `npm run build`.
 6. Teste visual sem login: inicie Vite em `127.0.0.1:3017` e execute `node tests/ui-smoke.mjs` (Edge instalado).
 
@@ -36,4 +36,4 @@ Validar exports Web Request/Response no runtime Vercel antes do deploy. `vite bu
 - `GET` equivalente está disponível para Vercel Cron. Hobby: cron diário em `vercel.json` + GitHub Actions a cada ~10 min (`.github/workflows/tick.yml`, secrets `APP_URL` e `CRON_SECRET`). Detalhes em `OPERACAO_E_BACKUP.md`.
 - Configure fallback SPA somente para rotas de interface, nunca reescrevendo `/api/*` para HTML.
 
-Comandos de publicação e aplicações remotas de migrations exigem autorização específica. Nada foi publicado.
+Comandos de publicação e aplicações remotas de migrations exigem autorização específica. Houve publicação em rodadas anteriores. Nesta revisão, migrations novas permanecem locais. E2E mutável recusa Supabase hospedado e exige stack local isolada; nunca use a RPC antiga de limpeza de testes em produção.

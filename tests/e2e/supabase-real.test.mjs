@@ -1,18 +1,20 @@
 // Teste ponta a ponta contra um projeto Supabase REAL (Auth + PostgREST + RLS + Storage).
 // Usa a chave pública como usuário comum; service role só para criar/limpar usuários sintéticos.
-// Cria dois condomínios de teste e remove tudo ao final (inclusive usuários Auth).
-// NÃO roda contra produção com clientes reais: exige PP_E2E_ALLOW=1 e banco sem condomínios reais.
+// Cria dois condomínios de teste; preserva fixtures para diagnóstico na stack local.
+// NÃO roda contra projetos hospedados: exige PP_E2E_ALLOW=1 e URL Supabase de loopback.
 //
 // PP_E2E_ALLOW=1 SUPABASE_URL=... SUPABASE_ANON_KEY=... SUPABASE_SERVICE_ROLE_KEY=... \
 //   node --test tests/e2e/supabase-real.test.mjs
 import { test, before, after } from 'node:test';
 import assert from 'node:assert/strict';
 import { createClient } from '@supabase/supabase-js';
+import { assertLocalSupabase } from './environment.mjs';
 
 const { SUPABASE_URL: url, SUPABASE_ANON_KEY: anon, SUPABASE_SERVICE_ROLE_KEY: secret } = process.env;
 if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
   test('e2e real ignorado (defina PP_E2E_ALLOW=1 e as chaves)', { skip: true }, () => {});
 } else {
+  assertLocalSupabase(url);
   const opts = { auth: { persistSession: false, autoRefreshToken: false } };
   const svc = createClient(url, secret, opts);
   const run = `e2e${Date.now().toString(36)}`;
@@ -57,13 +59,9 @@ if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
   });
 
   after(async () => {
-    const ids = Object.values(tenants);
-    if (ids.length) {
-      // Tabelas append-only bloqueiam delete: remove pela FK dos condomínios de teste via SQL de serviço.
-      const { error } = await svc.rpc('e2e_cleanup', { p_tenants: ids });
-      if (error) console.error('Limpeza SQL falhou:', error.message);
-    }
-    for (const id of created) await svc.auth.admin.deleteUser(id);
+    // Preserva fixtures na stack isolada para diagnóstico. Nada apaga auditoria,
+    // desliga FKs ou remove metadados do Storage diretamente.
+    console.log(`Fixtures locais preservadas: ${run}; usuários sintéticos: ${created.length}.`);
     for (const p of before.publishedBefore || []) await svc.from('plans').update({ published: p.published }).eq('code', p.code);
   });
 

@@ -62,7 +62,11 @@ export function PushToggle() {
         tenant_id: t.tenant.id, user_id: userId, endpoint: j.endpoint, p256dh: j.keys!.p256dh, auth: j.keys!.auth,
         user_agent: navigator.userAgent.slice(0, 200),
       });
-      if (error && !/duplicate/i.test(error.message)) throw new Error('Não foi possível registrar este dispositivo.');
+      if (error && error.code !== '23505') throw new Error('Não foi possível registrar este dispositivo.');
+      if (error && !await hasPushRegistration(supabase, t.tenant.id, userId, s.endpoint)) {
+        throw new Error('Não foi possível confirmar o registro deste dispositivo.');
+      }
+      setVerificationError('');
       setSub(s);
       toast.success('Notificações ativadas neste dispositivo.');
     } catch (e: any) {
@@ -77,10 +81,8 @@ export function PushToggle() {
     try {
       if (sub && userId) {
         await removePushRegistration(supabase, t.tenant.id, userId, sub.endpoint);
-        // Só cancela a inscrição do navegador se não houver outros vínculos usando o mesmo endpoint.
-        const { count } = await supabase.from('push_subscriptions').select('id', { count: 'exact', head: true })
-          .eq('endpoint', sub.endpoint);
-        if (!count) await sub.unsubscribe();
+        // A RLS não enxerga vínculos de outro usuário neste navegador.
+        // Remove só o vínculo atual, sem cancelar a inscrição compartilhada do PushManager.
       }
       setSub(null);
     } catch (error: any) {
@@ -90,9 +92,12 @@ export function PushToggle() {
     }
   };
 
-  return sub ? (
-    <Button variant="ghost" onClick={disable} loading={busy}><BellOff className="w-4 h-4" /> Desativar notificações neste dispositivo</Button>
-  ) : (
-    <Button variant="secondary" onClick={enable} loading={busy}><Bell className="w-4 h-4" /> Ativar notificações neste dispositivo</Button>
-  );
+  return <div className="space-y-2">
+    {verificationError && <Alert tone="warning">{verificationError}</Alert>}
+    {sub ? (
+      <Button variant="ghost" onClick={disable} loading={busy}><BellOff className="w-4 h-4" /> Desativar avisos deste condomínio neste dispositivo</Button>
+    ) : (
+      <Button variant="secondary" onClick={enable} loading={busy}><Bell className="w-4 h-4" /> Ativar avisos deste condomínio neste dispositivo</Button>
+    )}
+  </div>;
 }

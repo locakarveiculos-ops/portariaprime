@@ -50,13 +50,16 @@ export async function createCheckoutLink(input: CreateLinkInput, fetchImpl: type
       signal: AbortSignal.timeout(15000),
     });
   } catch {
-    // Timeout: o link pode ou não ter sido criado. O pedido fica pendente e o
-    // usuário pode tentar de novo (mesmo order_nsu, sem novo pedido).
-    throw new ProviderError('Tempo esgotado ao falar com a InfinitePay. Tente novamente em instantes.', true);
+    // Timeout não prova ausência do link: exigir reconciliação antes de nova criação.
+    throw new ProviderError('Criação do link sem confirmação. É necessária conferência antes de tentar novamente.', true);
   }
   const data: any = await res.json().catch(() => ({}));
   const url = findUrl(data);
-  if (!res.ok || !url) throw new ProviderError(`InfinitePay recusou a criação do link (HTTP ${res.status}).`);
+  if (!res.ok || !url) {
+    // Erro 5xx ou sucesso sem URL não prova que o provedor deixou de criar o link.
+    const ambiguous = res.status >= 500 || res.ok || res.status === 408;
+    throw new ProviderError(`InfinitePay recusou ou não confirmou a criação do link (HTTP ${res.status}).`, ambiguous);
+  }
   return url;
 }
 

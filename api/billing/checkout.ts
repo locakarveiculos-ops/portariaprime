@@ -27,6 +27,8 @@ export const POST = handler(async (request) => {
   const { data: order, error } = await client.rpc('prepare_checkout', { p_tenant: tenantId });
   if (error) rpcError(error);
 
+  // Configuração ausente não deve consumir uma tentativa externa.
+  const base = appUrl();
   const svc = serviceClient();
   const attempt = crypto.randomUUID();
   const { data: claim, error: claimError } = await svc.rpc('claim_checkout_link', { p_order: order.order_id, p_attempt: attempt });
@@ -41,7 +43,6 @@ export const POST = handler(async (request) => {
     if (e || ok !== true) throw new Error(`Falha ao registrar link (${state}): ${e?.message || 'tentativa substituída'}`);
   };
 
-  const base = appUrl();
   let url: string;
   try {
     url = await createCheckoutLink({

@@ -1,5 +1,13 @@
 # Resultados de QA
 
+## Revisão de 20/10/2026 — prevalece sobre o registro histórico abaixo
+
+As tabelas anteriores descrevem a suíte inicial, não aceite integral. Consulte `IMPLEMENTACAO_STATUS.md` para a matriz atual. Seis testes via API passaram no Supabase remoto; a jornada de navegador permaneceu parcial (parou no convite sem runtime local). A rotina de limpeza desses testes desabilitava FKs/cascatas; sua garantia de limpeza foi retirada e uma migration local bloqueia a RPC. Não repetir E2E mutável em produção.
+
+Restore executado foi para PGlite com shim de Auth/Storage e checksum dos bytes, não restauração física completa de Supabase. Canais externos e pagamento permanecem não homologados.
+
+Novos testes locais: limite HTTP em stream, falhas visíveis de contexto, cadastro push por usuário/tenant, runtime HTTP local, bloqueio de E2E remoto, resposta tardia de checkout cancelado e respostas ambíguas do provedor. Última execução nesta revisão: `npm run typecheck`, `npm test`, `npm run build` e `node tests/pwa-update.mjs` passaram. Mudanças desta revisão continuam locais; migrations 20261020000300 e 20261020000400 não aplicadas remotamente.
+
 Legenda: ✅ passou local · ⚠ passou com ressalvas · ⛔ bloqueado (insumo externo) · ❌ não testado
 
 ## Banco (PGlite + shim mínimo Supabase)

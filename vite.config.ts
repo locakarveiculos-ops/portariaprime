@@ -25,10 +25,12 @@ export default defineConfig({
     injectManifest: { globPatterns: ['**/*.{js,css,html,png,ico,webmanifest}'] },
   })],
   // NEXT_PUBLIC_* = nomes criados pela integração Supabase da Vercel (somente chaves públicas).
-  envPrefix: ['VITE_', 'NEXT_PUBLIC_SUPABASE_'],
+  envPrefix: ['VITE_', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'],
   resolve: { alias: { '@': path.resolve(__dirname, '.') } },
   build: { sourcemap: false },
   server: {
+    // Somente desenvolvimento: iniciar scripts/dev-api.mjs separadamente.
+    proxy: { '/api': { target: 'http://127.0.0.1:3019' } },
     hmr: process.env.DISABLE_HMR !== 'true',
     watch: process.env.DISABLE_HMR === 'true' ? null : {},
   },

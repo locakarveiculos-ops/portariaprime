@@ -36,7 +36,12 @@ export function OnboardingPage() {
     } catch { return crypto.randomUUID(); }
   });
 
-  useEffect(() => { loadCatalog().then(setPlans).catch((e) => setError(e.message)); }, []);
+  const reloadCatalog = () => {
+    setError(null);
+    setPlans(null);
+    return loadCatalog().then(setPlans).catch((e) => setError(e.message));
+  };
+  useEffect(() => { void reloadCatalog(); }, []);
   useEffect(() => { if (!slugTouched) setSlug(slugify(name)); }, [name, slugTouched]);
 
   const selectable = useMemo(() => (plans || []).filter((p) => !p.is_custom && p.prices.length), [plans]);
@@ -78,7 +83,9 @@ export function OnboardingPage() {
     <Shell>
       <h1 className="text-2xl font-semibold">Cadastre seu condomínio</h1>
       <p className="text-muted mt-1">Primeiro mês grátis. Sem cartão para começar. Escolha o plano que valerá depois do teste.</p>
-      {!plans ? <Spinner /> : (
+      {!plans && error ? <div className="mt-4 space-y-3"><Alert tone="danger">{error}</Alert><Button onClick={reloadCatalog}>Tentar novamente</Button></div> : !plans ? <Spinner /> : selectable.length === 0 ? (
+        <div className="mt-4 space-y-3"><Alert tone="warning">Nenhum plano foi publicado para contratação. O administrador da plataforma precisa revisar e publicar o catálogo.</Alert><Button variant="secondary" onClick={reloadCatalog}>Verificar novamente</Button></div>
+      ) : (
         <form onSubmit={submit} className="mt-6 grid gap-6 lg:grid-cols-[1fr_380px]">
           <Card className="space-y-4">
             <Field label="Nome do condomínio"><Input required value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></Field>
