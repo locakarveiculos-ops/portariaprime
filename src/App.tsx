@@ -5,8 +5,16 @@ import { TenantProvider } from './lib/tenant';
 import { matchTenant, navigate, onLink, usePath } from './lib/router';
 import { Alert, Button, Card, Spinner, Toaster } from './components/ui';
 import { PortariaPrimeLogo } from './components/Brand';
-import { LoginPage, SignupPage, RecoverPage, NewPasswordPage, InvitePage } from './pages/auth/AuthPages';
-import { TenantShell } from './pages/tenant/TenantShell';
+import { TourProvider } from './components/TourGuide';
+
+// Telas de login/app carregam sob demanda: a landing pública não paga por elas.
+const auth = () => import('./pages/auth/AuthPages');
+const LoginPage = lazy(() => auth().then(m => ({ default: m.LoginPage })));
+const SignupPage = lazy(() => auth().then(m => ({ default: m.SignupPage })));
+const RecoverPage = lazy(() => auth().then(m => ({ default: m.RecoverPage })));
+const NewPasswordPage = lazy(() => auth().then(m => ({ default: m.NewPasswordPage })));
+const InvitePage = lazy(() => auth().then(m => ({ default: m.InvitePage })));
+const TenantShell = lazy(() => import('./pages/tenant/TenantShell').then(m => ({ default: m.TenantShell })));
 
 const Onboarding = lazy(() => import('./pages/Onboarding').then(m => ({ default: m.OnboardingPage })));
 const Portaria = lazy(() => import('./pages/tenant/portaria/PortariaPage').then(m => ({ default: m.PortariaPage })));
@@ -20,6 +28,7 @@ const Retorno = lazy(() => import('./pages/tenant/AssinaturaPage').then(m => ({ 
 const Totem = lazy(() => import('./pages/TotemPage'));
 const Admin = lazy(() => import('./pages/AdminPage'));
 const Ajuda = lazy(() => import('./pages/HelpPage'));
+const Landing = lazy(() => import('./pages/LandingPage'));
 
 function Redirect({ to }: { to: string }) {
   useEffect(() => { navigate(to, true); }, [to]);
@@ -33,9 +42,9 @@ function Routes() {
   if (path === '/termos' || path === '/privacidade') return <LegalPage privacy={path === '/privacidade'} />;
   if (configError) return <main className="max-w-lg mx-auto p-6"><PortariaPrimeLogo /><Alert tone="danger">{configError}</Alert></main>;
   if (route?.area === 'totem') return <Totem slug={route.slug} />;
+  // Landing pública: não espera a sessão; com sessão mostra "Acessar meu condomínio".
+  if (path === '/') return <Landing />;
   if (loading) return <Spinner />;
-  // A raiz é acesso ao sistema. Landing comercial permanece bloqueada pelo gate.
-  if (path === '/') return <Redirect to={session ? '/app' : '/entrar'} />;
   if (path === '/entrar') return <LoginPage />;
   if (path === '/cadastro') return <SignupPage />;
   if (path === '/recuperar-senha') return <RecoverPage />;
@@ -73,7 +82,7 @@ function Routes() {
     if (route.area === 'morador' && links.some(t => t.role === 'morador')) page = <Morador />;
     if (route.area === 'avisos' && links.some(t => t.role === 'morador')) page = <Avisos />;
     if (route.area === 'ajuda') page = <Ajuda />;
-    return <TenantProvider key={link.tenant_id} link={link}><TenantShell area={route.area}><Suspense fallback={<Spinner />}>{page}</Suspense></TenantShell></TenantProvider>;
+    return <TenantProvider key={link.tenant_id} link={link}><TourProvider><TenantShell area={route.area}><Suspense fallback={<Spinner />}>{page}</Suspense></TenantShell></TourProvider></TenantProvider>;
   }
   return <main className="p-6"><h1>Página não encontrada</h1><a href="/app" onClick={onLink}>Voltar ao sistema</a></main>;
 }
@@ -85,7 +94,7 @@ function LegalPage({ privacy }: { privacy: boolean }) {
     <p>{privacy ? 'O sistema trata identificação e contatos dos usuários, vínculos com unidades, registros de encomendas, fotos e assinaturas de retirada para operar a portaria. O acesso deve ser restrito às pessoas autorizadas pelo condomínio.' : 'O acesso depende de conta verificada e vínculo autorizado com o condomínio. A equipe deve conferir destinatário, unidade e identidade de quem retira. OCR é uma sugestão que exige revisão humana.'}</p>
     <p>O teste dura um mês de calendário por condomínio. Ao final, a renovação exige pagamento por link, sem débito automático. Inadimplência não autoriza apagar histórico nem provas de retirada.</p>
     <p>Assinatura desenhada na tela é registro operacional, não assinatura digital certificada. Canais externos e conectividade podem ficar indisponíveis.</p>
-    <a href="/entrar" onClick={onLink} className="underline">Voltar</a>
+    <a href="/" onClick={onLink} className="underline">Voltar</a>
   </main>;
 }
 

@@ -7,6 +7,7 @@ import { navigate, query } from '../lib/router';
 import { useSession } from '../lib/session';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
 import { PortariaPrimeLogo } from '../components/Brand';
+import { track } from '../lib/funnel';
 
 const slugify = (s: string) =>
   s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48);
@@ -70,6 +71,7 @@ export function OnboardingPage() {
         p_plan_code: chosen.code, p_cycle: cycle, p_contact_phone: phone || null,
       });
       try { sessionStorage.removeItem('pp_provision_req'); } catch { /* ok */ }
+      track('trial_started', chosen.code);
       await refresh();
       navigate(`/c/${r.slug}/configuracoes?inicio=1`, true);
     } catch (err: any) {

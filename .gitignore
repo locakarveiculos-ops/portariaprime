@@ -16,3 +16,4 @@ docs/legado/prototipo-portaria-prime-index.jsx
 docs/legado/readme-prototipo.txt
 # Evidências de teste geradas
 tests/evidence/
+dist-stack/

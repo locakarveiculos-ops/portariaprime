@@ -64,16 +64,16 @@ export function PessoasPage() {
         <Card className="space-y-3">
           <div className="flex flex-wrap justify-between gap-2 items-center">
             <p className="font-semibold">Unidades ({units?.filter((u) => u.active).length ?? '…'} ativas{t.overview?.entitlements ? ` de ${t.overview.entitlements.max_units} no plano` : ''})</p>
-            <Button variant="secondary" onClick={() => setImporting(true)}><Upload className="w-4 h-4" /> Importar CSV</Button>
+            <Button variant="secondary" onClick={() => setImporting(true)} data-tour="unidades-importar"><Upload className="w-4 h-4" /> Importar CSV</Button>
           </div>
-          <form onSubmit={addUnit} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end">
+          <form onSubmit={addUnit} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end" data-tour="unidades-form">
             <Field label="Bloco/Torre (opcional)"><Input name="block" maxLength={30} /></Field>
             <Field label="Unidade"><Input name="label" required maxLength={30} placeholder="101A, Casa 12…" /></Field>
             <Button type="submit" loading={busy}>Adicionar</Button>
           </form>
           <Input aria-label="Filtrar unidades" placeholder="Filtrar" value={filter} onChange={(e) => setFilter(e.target.value)} />
           {!units ? <Spinner /> : shown.length === 0 ? <Empty title="Nenhuma unidade" /> : (
-            <ul className="divide-y divide-line max-h-96 overflow-y-auto">
+            <ul className="divide-y divide-line max-h-96 overflow-y-auto" data-tour="unidades-lista">
               {shown.map((u) => (
                 <li key={u.id} className="py-2 flex items-center justify-between gap-2 text-sm">
                   <span className={u.active ? '' : 'text-muted line-through'}>{unitName(u.block, u.label)}</span>
@@ -92,10 +92,10 @@ export function PessoasPage() {
         <Card className="space-y-3">
           <div className="flex flex-wrap justify-between gap-2 items-center">
             <p className="font-semibold">Pessoas com acesso</p>
-            {canTeam && <Button variant="secondary" onClick={() => setInvite({ role: 'porteiro' })}>Convidar equipe</Button>}
+            {canTeam && <Button variant="secondary" onClick={() => setInvite({ role: 'porteiro' })} data-tour="equipe-convite">Convidar equipe</Button>}
           </div>
           {!members ? <Spinner /> : (
-            <ul className="divide-y divide-line">
+            <ul className="divide-y divide-line" data-tour="equipe-lista">
               {members.map((m) => (
                 <li key={m.membership_id} className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
                   <span>
@@ -116,7 +116,7 @@ export function PessoasPage() {
           {invites.length > 0 && (
             <>
               <p className="font-semibold pt-2">Convites pendentes</p>
-              <ul className="divide-y divide-line">
+              <ul className="divide-y divide-line" data-tour="convites-pendentes">
                 {invites.map((i) => (
                   <li key={i.id} className="py-2 flex justify-between gap-2 text-sm">
                     <span>{i.email} · {i.role}{i.unit_id && unitsById[i.unit_id] ? ` · ${unitName(unitsById[i.unit_id].block, unitsById[i.unit_id].label)}` : ''} · expira {new Date(i.expires_at).toLocaleDateString('pt-BR')}</span>

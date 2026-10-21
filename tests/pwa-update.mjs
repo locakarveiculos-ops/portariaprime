@@ -25,7 +25,7 @@ await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const browser = await chromium.launch({ channel: 'msedge', headless: true });
 try {
   const page = await browser.newPage();
-  await page.goto(`http://127.0.0.1:${server.address().port}/`);
+  await page.goto(`http://127.0.0.1:${server.address().port}/entrar`);
   await page.evaluate(async () => { await navigator.serviceWorker.ready; });
   await page.reload();
   await page.waitForFunction(() => !!navigator.serviceWorker.controller);

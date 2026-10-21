@@ -1,29 +1,52 @@
 # Banco e restauração
 
-## O que foi reconstruído
+## Dados antigos
 
-Cadeia SQL canônica para um projeto Supabase novo: identidade, vínculos por tenant, unidades alfanuméricas, operação de encomendas, filas, faturamento, RLS, Storage e funções transacionais. Aplicada apenas em Postgres PGlite em memória com schemas Auth/Storage mínimos de teste. **Nenhum banco remoto foi reconstruído.**
+O banco do Village Azaleia foi perdido. **Nenhum dado histórico foi recuperado ou importado.** O que existe é o schema reconstruído (migrations canônicas) e dados fictícios de demonstração/QA. O seed `supabase/seed/demo.sql` só roda com a flag `allow_demo_seed` e não cria senha padrão.
 
-## Histórico
+## Cadeia de migrations
 
-Existem backups locais parciais descritos em `DIAGNOSTICO_LEGADO.md`. **Nenhum registro histórico foi recuperado/importado.** O seed de dois condomínios é fictício. Não contém senha padrão nem recria credenciais legadas.
+`supabase/migrations/*.sql`, em ordem. Verificado em 21/10/2026:
 
-## Novo projeto
+| Ambiente | Situação |
+|---|---|
+| PGlite (testes unitários de banco) | todas aplicadas a cada `npm run test:db` |
+| PostgreSQL 17 real + Supabase Auth/Storage/PostgREST oficiais (stack local, `docs/STACK_LOCAL.md`) | **16 de 16 aplicadas em banco novo**, cada uma em transação única (`psql -1`) |
+| Supabase de produção `zehijyqgqkouzhldeqio` | até `20261020000200`. **Pendentes:** `20261020000300_disable_test_cleanup`, `20261020000400_checkout_completion_guard`, `20261021000100_landing_funnel_support` |
 
-Aplicar as migrations canônicas ordenadas em ambiente isolado. Guardar o histórico do mecanismo de migrations. Testar com usuários autenticados comuns antes de configurar dados reais. O shim `tests/db/supabase-shim.sql` é somente teste: nunca aplicar no Supabase.
+As três pendentes são aditivas (revogam uma RPC de teste, endurecem uma atualização condicional, adicionam colunas com default e uma tabela nova). Aplicar com a conta dona do projeto:
 
-## Ambiente existente
+```
+supabase link --project-ref zehijyqgqkouzhldeqio
+supabase db push        # aplica só as que faltam
+```
 
-Não existe caminho incremental legado→SaaS homologado nesta entrega. NÃO aplicar migrations novas sobre tabelas antigas homônimas. Criar novo projeto, realizar backup íntegro do anterior, mapear IDs legados para UUIDs e validar vínculos por condomínio antes de importar. Importador histórico permanece pendente; não há recuperação automática segura por bloco/apartamento.
+Antes: backup (abaixo). O app publicado funciona sem elas (o formulário de contato grava sem a coluna `source`; o funil fica sem registro até a migration existir).
 
-## Backup e restore
+## Backup e restauração física — ensaiado
 
-`scripts/backup-prime.mjs` exporta tabelas paginadas, arquivos das migrations, inventário Auth e objetos Storage; criptografa AES-256-GCM com checksum externo. `scripts/verify-backup.mjs` verifica integridade offline. Ainda não foram executados contra o Supabase real.
+`scripts/restore-drill.mjs` (stack local, 21/10/2026):
 
-Limitações: migrações exportadas não equivalem a dump do schema vivo; alterações fora delas precisam de `pg_dump`. Paginação não constitui snapshot transacional: suspender escritas ou usar snapshot Postgres coordenado. Inventário Auth não contém hashes/senhas/sessões; recuperação exige exportação Auth suportada pelo provedor ou recriação/mapeamento deliberado e reset de acesso. A implementação mantém arquivo em memória, exigindo espaço suficiente.
+1. `pg_dump -Fc` dos schemas `public`, `auth`, `storage`, `app`, `extensions` + binários do Storage, empacotados e criptografados (AES-256-GCM, chave derivada por scrypt de `BACKUP_PASSPHRASE`). Saída em `%LOCALAPPDATA%\pp-stack\backups`, fora do Git.
+2. Cluster PostgreSQL **novo** (porta 54339), papéis do Supabase recriados, `pg_restore` em transação única, objetos em pasta separada.
+3. Verificação: contagens idênticas em 75 tabelas (822 linhas), nenhuma FK inválida, nenhum anexo sem objeto, checksums SHA-256 idênticos dos objetos.
+4. `scripts/restore-drill-login.mjs`: Supabase Auth separado apontado para o banco restaurado; **login com a senha original funcionou** e senha errada foi recusada.
 
-Ensaio de restauração completo **pendente**. Não anunciar backup restaurável até restaurar em projeto isolado, comparar contagens/checksums, verificar FKs/RLS e baixar amostras de objetos autorizadas. Scripts legados não devem ser utilizados como substituto desse procedimento.
+Achado do ensaio, já tratado no script: restaurar com `--no-owner` deixa as tabelas do `auth` com dono `postgres`; como elas têm RLS sem policies, o serviço Auth passa a ver **zero usuários** e ninguém entra, mesmo com os dados presentes. É preciso devolver a posse a `supabase_auth_admin` (e as do `storage` a `supabase_storage_admin`).
+
+### Em produção (Supabase hospedado)
+
+- Banco: `supabase db dump` (schema e dados) ou backups diários do plano; os hashes de senha estão em `auth.users` e voltam com o dump.
+- Storage: baixar os buckets `tenant-private` e `tenant-public` (API do Storage com service role) e guardar com o dump, criptografado.
+- Restaurar SEMPRE num projeto novo, conferir contagens/objetos/login e só então trocar o apontamento.
+- Ainda não executado contra o projeto de produção (exige a conta dona do projeto; o token anterior foi exposto no chat e deve ser revogado).
+
+`scripts/backup-prime.mjs`/`restore-prime.mjs` (lógicos, via API) continuam como alternativa sem acesso ao Postgres; não substituem o ensaio físico.
+
+## Retenção e alerta
+
+Pendente de configuração no ambiente do proprietário: agendar o dump diário (GitHub Actions com secret ou máquina do operador), reter 7 diários + 4 semanais + 3 mensais fora do repositório, e alertar falha pelo próprio job (e-mail do Actions). Sem isso, o critério "job verificável com alerta" não está fechado.
 
 ## Rollback
 
-Não executar reset/drop no projeto existente. Para implantação futura, preservar o projeto anterior e um backup validado; realizar migração em destino separado. Reverter versão do aplicativo e apontamento somente após validar compatibilidade de schema e integridade, sem apagar transações novas.
+Nunca reset/drop no projeto existente. Reverter a versão do aplicativo é seguro com as migrations atuais (todas aditivas). Para rollback de dados, restaurar em projeto separado e migrar o apontamento, sem apagar transações novas.

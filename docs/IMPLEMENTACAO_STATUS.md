@@ -1,5 +1,7 @@
 # Status de implementação — Portaria Prime
 
+> **Atualização de 21/10/2026 — prevalece sobre o texto abaixo.** Stack Supabase local real (sem Docker) montada: migrations aplicadas em banco novo, E2E de API 6/6, jornada completa do síndico no navegador, restore físico com login, tour/ajuda completos, capturas reais e landing em `/`. Matriz atual: `FINALIZACAO_CHECKLIST.md`, `QA_FINAL.md`, `GATE_LANDING.md`. Continuam bloqueados por insumo externo: migrations novas em produção, catálogo publicado, InfinitePay/Resend/Evolution/Gemini/VAPID, backup agendado e revisão jurídica.
+
 Revisão em 20/10/2026. Especificação válida: versão 2 enviada pelo proprietário. O arquivo mestre local contém V1 histórica, com aviso de precedência. **Entrega integral ainda não aceita.**
 
 ## Evidências e limites

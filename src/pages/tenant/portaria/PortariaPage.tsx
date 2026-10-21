@@ -52,7 +52,7 @@ export function PortariaPage() {
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Portaria</h1>
       {error && <Alert tone="danger">{error}</Alert>}
-      <div className="grid grid-cols-3 gap-2" role="tablist">
+      <div className="grid grid-cols-3 gap-2" role="tablist" data-tour="portaria-abas">
         {tabs.map(([id, label, Icon]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
             className={`min-h-14 rounded-2xl border text-base font-semibold flex items-center justify-center gap-2 ${tab === id ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-line'}`}>
@@ -79,14 +79,14 @@ export function PortariaPage() {
       ) : <Spinner />)}
 
       {tab === 'entregar' && (
-        <Card className="space-y-4">
+        <Card className="space-y-4" data-tour="entregar-qr">
           <ScanToPickup onFound={(pkg, qr) => setPickup({ pkg, qr })} />
           <p className="text-sm text-muted">Sem QR? Encontre a encomenda em “Buscar” e use “Entregar sem QR”.</p>
         </Card>
       )}
 
       {(tab === 'buscar' || tab === 'entregar') && (
-        <Card className="space-y-3">
+        <Card className="space-y-3" data-tour="aguardando-lista">
           <div className="flex flex-wrap items-end gap-3 justify-between">
             <p className="font-semibold">Aguardando retirada ({waiting.length})</p>
             <div className="w-full sm:w-72"><Input aria-label="Buscar por unidade, rastreio ou nome" placeholder="Unidade, rastreio ou nome" value={search} onChange={(e) => setSearch(e.target.value)} /></div>
@@ -135,7 +135,7 @@ function HistorySearch({ onReceipt }: { onReceipt: (id: string) => void }) {
     try { setRows(await listPackages(t.tenant.id, { search: q, limit: 50 })); } catch (err: any) { toast.error(err.message); }
   };
   return (
-    <Card className="space-y-3">
+    <Card className="space-y-3" data-tour="historico-busca">
       <form onSubmit={run} className="flex gap-2 items-end">
         <div className="flex-1"><Field label="Histórico completo"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Rastreio, unidade ou nome" /></Field></div>
         <Button type="submit" variant="secondary">Buscar</Button>

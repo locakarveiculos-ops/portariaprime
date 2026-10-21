@@ -5,6 +5,7 @@ import { navigate, onLink, query } from '../../lib/router';
 import { useSession } from '../../lib/session';
 import { Alert, Button, Field, Input, Spinner } from '../../components/ui';
 import { AuthLayout } from './AuthLayout';
+import { track } from '../../lib/funnel';
 
 const origin = () => location.origin;
 
@@ -60,6 +61,7 @@ export function SignupPage() {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const next = query('next') || '/onboarding';
+  useEffect(() => { if (!next.startsWith('/convite')) track('signup_started'); }, [next]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,6 +76,7 @@ export function SignupPage() {
     });
     setBusy(false);
     if (error) return setError(/registered|exists/i.test(error.message) ? 'Este e-mail já tem conta. Use "Entrar".' : friendly(error));
+    if (!next.startsWith('/convite')) track('signup_completed');
     setSent(true);
   };
 

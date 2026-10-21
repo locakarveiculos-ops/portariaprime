@@ -35,8 +35,8 @@ export function MoradorPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Minhas encomendas</h1>
-      <PushToggle />
-      <Card>
+      <div data-tour="push-toggle"><PushToggle /></div>
+      <Card data-tour="morador-aguardando">
         <p className="font-semibold mb-2">Para retirar ({waiting.length})</p>
         {!rows ? <Spinner /> : waiting.length === 0 ? <Empty title="Nenhuma encomenda aguardando">Você será avisado quando algo chegar.</Empty> : (
           <ul className="divide-y divide-line">
@@ -46,13 +46,13 @@ export function MoradorPage() {
                   <p className="font-medium">{p.carrier} <span className="text-muted font-normal">· {unitName(p.unit_block, p.unit_label)}</span></p>
                   <p className="text-xs text-muted">{p.tracking_code || 'sem rastreio'} · chegou {dateTime(p.received_at, t.tenant.timezone)}</p>
                 </div>
-                <Button onClick={() => openQr(p)} loading={busy}><QrCode className="w-4 h-4" /> Mostrar QR de retirada</Button>
+                <Button onClick={() => openQr(p)} loading={busy} data-tour="morador-qr"><QrCode className="w-4 h-4" /> Mostrar QR de retirada</Button>
               </li>
             ))}
           </ul>
         )}
       </Card>
-      <Card>
+      <Card data-tour="morador-historico">
         <p className="font-semibold mb-2">Histórico</p>
         {history.length === 0 ? <Empty title="Sem histórico ainda" /> : (
           <ul className="divide-y divide-line">

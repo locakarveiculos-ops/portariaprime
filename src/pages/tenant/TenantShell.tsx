@@ -6,8 +6,36 @@ import { navigate, onLink } from '../../lib/router';
 import { publicLogoUrl } from '../../lib/theme';
 import { dateTime } from '../../lib/format';
 import { Alert } from '../../components/ui';
+import { useTour } from '../../components/TourGuide';
+import { articleFor } from '../../lib/help';
+import { loadProgress, saveProgress, toursFor } from '../../lib/tours';
 
 interface NavItem { area: string; label: string; icon: React.ElementType; show: boolean }
+
+/** “Ajuda desta tela” + oferta do tutorial no primeiro acesso à área (sem obrigar). */
+function ScreenHelp({ area, base }: { area: string; base: string }) {
+  const t = useTenant();
+  const { ctx } = useSession();
+  const { start, running } = useTour();
+  const role = t.link.role;
+  const article = articleFor(area, role);
+  const tour = toursFor(role, (p) => t.can(p as any)).find((x) => x.steps[0].area === area);
+  const [progress, setProgress] = useState(() => loadProgress(ctx!.user_id, t.tenant.id));
+  if (area === 'ajuda' || !article) return null;
+  const offer = tour && progress[tour.id] === undefined && !running;
+  return (
+    <div className="flex flex-wrap items-center justify-end gap-3 text-sm">
+      {offer && (
+        <span className="flex flex-wrap items-center gap-2 rounded-xl border border-line bg-surface px-3 py-1.5">
+          Primeira vez aqui?
+          <button className="font-semibold underline min-h-9" onClick={() => start(tour, base, ctx!.user_id, t.tenant.id)}>Fazer o tutorial</button>
+          <button className="text-muted underline min-h-9" onClick={() => { saveProgress(ctx!.user_id, t.tenant.id, tour.id, 'skipped'); setProgress(loadProgress(ctx!.user_id, t.tenant.id)); }}>Agora não</button>
+        </span>
+      )}
+      <a href={`${base}/ajuda?artigo=${article.slug}`} onClick={onLink} className="inline-flex items-center gap-1 text-secondary font-medium min-h-9"><HelpCircle className="w-4 h-4" aria-hidden />Ajuda desta tela</a>
+    </div>
+  );
+}
 
 export function TenantShell({ area, children }: { area: string; children: React.ReactNode }) {
   const t = useTenant();
@@ -90,6 +118,7 @@ export function TenantShell({ area, children }: { area: string; children: React.
           {t.isStaff && state === 'restricted' && (
             <Alert tone="danger">Assinatura inativa: novos recebimentos estão bloqueados. Consulta, exportação e retirada de encomendas já guardadas continuam liberadas.</Alert>
           )}
+          <ScreenHelp area={area} base={base} />
           {children}
         </main>
       </div>

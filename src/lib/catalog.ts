@@ -39,7 +39,7 @@ export function featureList(p: PlanRow): string[] {
     'Recebimento, guarda e retirada com QR Code',
     'Assinatura na retirada e comprovante',
     'Moradores, equipe e personalização da marca',
-    'Avisos no app e por e-mail',
+    'Avisos no app (e-mail e notificação no celular quando configurados)',
   ];
   if (e.feature_ocr) f.push(p.is_custom ? 'Leitura de etiquetas (OCR)' : `Leitura de etiquetas (OCR): ${e.ocr_monthly}/mês`);
   if (e.feature_whatsapp) f.push(p.is_custom ? 'Avisos por WhatsApp' : `Avisos por WhatsApp: ${e.whatsapp_monthly}/mês`);

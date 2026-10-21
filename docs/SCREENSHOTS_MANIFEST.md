@@ -1,7 +1,19 @@
-# Manifesto de screenshots
+# Manifesto de capturas
 
-**Nenhuma captura comercial produzida.** O gate da landing está fechado (`GATE_LANDING.md`): faltam Supabase real e fluxos ponta a ponta homologados, sem os quais qualquer print de dashboard/recebimento/retirada mostraria recurso não comprovado.
+Geradas por `scripts/capture-screens.mjs` em 2026-10-21, commit `09063af` (mais alterações locais da sessão), stack Supabase local isolada (`scripts/local-stack.mjs`), Edge headless, tema claro, movimento reduzido.
+Todos os dados são fictícios (domínio `.invalid`). QR da tela do morador desfocado; assinatura é traço sintético; tokens pertencem apenas à stack local.
 
-Evidências de teste (não comerciais, fora do Git): `tests/evidence/login-{360,390,768,1024,1440}.png`, geradas por `npm run test:ui` contra o Vite local.
+| Arquivo | Rota | Viewport | Cenário |
+|---|---|---|---|
+| `public/screens/recebimento-desktop.webp` | `/c/:slug/portaria` | 1440x900 | Recebimento preenchido manualmente, antes de salvar |
+| `public/screens/comprovante-desktop.webp` | `/c/:slug/portaria (comprovante)` | 1440x900 | Comprovante após retirada real com assinatura sintética |
+| `public/screens/portaria-mobile.webp` | `/c/:slug/portaria (Buscar)` | 390x844 | Portaria no celular: aguardando retirada |
+| `public/screens/morador-mobile.webp` | `/c/:slug/morador (QR)` | 390x844 | Morador com QR de uso único (QR desfocado na captura) |
+| `public/screens/painel-desktop.webp` | `/c/:slug/painel` | 1440x900 | Painel do síndico após 7 recebimentos e 1 retirada |
+| `public/screens/armazenamento-desktop.webp` | `/c/:slug/painel (ocupação)` | 1440x900 | Ocupação dos locais de guarda |
+| `public/screens/assinatura-desktop.webp` | `/c/:slug/assinatura` | 1440x900 | Mês grátis ativo com plano escolhido |
+| `public/screens/marca-a-desktop.webp` | `/c/:slug/portaria` | 1440x900 | Condomínio A com marca azul |
+| `public/screens/marca-b-desktop.webp` | `/c/:slug/portaria` | 1440x900 | Condomínio B com marca verde; dados separados de A |
+| `public/screens/og.png` | derivada de painel-desktop | 1200x630 | Imagem Open Graph |
 
-Quando o gate abrir: rodar o seed de demonstração em homologação, operar o sistema de verdade e registrar aqui arquivo, rota, viewport, data, commit, cenário e teste correspondente.
+Recapturar: subir a stack local, `npm run dev:stack` e `node --env-file=.env.stack.local scripts/capture-screens.mjs`.

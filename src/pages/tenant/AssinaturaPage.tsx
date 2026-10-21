@@ -48,7 +48,7 @@ export function AssinaturaPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Assinatura</h1>
-      <Card className="space-y-3">
+      <Card className="space-y-3" data-tour="assinatura-resumo">
         <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-lg">{ov.plan.name} · {CYCLE_LABEL[ov.cycle]}</p><Badge tone={tone}>{label}</Badge></div>
         {ov.status === 'trialing' && (
           <div className="text-sm space-y-1">
@@ -62,7 +62,7 @@ export function AssinaturaPage() {
         {ov.commercial_state === 'grace' && <Alert tone="warning">Período de carência de {ov.grace_days} dias após o vencimento. Pague para evitar o bloqueio de novos recebimentos.</Alert>}
         {ov.commercial_state === 'restricted' && <Alert tone="danger">Acesso restrito: novos recebimentos e recursos pagos bloqueados. Dados, consultas, exportação e retirada de encomendas guardadas continuam disponíveis.</Alert>}
         {ov.next_plan && <p className="text-sm">Mudança agendada para o próximo ciclo: <strong>{ov.next_plan.name} · {CYCLE_LABEL[ov.next_plan.cycle]}</strong> (a partir de {dateTime(ov.current_period_end, tz)}).</p>}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm" data-tour="assinatura-uso">
           <Usage label="Unidades" used={ov.usage.units} max={ov.entitlements.max_units} />
           <Usage label="Portarias" used={ov.usage.concierges} max={ov.entitlements.max_concierges} />
           {ov.entitlements.feature_ocr && <Usage label="Leituras OCR (mês)" used={ov.usage.ocr} max={ov.entitlements.ocr_monthly} />}
@@ -75,14 +75,14 @@ export function AssinaturaPage() {
             {payError && <Alert tone="warning">{payError}</Alert>}
           </div>
         )}
-        <div className="flex gap-2 pt-2 border-t border-line">
+        <div className="flex gap-2 pt-2 border-t border-line" data-tour="assinatura-cancelar">
           {ov.cancel_at_period_end || ov.status === 'canceled'
             ? <Button variant="secondary" loading={busy} onClick={() => run(async () => { await rpc('reactivate_subscription', { p_tenant: t.tenant.id }); await t.reload(); }, 'Assinatura reativada.')}>Reativar</Button>
             : <Button variant="ghost" loading={busy} onClick={() => confirm('Cancelar a assinatura? O acesso continua até o fim do período já liberado.') && run(async () => { await rpc('cancel_subscription', { p_tenant: t.tenant.id }); await t.reload(); }, 'Cancelamento registrado.')}>Cancelar assinatura</Button>}
         </div>
       </Card>
 
-      <Card className="space-y-3">
+      <Card className="space-y-3" data-tour="assinatura-troca">
         <p className="font-semibold">Trocar de plano</p>
         <p className="text-sm text-muted">{trialActive ? 'Durante o teste, a troca vale na hora e o término do teste não muda.' : 'A troca vale a partir do próximo ciclo (sem cobrança proporcional). Nenhum dado é apagado.'}</p>
         {!plans ? <Spinner /> : (

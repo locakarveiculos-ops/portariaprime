@@ -55,7 +55,7 @@ function BrandingCard() {
   const reset = () => setForm({ ...form, ...DEFAULTS, theme: 'light' });
   if (!t.can('settings')) return null;
   return (
-    <Card className="space-y-4">
+    <Card className="space-y-4" data-tour="config-marca">
       <p className="font-semibold">Marca do condomínio</p>
       <div className="grid sm:grid-cols-2 gap-4">
         <Field label="Nome exibido"><Input value={form.display_name} maxLength={80} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
@@ -138,7 +138,7 @@ function StorageCard() {
   });
 
   return (
-    <Card className="space-y-3">
+    <Card className="space-y-3" data-tour="config-locais">
       <div className="flex justify-between items-center"><p className="font-semibold">Portarias e locais de guarda</p><Button variant="ghost" onClick={addConcierge}>Nova portaria</Button></div>
       {!concierges ? <Spinner /> : (
         <>
@@ -178,7 +178,7 @@ function ChannelsCard() {
     if (error) throw new Error('Não foi possível salvar.');
   }, 'Preferências salvas.');
   return (
-    <Card className="space-y-3">
+    <Card className="space-y-3" data-tour="config-canais">
       <p className="font-semibold">Avisos e regras</p>
       <div className="flex flex-wrap gap-4 text-sm">
         {[['notify_email', 'E-mail'], ['notify_push', 'Notificação no app'], ['notify_whatsapp', 'WhatsApp']].map(([k, l]) => (
@@ -230,7 +230,7 @@ function TotemCard() {
   useEffect(() => { load(); }, [load]);
   if (!t.can('settings')) return null;
   return (
-    <Card className="space-y-3">
+    <Card className="space-y-3" data-tour="config-totem">
       <p className="font-semibold">Totem de autoatendimento</p>
       <p className="text-sm text-muted">No tablet da portaria, abra <strong>{location.host}/c/{t.tenant.slug}/totem</strong> e digite o código de pareamento (vale 15 minutos). O totem só pré-registra; o porteiro confere antes do aviso ao morador.</p>
       {code && <Alert tone="success">Código de pareamento: <strong className="font-mono text-lg tracking-widest">{code}</strong></Alert>}

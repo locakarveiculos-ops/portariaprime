@@ -22,12 +22,13 @@ export default defineConfig({
         { src: '/maskable-icon-512x512.png', sizes: '512x512', type: 'image/png', purpose: 'maskable' },
       ],
     },
-    injectManifest: { globPatterns: ['**/*.{js,css,html,png,ico,webmanifest}'] },
+    // Capturas da landing ficam fora do precache (peso); o navegador as cacheia por HTTP.
+    injectManifest: { globPatterns: ['**/*.{js,css,html,png,ico,webmanifest}'], globIgnores: ['screens/**'] },
   })],
   // NEXT_PUBLIC_* = nomes criados pela integração Supabase da Vercel (somente chaves públicas).
   envPrefix: ['VITE_', 'NEXT_PUBLIC_SUPABASE_URL', 'NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY', 'NEXT_PUBLIC_SUPABASE_ANON_KEY'],
   resolve: { alias: { '@': path.resolve(__dirname, '.') } },
-  build: { sourcemap: false },
+  build: { sourcemap: false, rollupOptions: { output: { manualChunks: { supabase: ['@supabase/supabase-js'], react: ['react', 'react-dom'] } } } },
   server: {
     // Somente desenvolvimento: iniciar scripts/dev-api.mjs separadamente.
     proxy: { '/api': { target: 'http://127.0.0.1:3019' } },

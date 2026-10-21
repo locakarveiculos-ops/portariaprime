@@ -1,0 +1,9 @@
+User-agent: *
+Allow: /$
+Allow: /termos
+Allow: /privacidade
+Allow: /screens/
+Allow: /brand/
+Disallow: /
+
+Sitemap: https://portariaprime.vercel.app/sitemap.xml

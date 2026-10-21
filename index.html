@@ -3,14 +3,34 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Portaria Prime</title>
-    <meta name="description" content="Cada encomenda. Tudo sob controle. Gestão de encomendas para condomínios." />
-    <meta name="robots" content="noindex,nofollow" />
+    <title>Portaria Prime — gestão de encomendas para condomínios</title>
+    <meta name="description" content="Cada encomenda. Tudo sob controle. Organize o recebimento, avise os moradores e registre cada retirada. Teste grátis por 1 mês, sem cartão." />
+    <link rel="canonical" href="https://portariaprime.vercel.app/" />
+    <meta property="og:type" content="website" />
+    <meta property="og:locale" content="pt_BR" />
+    <meta property="og:site_name" content="Portaria Prime" />
+    <meta property="og:title" content="Portaria Prime — Cada encomenda. Tudo sob controle." />
+    <meta property="og:description" content="Recebimento, aviso e retirada de encomendas com comprovante, para condomínios. Teste grátis por 1 mês." />
+    <meta property="og:url" content="https://portariaprime.vercel.app/" />
+    <meta property="og:image" content="https://portariaprime.vercel.app/screens/og.png" />
+    <meta name="twitter:card" content="summary_large_image" />
     <meta name="theme-color" content="#101F30" />
     <meta name="apple-mobile-web-app-capable" content="yes" />
     <meta name="apple-mobile-web-app-title" content="Portaria Prime" />
     <link rel="icon" href="/favicon.ico" />
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
+    <script>
+      // Áreas privadas fora do índice (o servidor também envia X-Robots-Tag).
+      if (!['/', '/termos', '/privacidade'].includes(location.pathname)) {
+        var m = document.createElement('meta'); m.name = 'robots'; m.content = 'noindex,nofollow'; document.head.appendChild(m);
+      }
+      // Landing: baixa a imagem principal em paralelo ao JavaScript (LCP).
+      if (location.pathname === '/') {
+        var l = document.createElement('link'); l.rel = 'preload'; l.as = 'image'; l.fetchPriority = 'high';
+        l.setAttribute('imagesrcset', '/screens/painel-desktop-720.webp 720w, /screens/painel-desktop.webp 1440w');
+        l.setAttribute('imagesizes', '(min-width: 1024px) 560px, 100vw'); document.head.appendChild(l);
+      }
+    </script>
   </head>
   <body>
     <div id="root"></div>

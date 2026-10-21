@@ -120,7 +120,7 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
 
   return (
     <form onSubmit={submit} className="grid gap-4 lg:grid-cols-2">
-      <Card className="space-y-3">
+      <Card className="space-y-3" data-tour="receber-foto">
         <p className="font-semibold">1. Foto da etiqueta <span className="text-muted font-normal">(opcional)</span></p>
         {preview ? (
           <div className="relative">
@@ -137,9 +137,9 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
 
       <Card className="space-y-4">
         <p className="font-semibold">2. Dados da encomenda</p>
-        <Field label="Unidade de destino" hint={unit ? `Selecionada: ${unitName(unit.block, unit.label)}` : 'Digite bloco e unidade, ex.: "A 101" ou "casa 12".'}>
+        <div data-tour="receber-unidade"><Field label="Unidade de destino" hint={unit ? `Selecionada: ${unitName(unit.block, unit.label)}` : 'Digite bloco e unidade, ex.: "A 101" ou "casa 12".'}>
           <Input value={unitQuery} onChange={(e) => { setUnitQuery(e.target.value); setUnitId(null); }} placeholder="Buscar unidade" autoComplete="off" />
-        </Field>
+        </Field></div>
         {!unitId && unitQuery && (
           <div className="flex flex-wrap gap-2" role="listbox" aria-label="Unidades encontradas">
             {candidates.length === 0 && <p className="text-sm text-muted">Nenhuma unidade encontrada.</p>}
@@ -164,15 +164,15 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
           </>
         )}
         {storage.length > 0 && (
-          <Field label="Local de guarda" hint="Automático escolhe o local com mais espaço livre.">
+          <div data-tour="receber-local"><Field label="Local de guarda" hint="Automático escolhe o local com mais espaço livre.">
             <Select value={loc} onChange={(e) => setLoc(e.target.value)}>
               <option value="">Automático</option>
               {storage.map((s) => <option key={s.id} value={s.id}>{s.code}{s.is_contingency ? ' (contingência)' : ''}</option>)}
             </Select>
-          </Field>
+          </Field></div>
         )}
         {error && <Alert tone="danger">{error}</Alert>}
-        <Button type="submit" loading={busy} className="w-full">{preregistered ? 'Confirmar recebimento' : 'Registrar encomenda'}</Button>
+        <Button type="submit" loading={busy} className="w-full" data-tour="receber-salvar">{preregistered ? 'Confirmar recebimento' : 'Registrar encomenda'}</Button>
       </Card>
     </form>
   );

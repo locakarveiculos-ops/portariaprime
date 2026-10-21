@@ -4,7 +4,7 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
-    { "source": "/((?!api/|assets/|brand/|sw\\.js|manifest\\.webmanifest|.*\\.(?:png|ico|js|css|webmanifest)$).*)", "destination": "/index.html" }
+    { "source": "/((?!api/|assets/|brand/|screens/|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|.*\\.(?:png|webp|ico|js|css|webmanifest)$).*)", "destination": "/index.html" }
   ],
   "headers": [
     {
@@ -16,6 +16,8 @@
         { "key": "X-Frame-Options", "value": "DENY" }
       ]
     },
+    { "source": "/(c|app|admin|onboarding|convite|entrar|cadastro|recuperar-senha|nova-senha|checkout)(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/screens/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] },
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
   ],

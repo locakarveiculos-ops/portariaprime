@@ -76,7 +76,7 @@ export function PainelPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Painel</h1>
-      <Card className="grid sm:grid-cols-4 gap-3 items-end">
+      <Card className="grid sm:grid-cols-4 gap-3 items-end" data-tour="painel-filtros">
         <Field label="De"><Input type="date" value={from} max={to} onChange={(e) => setFrom(e.target.value)} /></Field>
         <Field label="Até"><Input type="date" value={to} min={from} onChange={(e) => setTo(e.target.value)} /></Field>
         <Field label="Situação">
@@ -85,16 +85,16 @@ export function PainelPage() {
             {Object.entries(STATUS_LABEL).map(([k, v]) => <option key={k} value={k}>{v}</option>)}
           </Select>
         </Field>
-        <Button variant="secondary" onClick={exportCsv} loading={exporting}><Download className="w-4 h-4" /> Exportar CSV</Button>
+        <Button variant="secondary" onClick={exportCsv} loading={exporting} data-tour="painel-exportar"><Download className="w-4 h-4" /> Exportar CSV</Button>
       </Card>
       {error && <Alert tone="danger">{error}</Alert>}
       {!sum ? <Spinner /> : (
         <>
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3" data-tour="painel-kpis">
             {kpis.map(([k, v]) => <Card key={k as string}><p className="text-xs text-muted">{k}</p><p className="text-2xl font-semibold mt-1">{v}</p></Card>)}
           </div>
           <div className="grid lg:grid-cols-2 gap-3">
-            <Card>
+            <Card data-tour="painel-ocupacao">
               <p className="font-semibold mb-3">Ocupação dos locais</p>
               {sum.occupancy.length === 0 ? <Empty title="Nenhum local configurado">Cadastre estantes em Configurações para usar o mapa e a sugestão de local.</Empty> : (
                 <ul className="space-y-2">
