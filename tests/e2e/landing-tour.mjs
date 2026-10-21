@@ -108,7 +108,7 @@ try {
   await s.getByRole('button', { name: 'Entrar' }).click();
   await s.waitForURL(/\/app/);
   await s.getByRole('button', { name: 'Cadastrar condomínio' }).click();
-  const slug = `tour-${Date.now().toString(36)}`;
+  const slug = `e2e-tour-${Date.now().toString(36)}`;
   await s.getByLabel('Nome do condomínio').fill('Condomínio Tour QA');
   await s.getByLabel(/Endereço no sistema/).fill(slug);
   await s.getByLabel(/CNPJ do condomínio/).fill(String(33_000_000_000_000 + (Date.now() % 9_000_000_000)));

@@ -123,8 +123,8 @@ async function receive(p, slug, unit, tracking, carrier, recipient) {
 }
 
 try {
-  const A = { name: 'Residencial Aurora', slug: `aurora-${run}`, color: '#1F3A5F', doc: String(11_000_000_000_000 + (Date.now() % 9_000_000_000)) };
-  const B = { name: 'Condomínio Jardim das Palmeiras', slug: `jardim-${run}`, color: '#126B61', doc: String(22_000_000_000_000 + (Date.now() % 9_000_000_000)) };
+  const A = { name: 'Residencial Aurora', slug: `e2e-aurora-${run}`, color: '#1F3A5F', doc: String(11_000_000_000_000 + (Date.now() % 9_000_000_000)) };
+  const B = { name: 'Condomínio Jardim das Palmeiras', slug: `e2e-jardim-${run}`, color: '#126B61', doc: String(22_000_000_000_000 + (Date.now() % 9_000_000_000)) };
   const sindA = await account('síndica aurora'.replace(/\W+/g, '-')), sindB = await account('sindico-jardim');
   const port = await account('porteiro-aurora'), mor = await account('moradora-aurora');
 

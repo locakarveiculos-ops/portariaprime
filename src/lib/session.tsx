@@ -1,7 +1,7 @@
 import React, { createContext, useCallback, useContext, useEffect, useRef, useState } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase, configError } from './supabase';
-import { rpc } from './api';
+import { friendly, rpc } from './api';
 import { applyTheme } from './theme';
 
 export interface TenantLink {
@@ -19,6 +19,7 @@ export interface Ctx {
   email: string;
   email_verified: boolean;
   platform_admin: boolean;
+  platform_role?: 'owner' | 'support' | 'finance' | 'auditor' | null;
   tenants: TenantLink[];
 }
 
@@ -52,8 +53,11 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     setLoading(true);
     try {
       const context = await rpc<Ctx>('my_context');
+      const { data: platform, error: platformError } = await supabase.rpc('platform_context');
+      // Rollout incremental: apenas RPC ainda não instalada permite continuar sem papel global.
+      if (platformError && platformError.code !== 'PGRST202') throw new Error(friendly(platformError));
       if (current !== generation.current) return;
-      setCtx(context);
+      setCtx({ ...context, platform_role: platform?.role ?? null });
       setError(null);
     } catch (e: any) {
       if (current === generation.current) setError(e.message);

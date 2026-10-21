@@ -21,7 +21,9 @@ export function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const { session } = useSession();
-  useEffect(() => { if (session) navigate(nextPath(), true); }, [session]);
+  // Destino lido uma vez: depois do 1º redirecionamento a URL já não tem ?next e cairia em /app.
+  const [next] = useState(nextPath);
+  useEffect(() => { if (session && location.pathname === '/entrar') navigate(next, true); }, [session, next]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();

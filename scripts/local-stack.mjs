@@ -129,12 +129,6 @@ async function up() {
   console.log(`Auth: se não estiver no ar, rode em outro terminal: wsl -d Debian -- sh '${wslAuth}/run.sh'`);
   await waitHttp(`http://127.0.0.1:${PORTS.auth}/health`, (s) => s === 200, 180);
 
-  // Shim de identidade para quem usa auth.uid()/auth.jwt() fora do PostgREST não é necessário: o Auth cria as funções.
-  pids.rest = startDetached('postgrest', join(S, 'artifacts', 'postgrest-windows-x64', 'postgrest.exe'), [], {
-    PGRST_DB_URI: dbUrl('authenticator'), PGRST_DB_SCHEMAS: 'public,storage,graphql_public', PGRST_DB_ANON_ROLE: 'anon',
-    PGRST_JWT_SECRET: secret, PGRST_SERVER_PORT: String(PORTS.rest), PGRST_SERVER_HOST: '127.0.0.1', PGRST_DB_CHANNEL_ENABLED: 'true',
-  }, S);
-
   mkdirSync(join(S, 'storage-data'), { recursive: true });
   pids.storage = startDetached('storage', join(S, 'node-v24.11.1-win-x64', 'node.exe'), ['dist/start/server.js'], {
     NODE_ENV: 'production', SERVER_HOST: '127.0.0.1', SERVER_PORT: String(PORTS.storage), SERVER_ADMIN_PORT: '54334',
@@ -158,7 +152,13 @@ async function up() {
     psql(`insert into public._pp_migrations (name) values ('${f}')`);
     console.log(`migration ${f}`);
   }
-  psql(`notify pgrst, 'reload schema'`);
+  // PostgREST só depois das migrations, e sempre uma instância nova: um processo antigo
+  // na porta serviria o cache de schema velho (o NOTIFY não chega a ele de forma confiável).
+  spawnSync('powershell.exe', ['-NoProfile', '-Command', `Get-NetTCPConnection -LocalPort ${PORTS.rest} -State Listen -ErrorAction SilentlyContinue | ForEach-Object { Stop-Process -Id $_.OwningProcess -Force }`]);
+  pids.rest = startDetached('postgrest', join(S, 'artifacts', 'postgrest-windows-x64', 'postgrest.exe'), [], {
+    PGRST_DB_URI: dbUrl('authenticator'), PGRST_DB_SCHEMAS: 'public,storage,graphql_public', PGRST_DB_ANON_ROLE: 'anon',
+    PGRST_JWT_SECRET: secret, PGRST_SERVER_PORT: String(PORTS.rest), PGRST_SERVER_HOST: '127.0.0.1', PGRST_DB_CHANNEL_ENABLED: 'true',
+  }, S);
   await waitHttp(`http://127.0.0.1:${PORTS.rest}/`, (s) => s < 500, 60);
 
   writeFileSync(stateFile, JSON.stringify({ ...state, pids }, null, 2));

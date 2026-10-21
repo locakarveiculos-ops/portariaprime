@@ -54,7 +54,7 @@ function Routes() {
   if (error || !ctx) return <main className="max-w-lg mx-auto p-6 space-y-4"><Alert tone="danger">{error || 'Não foi possível carregar seus vínculos.'}</Alert><Button onClick={refresh}>Tentar novamente</Button><Button variant="ghost" onClick={signOut}>Sair</Button></main>;
   if (path === '/onboarding') return <Onboarding />;
   if (path === '/checkout/retorno') return <Retorno />;
-  if (path === '/admin') return ctx.platform_admin ? <Admin /> : <Alert tone="danger">Acesso restrito à administração da plataforma.</Alert>;
+  if (path === '/admin') return (ctx.platform_admin || ctx.platform_role) ? <Admin /> : <Alert tone="danger">Acesso restrito à administração da plataforma.</Alert>;
   if (path === '/app') return <main className="max-w-2xl mx-auto px-4 py-10 space-y-5">
     <PortariaPrimeLogo /><h1 className="text-2xl font-semibold">Escolha o condomínio</h1>
     {ctx.tenants.length === 0 && <Alert>Nenhum vínculo ativo. Use o convite recebido ou cadastre seu condomínio.</Alert>}
@@ -62,7 +62,7 @@ function Routes() {
       <a className="font-semibold underline" href={`/c/${t.slug}`} onClick={onLink}>{t.name}</a>
     </Card>)}
     <Button onClick={() => navigate('/onboarding')}>Cadastrar condomínio</Button>
-    {ctx.platform_admin && <Button variant="secondary" onClick={() => navigate('/admin')}>Administrar plataforma</Button>}
+    {(ctx.platform_admin || ctx.platform_role) && <Button variant="secondary" onClick={() => navigate('/admin')}>Administrar plataforma</Button>}
     <Button variant="ghost" onClick={signOut}>Sair</Button>
   </main>;
   if (route) {

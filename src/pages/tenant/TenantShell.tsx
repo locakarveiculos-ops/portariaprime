@@ -96,7 +96,7 @@ export function TenantShell({ area, children }: { area: string; children: React.
         )}
         <div className="mt-6 border-t border-line pt-4 space-y-2">
           <p className="text-xs text-muted truncate">{ctx?.email}</p>
-          {ctx?.platform_admin && <a href="/admin" onClick={onLink} className="block text-sm text-secondary">Administração da plataforma</a>}
+          {(ctx?.platform_admin || ctx?.platform_role) && <a href="/admin" onClick={onLink} className="block text-sm text-secondary">Administração da plataforma</a>}
           <button onClick={async () => { await signOut(); navigate('/entrar', true); }} className="flex items-center gap-2 text-sm text-muted hover:text-text min-h-10">
             <LogOut className="w-4 h-4" /> Sair
           </button>
