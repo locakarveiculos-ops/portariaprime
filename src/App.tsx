@@ -18,6 +18,7 @@ const TenantShell = lazy(() => import('./pages/tenant/TenantShell').then(m => ({
 
 const Onboarding = lazy(() => import('./pages/Onboarding').then(m => ({ default: m.OnboardingPage })));
 const Portaria = lazy(() => import('./pages/tenant/portaria/PortariaPage').then(m => ({ default: m.PortariaPage })));
+const Comprovante = lazy(() => import('./pages/tenant/Receipt').then(m => ({ default: m.ReceiptPage })));
 const Morador = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.MoradorPage })));
 const Avisos = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.AvisosPage })));
 const Painel = lazy(() => import('./pages/tenant/PainelPage').then(m => ({ default: m.PainelPage })));
@@ -75,6 +76,7 @@ function Routes() {
     const perm = (p: string) => admin && link.permissions.includes(p);
     let page: React.ReactNode = <Alert tone="danger">Área indisponível para seu vínculo.</Alert>;
     if (route.area === 'portaria' && staff) page = <Portaria />;
+    if (route.area === 'totem-equipe' && staff) page = <Portaria totem />;
     if (route.area === 'painel' && admin) page = <Painel />;
     if (route.area === 'pessoas' && admin) page = <Pessoas />;
     if (route.area === 'configuracoes' && perm('settings')) page = <Config />;
@@ -82,6 +84,7 @@ function Routes() {
     if (route.area === 'morador' && links.some(t => t.role === 'morador')) page = <Morador />;
     if (route.area === 'avisos' && links.some(t => t.role === 'morador')) page = <Avisos />;
     if (route.area === 'ajuda') page = <Ajuda />;
+    if (route.area === 'comprovante') page = <Comprovante />;
     return <TenantProvider key={link.tenant_id} link={link}><TourProvider><TenantShell area={route.area}><Suspense fallback={<Spinner />}>{page}</Suspense></TenantShell></TourProvider></TenantProvider>;
   }
   return <main className="p-6"><h1>Página não encontrada</h1><a href="/app" onClick={onLink}>Voltar ao sistema</a></main>;

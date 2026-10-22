@@ -48,7 +48,7 @@ if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
     const { data: plans } = await svc.from('plans').select('code, published');
     before.publishedBefore = plans;
     await svc.from('plans').update({ published: true }).in('code', ['essencial', 'profissional', 'prime']);
-    for (const k of ['adminA', 'adminB', 'porteiroA', 'moradorA', 'moradorB', 'intruso']) await makeUser(k);
+    for (const k of ['adminA', 'adminB', 'porteiroA', 'moradorA', 'moradorA2', 'moradorA3', 'moradorB', 'intruso']) await makeUser(k);
     for (const [key, admin, n] of [['A', 'adminA', 1], ['B', 'adminB', 2]]) {
       const r = await rpc(admin, 'provision_tenant', {
         p_request_id: crypto.randomUUID(), p_name: `E2E ${key}`, p_slug: `${run}-${key.toLowerCase()}`, p_document: doc(n),
@@ -96,6 +96,10 @@ if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
     await assert.rejects(rpc('intruso', 'accept_invitation', { p_token: m.token }), /outro e-mail/);
     await rpc('moradorA', 'accept_invitation', { p_token: m.token });
     await assert.rejects(rpc('moradorA', 'accept_invitation', { p_token: m.token }), /já foi utilizado/);
+    for (const k of ['moradorA2', 'moradorA3']) {
+      const inv = await rpc('adminA', 'create_invitation', { p_tenant: tenants.A, p_email: users[k].email, p_role: 'morador', p_unit: unitA, p_permissions: [] });
+      await rpc(k, 'accept_invitation', { p_token: inv.token });
+    }
     const mb = await rpc('adminB', 'create_invitation', { p_tenant: tenants.B, p_email: users.moradorB.email, p_role: 'morador', p_unit: unitB, p_permissions: [] });
     await rpc('moradorB', 'accept_invitation', { p_token: mb.token });
     const { error } = await users.intruso.client.from('unit_memberships').insert({ tenant_id: tenants.A, unit_id: unitA, user_id: users.intruso.id });
@@ -126,14 +130,51 @@ if (process.env.PP_E2E_ALLOW !== '1' || !url || !anon || !secret) {
 
     const { token } = await rpc('moradorA', 'issue_pickup_token', { p_tenant: tenants.A, p_package: pkg.id });
     await assert.rejects(rpc('adminB', 'lookup_pickup_token', { p_tenant: tenants.B, p_qr: token }), /não reconhecido/);
-    const sig = `${tenants.A}/packages/${pkg.id}/signature-${run}abcd.png`;
-    assert.ifError((await users.porteiroA.client.storage.from('tenant-private').upload(sig, png, { contentType: 'image/png' })).error);
-    const args = { p_tenant: tenants.A, p_package: pkg.id, p_method: 'qr', p_qr: token, p_picked_up_by: 'Retirante E2E', p_signature_path: sig, p_handover_path: null, p_manual_reason: null };
-    const [r1, r2] = await Promise.allSettled([rpc('porteiroA', 'confirm_pickup', args), rpc('adminA', 'confirm_pickup', args)]);
+    // Consulta não consome: duas leituras seguidas.
+    await rpc('porteiroA', 'lookup_pickup_token', { p_tenant: tenants.A, p_qr: token });
+    await rpc('porteiroA', 'lookup_pickup_token', { p_tenant: tenants.A, p_qr: token });
+    // Cada operador envia as próprias provas (owner do objeto = quem confirma).
+    const proofs = async (key) => {
+      const sig = `${tenants.A}/packages/${pkg.id}/signature-${key}${run}.png`;
+      const photo = `${tenants.A}/packages/${pkg.id}/handover-${key}${run}.png`;
+      for (const path of [sig, photo]) assert.ifError((await users[key].client.storage.from('tenant-private').upload(path, png, { contentType: 'image/png' })).error);
+      return { p_signature_path: sig, p_item_photo_path: photo };
+    };
+    const base = { p_tenant: tenants.A, p_package: pkg.id, p_qr: token, p_picked_up_by: 'Retirante E2E', p_recipient_kind: 'morador', p_manual_reason: null };
+    const pa = await proofs('porteiroA');
+    const pb = await proofs('adminA');
+    // Foto do item é obrigatória e prova de outro operador não vale.
+    await assert.rejects(rpc('porteiroA', 'deliver_package', { ...base, p_request: crypto.randomUUID(), ...pa, p_item_photo_path: null }), /Foto do item/);
+    await assert.rejects(rpc('porteiroA', 'deliver_package', { ...base, p_request: crypto.randomUUID(), ...pb }), /Assinatura não recebida/);
+    // Cliente não alcança a baixa direta sem provas.
+    assert.ok((await users.porteiroA.client.rpc('confirm_pickup', { p_tenant: tenants.A, p_package: pkg.id, p_method: 'qr', p_qr: token, p_picked_up_by: 'x', p_signature_path: pa.p_signature_path, p_handover_path: null, p_manual_reason: null })).error);
+    const reqA = crypto.randomUUID();
+    const [r1, r2] = await Promise.allSettled([
+      rpc('porteiroA', 'deliver_package', { ...base, p_request: reqA, ...pa }),
+      rpc('adminA', 'deliver_package', { ...base, p_request: crypto.randomUUID(), ...pb }),
+    ]);
     assert.equal([r1, r2].filter((r) => r.status === 'fulfilled').length, 1, 'exatamente uma retirada vence (conexões distintas)');
     const { data: receipt } = await users.moradorA.client.from('receipts').select('protocol, snapshot').eq('package_id', pkg.id).single();
     assert.match(receipt.protocol, /^PP-/);
     assert.equal(receipt.snapshot.picked_up_by, 'Retirante E2E');
+    if (r1.status === 'fulfilled') {
+      const again = await rpc('porteiroA', 'deliver_package', { ...base, p_request: reqA, ...pa });
+      assert.equal(again.protocol, receipt.protocol, 'retry devolve o mesmo protocolo');
+    }
+    // Os três moradores da unidade veem comprovante e aviso; o de outro condomínio não.
+    for (const k of ['moradorA', 'moradorA2', 'moradorA3']) {
+      const { data: rc } = await users[k].client.from('receipts').select('protocol').eq('package_id', pkg.id);
+      assert.equal(rc.length, 1, `${k} vê o comprovante`);
+      const { data: nt } = await users[k].client.from('notifications').select('kind').eq('package_id', pkg.id);
+      assert.deepEqual(nt.map((n) => n.kind).sort(), ['package_picked_up', 'package_received'], `${k} avisado`);
+      const { data: img } = await users[k].client.storage.from('tenant-private').createSignedUrl(receipt.snapshot.handover_path, 60);
+      assert.ok(img?.signedUrl, `${k} abre a foto do item`);
+    }
+    const { data: none } = await users.moradorB.client.from('receipts').select('id').eq('package_id', pkg.id);
+    assert.equal(none.length, 0);
+    const { data: jobs } = await svc.from('notification_jobs').select('channel, recipient').eq('ref_id', pkg.id).eq('event', 'package_picked_up');
+    assert.equal(jobs.filter((j) => j.channel === 'push').length, 3);
+    assert.equal(jobs.filter((j) => j.channel === 'email').length, 3);
   });
 
   test('revogação vale imediatamente com JWT ainda válido', async () => {

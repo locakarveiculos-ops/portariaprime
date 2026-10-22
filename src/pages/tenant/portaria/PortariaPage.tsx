@@ -6,19 +6,20 @@ import { dateTime, STATUS_LABEL, unitName } from '../../../lib/format';
 import { listPackages, loadStorage, loadUnits, PackageRow, StorageLoc, UnitRow } from '../../../lib/packages';
 import { Alert, Badge, Button, Card, Empty, Field, Input, Modal, Select, Spinner, toast } from '../../../components/ui';
 import { ReceiveForm } from './ReceiveForm';
-import { PickupModal, ScanToPickup } from './PickupFlow';
+import { PickupModal, PickupPackage, ScanToPickup } from './PickupFlow';
 import { ReceiptModal } from '../Receipt';
 
 type Tab = 'receber' | 'entregar' | 'buscar';
 
-export function PortariaPage() {
+/** Portaria completa; `totem` = balcão da equipe logada, só Registrar/Entregar, botões grandes. */
+export function PortariaPage({ totem = false }: { totem?: boolean }) {
   const t = useTenant();
   const [tab, setTab] = useState<Tab>('receber');
   const [units, setUnits] = useState<UnitRow[] | null>(null);
   const [storage, setStorage] = useState<StorageLoc[]>([]);
   const [pending, setPending] = useState<PackageRow[] | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [pickup, setPickup] = useState<{ pkg: PackageRow; qr: string | null } | null>(null);
+  const [pickup, setPickup] = useState<{ pkg: PickupPackage; qr: string | null } | null>(null);
   const [receipt, setReceipt] = useState<string | null>(null);
   const [confirmPre, setConfirmPre] = useState<PackageRow | null>(null);
   const [move, setMove] = useState<PackageRow | null>(null);
@@ -46,22 +47,24 @@ export function PortariaPage() {
   const q = search.trim().toLowerCase();
   const filtered = q ? waiting.filter((p) => `${p.unit_block || ''} ${p.unit_label || ''} ${p.tracking_code || ''} ${p.recipient_name || ''}`.toLowerCase().includes(q)) : waiting;
 
-  const tabs: [Tab, string, React.ElementType][] = [['receber', 'Receber', PackagePlus], ['entregar', 'Entregar', PackageCheck], ['buscar', 'Buscar', Search]];
+  const tabs: [Tab, string, React.ElementType][] = totem
+    ? [['receber', 'Registrar encomenda', PackagePlus], ['entregar', 'Entregar ao morador', PackageCheck]]
+    : [['receber', 'Receber', PackagePlus], ['entregar', 'Entregar', PackageCheck], ['buscar', 'Buscar', Search]];
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Portaria</h1>
+      <h1 className="text-2xl font-semibold">{totem ? 'Totem da portaria' : 'Portaria'}</h1>
       {error && <Alert tone="danger">{error}</Alert>}
-      <div className="grid grid-cols-3 gap-2" role="tablist" data-tour="portaria-abas">
+      <div className={`grid ${totem ? 'grid-cols-2' : 'grid-cols-3'} gap-2`} role="tablist" data-tour="portaria-abas">
         {tabs.map(([id, label, Icon]) => (
           <button key={id} role="tab" aria-selected={tab === id} onClick={() => setTab(id)}
-            className={`min-h-14 rounded-2xl border text-base font-semibold flex items-center justify-center gap-2 ${tab === id ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-line'}`}>
+            className={`${totem ? 'min-h-20 text-lg' : 'min-h-14'} rounded-2xl border text-base font-semibold flex items-center justify-center gap-2 ${tab === id ? 'bg-primary text-primary-fg border-transparent' : 'bg-surface border-line'}`}>
             <Icon className="w-5 h-5" aria-hidden /> {label}
           </button>
         ))}
       </div>
 
-      {pre.length > 0 && (
+      {!totem && pre.length > 0 && (
         <Card className="space-y-2">
           <p className="font-semibold">Deixadas no totem — confira antes de avisar ({pre.length})</p>
           {pre.map((p) => (

@@ -15,7 +15,7 @@ export default defineConfig({
       name: 'Portaria Prime', short_name: 'Portaria Prime',
       description: 'Cada encomenda. Tudo sob controle.',
       theme_color: '#101F30', background_color: '#101F30',
-      display: 'standalone', start_url: '/', scope: '/', lang: 'pt-BR',
+      id: '/', display: 'standalone', start_url: '/app', scope: '/', lang: 'pt-BR', orientation: 'any',
       icons: [
         { src: '/pwa-192x192.png', sizes: '192x192', type: 'image/png' },
         { src: '/pwa-512x512.png', sizes: '512x512', type: 'image/png' },

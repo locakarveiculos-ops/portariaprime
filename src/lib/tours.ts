@@ -54,7 +54,7 @@ export const TOURS: Tour[] = [
       { area: 'portaria', target: 'portaria-abas', title: 'Receber', body: 'Toque em Receber. Entregar e Buscar ficam ao lado.' },
       { area: 'portaria', target: 'receber-foto', title: 'Foto da etiqueta', body: 'Opcional. Se o plano tiver leitura automática, o sistema sugere os dados, e você confere.' },
       { area: 'portaria', target: 'receber-unidade', title: 'Unidade', body: 'Digite bloco e número, por exemplo “A 101”, e escolha na lista.' },
-      { area: 'portaria', target: 'receber-local', title: 'Local de guarda', body: 'Automático escolhe o local com mais espaço. Se estiver tudo lotado, o sistema avisa.' },
+      { area: 'portaria', target: 'receber-local', title: 'Local de guarda', body: 'O sistema sugere a estante com mais espaço. Guarde a encomenda e marque “Guardei fisicamente”. Lotado = aviso, nunca local inventado.' },
       { area: 'portaria', target: 'receber-salvar', title: 'Salvar', body: 'Só considere registrado depois da mensagem de confirmação. O morador é avisado em seguida.' },
     ],
   },
@@ -63,7 +63,7 @@ export const TOURS: Tour[] = [
     goal: 'Entregar ao morador e guardar a prova da retirada.',
     steps: [
       { area: 'portaria', target: 'portaria-abas', title: 'Entregar', body: 'Toque em Entregar e leia o QR do morador com a câmera.' },
-      { area: 'portaria', target: 'entregar-qr', title: 'Leitura do QR', body: 'O QR vale uma vez e expira. Se não funcionar, peça ao morador para gerar outro.' },
+      { area: 'portaria', target: 'entregar-qr', title: 'Leitura do QR', body: 'Ler o QR só consulta e mostra onde está a encomenda. Ao confirmar, colete assinatura e foto do item; o QR é usado nessa hora.' },
       { area: 'portaria', target: 'aguardando-lista', title: 'Sem QR', body: 'Ache a encomenda na lista e use “Entregar sem QR”. Exige justificativa, que fica no histórico.' },
     ],
   },

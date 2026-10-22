@@ -5,13 +5,25 @@ import { signedUrl } from '../../lib/files';
 import { dateTime, unitName } from '../../lib/format';
 import { publicLogoUrl } from '../../lib/theme';
 import { useTenant } from '../../lib/tenant';
+import { query } from '../../lib/router';
 import { Alert, Button, Modal, Spinner } from '../../components/ui';
 
-/**
- * Comprovante de retirada a partir do snapshot imutável (tabela receipts).
- * Imagens via URL assinada curta, gerada a cada abertura (só para autorizados).
- */
+/** Link estável enviado nas mensagens: exige login e vínculo com a unidade (RLS). */
+export function ReceiptPage() {
+  const id = query('p');
+  return <div className="max-w-xl space-y-4"><h1 className="text-2xl font-semibold">Comprovante de retirada</h1>
+    {id && /^[0-9a-f-]{36}$/i.test(id) ? <ReceiptView packageId={id} /> : <Alert tone="danger">Link de comprovante inválido.</Alert>}</div>;
+}
+
 export function ReceiptModal({ packageId, onClose }: { packageId: string; onClose: () => void }) {
+  return <Modal title="Comprovante de retirada" onClose={onClose}><ReceiptView packageId={packageId} /></Modal>;
+}
+
+/**
+ * Comprovante a partir do snapshot imutável (tabela receipts): página e PDF
+ * (impressão do navegador) saem do mesmo registro. Imagens via URL assinada curta.
+ */
+function ReceiptView({ packageId }: { packageId: string }) {
   const t = useTenant();
   const [r, setR] = useState<any>(null);
   const [img, setImg] = useState<{ sig?: string; photo?: string }>({});
@@ -33,7 +45,7 @@ export function ReceiptModal({ packageId, onClose }: { packageId: string; onClos
   const logo = publicLogoUrl(t.branding?.logo_path);
   const s = r?.snapshot;
   return (
-    <Modal title="Comprovante de retirada" onClose={onClose}>
+    <>
       {error ? <Alert tone="danger">{error}</Alert> : !r ? <Spinner /> : (
         <div className="space-y-4">
           <div className="print-area rounded-xl border border-line p-4 bg-white text-[#18283A] space-y-3">
@@ -51,19 +63,21 @@ export function ReceiptModal({ packageId, onClose }: { packageId: string; onClos
               <dt style={{ color: '#526174' }}>Recebida em</dt><dd className="text-right">{dateTime(s.received_at, t.tenant.timezone)}</dd>
               <dt style={{ color: '#526174' }}>Retirada em</dt><dd className="text-right">{dateTime(s.picked_up_at, t.tenant.timezone)}</dd>
               <dt style={{ color: '#526174' }}>Retirada por</dt><dd className="text-right font-medium">{s.picked_up_by}</dd>
+              {s.recipient_kind && <><dt style={{ color: '#526174' }}>Relação</dt><dd className="text-right">{s.recipient_kind === 'autorizado' ? 'Recebedor autorizado' : 'Morador'}</dd></>}
+              {s.storage && <><dt style={{ color: '#526174' }}>Retirada de</dt><dd className="text-right">{s.storage}</dd></>}
               <dt style={{ color: '#526174' }}>Entregue por</dt><dd className="text-right">{s.operator}</dd>
               <dt style={{ color: '#526174' }}>Validação</dt><dd className="text-right">{s.method === 'qr' ? 'QR Code de uso único' : 'Manual (justificada)'}</dd>
             </dl>
             {s.manual_reason && <p className="text-xs" style={{ color: '#526174' }}>Justificativa: {s.manual_reason}</p>}
             <div className="grid grid-cols-2 gap-3">
               {img.sig && <figure><img src={img.sig} alt="Assinatura" className="h-24 w-full object-contain border rounded" /><figcaption className="text-[11px] mt-1" style={{ color: '#526174' }}>Assinatura</figcaption></figure>}
-              {img.photo && <figure><img src={img.photo} alt="Foto da entrega" className="h-24 w-full object-cover rounded" /><figcaption className="text-[11px] mt-1" style={{ color: '#526174' }}>Foto da entrega</figcaption></figure>}
+              {img.photo && <figure><img src={img.photo} alt="Foto do item entregue" className="h-24 w-full object-cover rounded" /><figcaption className="text-[11px] mt-1" style={{ color: '#526174' }}>Foto do item entregue</figcaption></figure>}
             </div>
             <p className="text-[10px] pt-2" style={{ color: '#526174' }}>Emitido em {dateTime(r.issued_at, t.tenant.timezone)} · Tecnologia Portaria Prime</p>
           </div>
-          <Button variant="secondary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Imprimir ou salvar PDF</Button>
+          <Button variant="secondary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Baixar PDF / imprimir</Button>
         </div>
       )}
-    </Modal>
+    </>
   );
 }

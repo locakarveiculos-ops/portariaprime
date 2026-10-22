@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Building2, CreditCard, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Users, X } from 'lucide-react';
+import { Bell, Building2, CreditCard, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Tablet, Users, X } from 'lucide-react';
 import { useSession } from '../../lib/session';
 import { useTenant } from '../../lib/tenant';
 import { navigate, onLink } from '../../lib/router';
@@ -45,6 +45,7 @@ export function TenantShell({ area, children }: { area: string; children: React.
   const role = t.link.role;
   const items: NavItem[] = [
     { area: 'portaria', label: 'Portaria', icon: Package, show: t.isStaff },
+    { area: 'totem-equipe', label: 'Totem da portaria', icon: Tablet, show: t.isStaff },
     { area: 'painel', label: 'Painel', icon: LayoutDashboard, show: role === 'admin' },
     { area: 'pessoas', label: 'Unidades e pessoas', icon: Users, show: t.can('team') || t.can('approve') || role === 'admin' },
     { area: 'morador', label: 'Minhas encomendas', icon: Package, show: role === 'morador' },

@@ -15,7 +15,7 @@ export interface MessageCtx {
   color_primary?: string | null;
   package?: {
     carrier?: string; tracking_code?: string | null; received_at?: string; picked_up_at?: string | null;
-    picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null;
+    picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string;
   } | null;
 }
 
@@ -27,6 +27,8 @@ const CYCLE: Record<string, string> = { monthly: 'mensal', quarterly: 'trimestra
 export function render(event: string, ctx: MessageCtx, payload: any, appUrl: string) {
   const p = ctx.package || {};
   const link = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/morador`;
+  // Link estável: abre após login, só para quem tem vínculo com a unidade (nada público).
+  const receiptLink = p.id ? `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/comprovante?p=${encodeURIComponent(p.id)}` : link;
   const billingLink = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/assinatura`;
   switch (event) {
     case 'package_received':
@@ -47,12 +49,12 @@ export function render(event: string, ctx: MessageCtx, payload: any, appUrl: str
     case 'package_picked_up':
       return {
         subject: `Encomenda retirada — ${ctx.tenant_name}`,
-        push: { title: 'Encomenda retirada', body: 'O comprovante está disponível no app.', url: link },
+        push: { title: 'Encomenda retirada', body: 'O comprovante está disponível no app.', url: receiptLink },
         whatsapp:
           `*${wa(ctx.tenant_name)}*\nEncomenda retirada por ${wa(p.picked_up_by)} em ${fmt(p.picked_up_at, ctx.timezone)}.\n` +
-          (p.protocol ? `Protocolo: ${wa(p.protocol)}\n` : '') + `Comprovante: ${link}`,
+          (p.protocol ? `Protocolo: ${wa(p.protocol)}\n` : '') + `Comprovante (requer login): ${receiptLink}`,
         lines: [['Unidade', p.unit], ['Retirada por', p.picked_up_by], ['Data', fmt(p.picked_up_at, ctx.timezone)], ['Protocolo', p.protocol]],
-        cta: ['Ver comprovante', link],
+        cta: ['Ver comprovante', receiptLink],
         intro: 'Uma encomenda da sua unidade foi retirada na portaria.',
       };
     case 'trial_reminder': {

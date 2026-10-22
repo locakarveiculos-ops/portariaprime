@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { readLabel } from '../../api/ocr/analyze-label.ts';
+import { normalizeLabel, readLabel } from '../../api/ocr/analyze-label.ts';
 
 test('OCR: modelo principal, reserva para erro/JSON inválido e falha explícita', async () => {
   const calls = [];
@@ -29,4 +29,25 @@ test('OCR: modelo principal, reserva para erro/JSON inválido e falha explícita
   }
   ai.models.generateContent = async () => ({ text: 'null' });
   await assert.rejects(readLabel(ai, 'image/png', 'AAAA'), /indisponível/);
+});
+
+test('OCR: códigos de triagem não viram unidade/bloco; campos separados e saneados', () => {
+  const r = normalizeLabel({
+    carrier: 'Mercado Livre', recipientName: ' Jefferson Gomes dos Santos ', senderName: 'Loja Exemplo',
+    unit: 'LSP-105', block: 'RJ2-2', complement: 'Apto 12B', trackingCode: 'MLB123', orderNumber: '2000001',
+    invoiceNumber: null, evidence: [{ field: 'recipientName', text: 'Jefferson Gomes dos Santos' }, { bad: 1 }],
+    alerts: ['x'.repeat(500)], confidence: 140,
+  });
+  assert.equal(r.unit, null);
+  assert.equal(r.block, null);
+  assert.equal(r.recipientName, 'Jefferson Gomes dos Santos');
+  assert.equal(r.senderName, 'Loja Exemplo');
+  assert.equal(r.complement, 'Apto 12B');
+  assert.equal(r.evidence.length, 1);
+  assert.equal(r.confidence, 100);
+  assert.ok(r.alerts.some((a) => a.includes('LSP-105')) && r.alerts.some((a) => a.includes('RJ2-2')));
+  assert.ok(r.alerts[0].length <= 160);
+  assert.equal(normalizeLabel({ unit: 'J', confidence: 50 }).unit, null);
+  assert.equal(normalizeLabel({ unit: '12B', block: 'A', confidence: 50 }).unit, '12B');
+  assert.equal(normalizeLabel({ unit: '15', confidence: 50 }).unit, '15');
 });

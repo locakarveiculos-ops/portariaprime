@@ -10,7 +10,17 @@ export interface PackageRow {
 }
 
 export interface UnitRow { id: string; block: string | null; label: string; active: boolean }
-export interface StorageLoc { id: string; code: string; capacity: number; used?: number; is_contingency: boolean; concierge_location_id: string }
+export interface StorageLoc {
+  id: string; code: string; capacity: number; used?: number; free?: number; is_contingency: boolean; concierge_location_id: string;
+  rack?: string | null; shelf?: string | null; concierge?: string | null; notes?: string | null;
+}
+
+/** "Portaria › Estante A › Prateleira 2" (ou o código, em locais antigos). */
+export const locationName = (s: { code: string; rack?: string | null; shelf?: string | null; concierge?: string | null }) =>
+  [s.concierge, s.rack, s.shelf].filter(Boolean).join(' › ') || s.code;
+
+/** Locais ativos com vagas calculadas no servidor (mesma ordem da escolha automática). */
+export const loadAvailability = (tenantId: string) => rpc<StorageLoc[]>('storage_availability', { p_tenant: tenantId });
 
 export interface ListParams { status?: string | null; from?: string | null; to?: string | null; search?: string | null; limit?: number }
 
@@ -43,7 +53,7 @@ export async function loadUnits(tenantId: string): Promise<UnitRow[]> {
 }
 
 export async function loadStorage(tenantId: string): Promise<StorageLoc[]> {
-  const { data, error } = await supabase.from('storage_locations').select('id, code, capacity, is_contingency, concierge_location_id, active, sort_order')
+  const { data, error } = await supabase.from('storage_locations').select('id, code, rack, shelf, notes, capacity, is_contingency, concierge_location_id, active, sort_order')
     .eq('tenant_id', tenantId).eq('active', true).order('sort_order').order('code');
   if (error) throw new Error('Não foi possível carregar os locais.');
   return data || [];

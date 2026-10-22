@@ -116,7 +116,8 @@ function StorageCard() {
     run(async () => {
       const { error } = await supabase.from('storage_locations').insert({
         tenant_id: t.tenant.id, concierge_location_id: f.get('concierge'), code: String(f.get('code')).trim(),
-        capacity: Number(f.get('capacity')), is_contingency: f.get('contingency') === 'on', sort_order: locs.length + 1,
+        rack: String(f.get('rack') || '').trim() || null, shelf: String(f.get('shelf') || '').trim() || null,
+        notes: String(f.get('notes') || '').trim() || null, capacity: Number(f.get('capacity')), is_contingency: f.get('contingency') === 'on', sort_order: locs.length + 1,
       });
       if (error) throw new Error(/unique|duplicate/.test(error.message) ? 'Já existe um local com esse código.' : 'Não foi possível salvar.');
       form.reset();
@@ -146,14 +147,17 @@ function StorageCard() {
           <ul className="divide-y divide-line text-sm">
             {locs.map((l) => (
               <li key={l.id} className="py-2 flex justify-between items-center">
-                <span className={l.active ? '' : 'line-through text-muted'}>{l.code} · capacidade {l.capacity} {l.is_contingency && <Badge tone="warning">contingência</Badge>}</span>
+                <span className={l.active ? '' : 'line-through text-muted'}>{l.code}{l.rack || l.shelf ? ` — ${[l.rack, l.shelf].filter(Boolean).join(' › ')}` : ''} · capacidade {l.capacity}{l.notes ? ` · ${l.notes}` : ''} {l.is_contingency && <Badge tone="warning">contingência</Badge>}</span>
                 <Button variant="ghost" onClick={() => toggle(l)}>{l.active ? 'Desativar' : 'Reativar'}</Button>
               </li>
             ))}
           </ul>
-          <form onSubmit={addLoc} className="grid sm:grid-cols-5 gap-2 items-end">
+          <form onSubmit={addLoc} className="grid sm:grid-cols-4 gap-2 items-end">
             <Field label="Portaria"><Select name="concierge">{concierges.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-            <Field label="Código"><Input name="code" required maxLength={20} placeholder="Estante A" /></Field>
+            <Field label="Código curto"><Input name="code" required maxLength={20} placeholder="A-2" /></Field>
+            <Field label="Estante"><Input name="rack" maxLength={40} placeholder="Estante A" /></Field>
+            <Field label="Prateleira"><Input name="shelf" maxLength={40} placeholder="Prateleira 2" /></Field>
+            <Field label="Observação"><Input name="notes" maxLength={300} placeholder="Itens grandes no chão" /></Field>
             <Field label="Capacidade"><Input name="capacity" type="number" min={1} max={1000} required defaultValue={20} /></Field>
             <label className="flex items-center gap-2 text-sm min-h-11"><input type="checkbox" name="contingency" /> Contingência</label>
             <Button type="submit" loading={busy}>Adicionar</Button>

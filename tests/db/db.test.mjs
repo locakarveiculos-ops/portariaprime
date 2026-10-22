@@ -18,8 +18,16 @@ async function provision(uid, slug, doc, extra = {}) {
 async function invite(adminUid, tenant, email, role, unit = null) {
   return db.rpc(adminUid, 'create_invitation', { p_tenant: tenant, p_email: email, p_role: role, p_unit: unit, p_permissions: '{}' });
 }
-async function storeObject(path) {
-  await db.service(`insert into storage.objects (bucket_id, name) values ('tenant-private', $1)`, [path]);
+async function storeObject(path, owner = null) {
+  await db.service(`insert into storage.objects (bucket_id, name, owner) values ('tenant-private', $1, $2)`, [path, owner]);
+}
+// Entrega pelo totem: assinatura e foto do item enviadas pelo próprio operador.
+async function proofs(uid, pkgId, tag) {
+  const sig = `${A}/packages/${pkgId}/signature-${tag}.png`;
+  const photo = `${A}/packages/${pkgId}/handover-${tag}.jpg`;
+  await storeObject(sig, uid);
+  await storeObject(photo, uid);
+  return { p_signature_path: sig, p_item_photo_path: photo };
 }
 const rejects = (p, re) => assert.rejects(p, (e) => (re ? re.test(e.message) : true) || assert.fail(e.message));
 
@@ -164,17 +172,20 @@ test('QR de uso único: retirada concorrente, QR reutilizado/estrangeiro/vazio',
   await rejects(db.rpc(morB, 'issue_pickup_token', { p_tenant: A, p_package: pkg.id }), /Sem permissão/);
   // QR de A lido em B.
   await rejects(db.rpc(adminB, 'lookup_pickup_token', { p_tenant: B, p_qr: token }), /não reconhecido/);
-  const sig = `${A}/packages/${pkg.id}/signature-abcdef12.png`;
-  await storeObject(sig);
-  const args = { p_tenant: A, p_package: pkg.id, p_method: 'qr', p_qr: token, p_picked_up_by: 'Morador A', p_signature_path: sig, p_handover_path: null, p_manual_reason: null };
+  const args = { p_tenant: A, p_package: pkg.id, p_request: uuid(), p_qr: token, p_picked_up_by: 'Morador A', p_recipient_kind: 'morador',
+    ...(await proofs(portA, pkg.id, 'abcdef12')), p_manual_reason: null };
   // Token vazio não faz bypass.
-  await rejects(db.rpc(portA, 'confirm_pickup', { ...args, p_qr: '' }), /não corresponde/);
+  await rejects(db.rpc(portA, 'deliver_package', { ...args, p_qr: '' }), /não corresponde/);
+  // Cliente não chama mais a baixa direta sem as provas obrigatórias.
+  await rejects(db.rpc(portA, 'confirm_pickup', { p_tenant: A, p_package: pkg.id, p_method: 'qr', p_qr: token, p_picked_up_by: 'X', p_signature_path: args.p_signature_path, p_handover_path: null, p_manual_reason: null }), /permission denied/);
   // PGlite tem uma única conexão: a disputa real entre conexões é garantida por
-  // SELECT ... FOR UPDATE + checagem de status na RPC. Aqui validamos a regra:
-  // a segunda confirmação (outro porteiro, mesmo QR) é recusada.
-  const first = await db.rpc(portA, 'confirm_pickup', args);
+  // SELECT ... FOR UPDATE + checagem de status na RPC (coberta no E2E real).
+  const first = await db.rpc(portA, 'deliver_package', args);
   assert.equal(first.status, 'RETIRADA');
-  await rejects(db.rpc(adminA, 'confirm_pickup', args), /já foi retirada/);
+  const replay = await db.rpc(portA, 'deliver_package', args);
+  assert.equal(replay.replayed, true);
+  assert.equal(replay.protocol, first.protocol);
+  await rejects(db.rpc(adminA, 'deliver_package', { ...args, p_request: uuid() }), /já foi retirada/);
   await rejects(db.rpc(adminA, 'lookup_pickup_token', { p_tenant: A, p_qr: token }), /já utilizado/);
   const [r] = await db.sql(`select count(*)::int n from public.receipts where package_id = $1`, [pkg.id]);
   assert.equal(r.n, 1);
@@ -185,9 +196,14 @@ test('QR expirado é recusado; manual exige justificativa e assinatura enviada',
   const { token } = await db.rpc(morA, 'issue_pickup_token', { p_tenant: A, p_package: pkg.id });
   db.setNow('2026-02-05T15:00:00Z');
   await rejects(db.rpc(portA, 'lookup_pickup_token', { p_tenant: A, p_qr: token }), /expirado/);
-  const base = { p_tenant: A, p_package: pkg.id, p_method: 'manual', p_qr: null, p_picked_up_by: 'Fulano', p_handover_path: null };
-  await rejects(db.rpc(portA, 'confirm_pickup', { ...base, p_signature_path: `${A}/packages/${pkg.id}/signature-zzzzzzzz.png`, p_manual_reason: 'curto' }), /justificativa/);
-  await rejects(db.rpc(portA, 'confirm_pickup', { ...base, p_signature_path: `${A}/packages/${pkg.id}/signature-zzzzzzzz.png`, p_manual_reason: 'Morador sem celular no momento' }), /Assinatura não recebida/);
+  const base = { p_tenant: A, p_package: pkg.id, p_request: uuid(), p_qr: null, p_picked_up_by: 'Fulano', p_recipient_kind: 'autorizado' };
+  const missing = { p_signature_path: `${A}/packages/${pkg.id}/signature-zzzzzzzz.png`, p_item_photo_path: `${A}/packages/${pkg.id}/handover-zzzzzzzz.jpg` };
+  await rejects(db.rpc(portA, 'deliver_package', { ...base, ...missing, p_manual_reason: 'Morador sem celular no momento' }), /Assinatura não recebida/);
+  const ok = await proofs(portA, pkg.id, 'exp00001');
+  await rejects(db.rpc(portA, 'deliver_package', { ...base, ...ok, p_item_photo_path: null, p_manual_reason: 'Morador sem celular no momento' }), /Foto do item/);
+  // Prova enviada por outro usuário não vale para este operador.
+  await rejects(db.rpc(adminA, 'deliver_package', { ...base, ...ok, p_manual_reason: 'Morador sem celular no momento' }), /Assinatura não recebida/);
+  await rejects(db.rpc(portA, 'deliver_package', { ...base, ...ok, p_manual_reason: 'curto' }), /justificativa/);
   db.setNow('2026-01-31T15:00:00Z');
 });
 
@@ -227,10 +243,8 @@ test('carência e restrição comercial: bloqueia recebimento, mantém retirada'
   const [st] = await db.as(adminA, `select app.commercial_state($1) s`, [A]);
   assert.equal(st.s, 'restricted');
   await rejects(db.rpc(portA, 'receive_package', { p_tenant: A, p_idempotency_key: 'rk-grace-2', p_unit: unitA, p_tracking: 'GR2', p_carrier: 'Outra' }), /Assinatura inativa/);
-  const sig = `${A}/packages/${pkg.id}/signature-grace001.png`;
-  await storeObject(sig);
-  const done = await db.rpc(portA, 'confirm_pickup', { p_tenant: A, p_package: pkg.id, p_method: 'manual', p_qr: null,
-    p_picked_up_by: 'Morador A', p_signature_path: sig, p_handover_path: null, p_manual_reason: 'Morador retirou com documento' });
+  const done = await db.rpc(portA, 'deliver_package', { p_tenant: A, p_package: pkg.id, p_request: uuid(), p_qr: null,
+    p_picked_up_by: 'Morador A', p_recipient_kind: 'morador', ...(await proofs(portA, pkg.id, 'grace001')), p_manual_reason: 'Morador retirou com documento' });
   assert.equal(done.status, 'RETIRADA');
 });
 
