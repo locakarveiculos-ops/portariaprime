@@ -7,7 +7,7 @@
 import webpush from 'web-push';
 import { optionalEnv } from './env.js';
 
-export type SendResult = { status: 'accepted' | 'failed' | 'disabled'; ref?: string; error?: string; gone?: boolean };
+export type SendResult = { status: 'accepted' | 'failed' | 'disabled'; ref?: string; error?: string; gone?: boolean; permanent?: boolean };
 
 export async function sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
   const key = optionalEnv('RESEND_API_KEY');
@@ -42,10 +42,29 @@ export async function sendWhatsApp(instance: string, phone: string, text: string
       signal: AbortSignal.timeout(15000),
     });
     const d: any = await r.json().catch(() => ({}));
-    return r.ok ? { status: 'accepted', ref: d?.key?.id } : { status: 'failed', error: `Evolution HTTP ${r.status}` };
+    if (r.ok) return { status: 'accepted', ref: d?.key?.id };
+    // 400 = número sem WhatsApp/formato; 401/403 = chave; 404 = instância. Sem dados do corpo (pode conter o número).
+    const why = r.status === 400 ? 'número inválido ou sem WhatsApp' : r.status === 401 || r.status === 403 ? 'credencial recusada'
+      : r.status === 404 ? 'instância não encontrada' : 'erro do provedor';
+    return { status: 'failed', error: `Evolution HTTP ${r.status}: ${why}`, permanent: r.status === 400 };
   } catch (e: any) {
-    return { status: 'failed', error: e?.message || 'rede' };
+    // Tempo esgotado: a Evolution pode ter enviado. Não repete sozinho para não duplicar.
+    if (e?.name === 'TimeoutError') return { status: 'failed', error: 'ambiguous: tempo esgotado após envio à Evolution' };
+    return { status: 'failed', error: `rede: ${e?.message || 'indisponível'}` };
   }
+}
+
+/** Estado da instância (somente leitura). */
+export async function whatsAppState(instance: string): Promise<'open' | 'closed' | 'unknown'> {
+  const base = optionalEnv('EVOLUTION_API_URL');
+  const key = optionalEnv('EVOLUTION_API_KEY');
+  if (!base || !key) return 'unknown';
+  try {
+    const r = await fetch(`${base.replace(/\/$/, '')}/instance/connectionState/${encodeURIComponent(instance)}`,
+      { headers: { apikey: key }, signal: AbortSignal.timeout(10000) });
+    const d: any = await r.json().catch(() => ({}));
+    return (d?.instance?.state || d?.state) === 'open' ? 'open' : r.ok || r.status === 404 ? 'closed' : 'unknown';
+  } catch { return 'unknown'; }
 }
 
 export function vapidConfigured(): boolean {

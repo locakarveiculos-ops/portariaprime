@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Bell, Building2, CreditCard, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Tablet, Users, X } from 'lucide-react';
+import { Bell, Building2, CreditCard, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Smartphone, Tablet, Users, X } from 'lucide-react';
 import { useSession } from '../../lib/session';
 import { useTenant } from '../../lib/tenant';
 import { navigate, onLink } from '../../lib/router';
@@ -49,7 +49,8 @@ export function TenantShell({ area, children }: { area: string; children: React.
     { area: 'painel', label: 'Painel', icon: LayoutDashboard, show: role === 'admin' },
     { area: 'pessoas', label: 'Unidades e pessoas', icon: Users, show: t.can('team') || t.can('approve') || role === 'admin' },
     { area: 'morador', label: 'Minhas encomendas', icon: Package, show: role === 'morador' },
-    { area: 'avisos', label: 'Avisos', icon: Bell, show: role === 'morador' },
+    { area: 'avisos', label: 'Avisos', icon: Bell, show: true },
+    { area: 'aplicativo', label: 'Aplicativo e notificações', icon: Smartphone, show: true },
     { area: 'configuracoes', label: 'Configurações', icon: Settings, show: t.can('settings') },
     { area: 'assinatura', label: 'Assinatura', icon: CreditCard, show: t.can('billing') },
     { area: 'ajuda', label: 'Ajuda', icon: HelpCircle, show: true },

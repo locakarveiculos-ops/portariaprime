@@ -22,3 +22,6 @@ alter table storage.objects enable row level security;
 grant select, insert, update, delete on storage.objects to authenticated;
 grant all on storage.objects, storage.buckets to service_role;
 grant usage on schema public to anon, authenticated, service_role;
+-- Vault (segredos do agendador): só a view lida pelas migrations.
+create schema vault;
+create table vault.decrypted_secrets (name text primary key, decrypted_secret text);

@@ -51,6 +51,7 @@ export function PushToggle() {
   const enable = async () => {
     setBusy(true);
     try {
+      if (Notification.permission === 'denied') throw new Error('Notificações bloqueadas neste navegador. Libere em Configurações do site e tente de novo.');
       const perm = await Notification.requestPermission();
       if (perm !== 'granted') throw new Error('Permissão de notificação negada. Você pode ativá-la nas configurações do navegador.');
       const reg = await navigator.serviceWorker.getRegistration();
@@ -58,13 +59,12 @@ export function PushToggle() {
       const s = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID) });
       const j = s.toJSON();
       if (!userId) throw new Error('Sessão inválida.');
-      const { error } = await supabase.from('push_subscriptions').insert({
-        tenant_id: t.tenant.id, user_id: userId, endpoint: j.endpoint, p256dh: j.keys!.p256dh, auth: j.keys!.auth,
-        user_agent: navigator.userAgent.slice(0, 200),
+      const { error } = await supabase.rpc('register_push_subscription', {
+        p_tenant: t.tenant.id, p_endpoint: j.endpoint, p_p256dh: j.keys!.p256dh, p_auth: j.keys!.auth,
+        p_user_agent: navigator.userAgent.slice(0, 200),
       });
-      if (error && error.code !== '23505') throw new Error('Não foi possível registrar este dispositivo.');
-      if (error && !await hasPushRegistration(supabase, t.tenant.id, userId, s.endpoint)) {
-        throw new Error('Não foi possível confirmar o registro deste dispositivo.');
+      if (error || !await hasPushRegistration(supabase, t.tenant.id, userId, s.endpoint)) {
+        throw new Error('Não foi possível registrar este dispositivo.');
       }
       setVerificationError('');
       setSub(s);

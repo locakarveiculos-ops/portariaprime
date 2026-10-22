@@ -18,6 +18,7 @@ const TenantShell = lazy(() => import('./pages/tenant/TenantShell').then(m => ({
 
 const Onboarding = lazy(() => import('./pages/Onboarding').then(m => ({ default: m.OnboardingPage })));
 const Portaria = lazy(() => import('./pages/tenant/portaria/PortariaPage').then(m => ({ default: m.PortariaPage })));
+const AppInfo = lazy(() => import('./pages/tenant/AppPage').then(m => ({ default: m.AppPage })));
 const Comprovante = lazy(() => import('./pages/tenant/Receipt').then(m => ({ default: m.ReceiptPage })));
 const Morador = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.MoradorPage })));
 const Avisos = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.AvisosPage })));
@@ -87,7 +88,8 @@ function Routes() {
     if (route.area === 'configuracoes' && perm('settings')) page = <Config />;
     if (route.area === 'assinatura' && perm('billing')) page = <Assinatura />;
     if (route.area === 'morador' && links.some(t => t.role === 'morador')) page = <Morador />;
-    if (route.area === 'avisos' && links.some(t => t.role === 'morador')) page = <Avisos />;
+    if (route.area === 'avisos') page = <Avisos />;
+    if (route.area === 'aplicativo') page = <AppInfo />;
     if (route.area === 'ajuda') page = <Ajuda />;
     if (route.area === 'comprovante') page = <Comprovante />;
     return <TenantProvider key={link.tenant_id} link={link}><TourProvider><TenantShell area={route.area}><Suspense fallback={<Spinner />}>{page}</Suspense></TenantShell></TourProvider></TenantProvider>;

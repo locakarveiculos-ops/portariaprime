@@ -8,6 +8,7 @@
 import { handler, json, readJson, isUuid, HttpError } from '../_lib/http.js';
 import { requireUser, serviceClient, rpcError } from '../_lib/supabase.js';
 import { env } from '../_lib/env.js';
+import { sendWhatsApp } from '../_lib/channels.js';
 
 function findQr(obj: any, depth = 0): string | null {
   if (!obj || depth > 4 || typeof obj !== 'object') return null;
@@ -24,9 +25,20 @@ function findQr(obj: any, depth = 0): string | null {
 
 export const POST = handler(async (request) => {
   const action = new URL(request.url).pathname.split('/').pop();
-  const { tenantId } = await readJson(request, 1024);
+  const { tenantId, phone } = await readJson(request, 1024);
   if (!isUuid(tenantId)) throw new HttpError(400, 'Condomínio inválido.');
   const { client } = await requireUser(request);
+
+  // Teste dirigido a um número informado pelo administrador, com texto fixo do servidor.
+  if (action === 'test') {
+    const digits = typeof phone === 'string' ? phone.replace(/\D/g, '') : '';
+    if (!/^\d{10,13}$/.test(digits)) throw new HttpError(400, 'Informe DDD e número (ex.: 11 99999-0000).');
+    const { data: instance, error: ge } = await client.rpc('whatsapp_test_gate', { p_tenant: tenantId, p_last4: digits.slice(-4) });
+    if (ge) rpcError(ge);
+    const r = await sendWhatsApp(instance, digits, 'Portaria Prime: teste de envio do WhatsApp do condomínio. Se você recebeu, os avisos estão funcionando.');
+    if (r.status !== 'accepted') throw new HttpError(502, `Não enviado: ${r.error || 'canal indisponível'}.`);
+    return json({ accepted: true, providerRef: r.ref ? `${r.ref.slice(0, 6)}…` : null });
+  }
   const { data: canSettings, error } = await client.rpc('has_settings_and_whatsapp', { p_tenant: tenantId });
   if (error) rpcError(error);
   if (!canSettings) throw new HttpError(403, 'Requer permissão de configurações e plano com WhatsApp.');

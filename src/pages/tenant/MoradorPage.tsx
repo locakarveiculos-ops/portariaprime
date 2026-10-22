@@ -158,10 +158,18 @@ function ContactsCard() {
 export function AvisosPage() {
   const t = useTenant();
   const [rows, setRows] = useState<any[] | null>(null);
+  const [onlyUnread, setOnlyUnread] = useState(false);
+  // RLS limita ao próprio usuário: leitura é por destinatário, não global.
   const load = useCallback(async () => {
-    const { data } = await supabase.from('notifications').select('*').eq('tenant_id', t.tenant.id).order('created_at', { ascending: false }).limit(100);
+    let q = supabase.from('notifications').select('*').eq('tenant_id', t.tenant.id).order('created_at', { ascending: false }).limit(100);
+    if (onlyUnread) q = q.is('read_at', null);
+    const { data } = await q;
     setRows(data || []);
-  }, [t.tenant.id]);
+  }, [t.tenant.id, onlyUnread]);
+  const markRead = async (id: string) => {
+    await supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('id', id).is('read_at', null);
+    load();
+  };
   useEffect(() => { load(); }, [load]);
   useRealtime('notifications', t.tenant.id, load);
   const readAll = async () => {
@@ -170,13 +178,14 @@ export function AvisosPage() {
   };
   return (
     <div className="space-y-4">
-      <div className="flex justify-between items-center"><h1 className="text-2xl font-semibold">Avisos</h1><Button variant="ghost" onClick={readAll}>Marcar todos como lidos</Button></div>
+      <div className="flex flex-wrap justify-between items-center gap-2"><h1 className="text-2xl font-semibold">Avisos</h1>
+        <div className="flex gap-2"><Button variant="ghost" onClick={() => setOnlyUnread((v) => !v)}>{onlyUnread ? 'Mostrar todos' : 'Só não lidos'}</Button><Button variant="ghost" onClick={readAll}>Marcar todos como lidos</Button></div></div>
       <Card>
         {!rows ? <Spinner /> : rows.length === 0 ? <Empty title="Nenhum aviso" /> : (
           <ul className="divide-y divide-line">
             {rows.map((n) => (
-              <li key={n.id} className={`py-3 ${n.read_at ? 'opacity-70' : ''}`}>
-                <p className="font-medium">{n.title}</p>
+              <li key={n.id} className={`py-3 ${n.read_at ? 'opacity-70' : ''}`} onClick={() => !n.read_at && markRead(n.id)}>
+                <p className="font-medium">{!n.read_at && <span className="inline-block w-2 h-2 rounded-full bg-primary mr-2" aria-label="não lido" />}{n.title}</p>
                 <p className="text-sm text-muted">{n.body}</p>
                 <p className="text-xs text-muted mt-1">{dateTime(n.created_at, t.tenant.timezone)}</p>
               </li>

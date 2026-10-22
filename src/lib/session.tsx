@@ -84,6 +84,10 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     // Encerra canais realtime e limpa tema/dados do condomínio anterior.
     await supabase.removeAllChannels();
+    try {
+      const sub = await (await navigator.serviceWorker?.getRegistration())?.pushManager?.getSubscription();
+      if (sub) await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
+    } catch { /* sem push neste navegador */ }
     await supabase.auth.signOut();
     applyTheme(null);
     try { sessionStorage.clear(); } catch { /* sem storage */ }

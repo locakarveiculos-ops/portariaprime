@@ -10,7 +10,7 @@ import { env, appUrl } from '../_lib/env.js';
 import { serviceClient } from '../_lib/supabase.js';
 import { verifyAndApply } from '../_lib/payments.js';
 import { render, emailHtml } from '../_lib/templates.js';
-import { sendEmail, sendWhatsApp, sendPush, SendResult } from '../_lib/channels.js';
+import { sendEmail, sendWhatsApp, sendPush, whatsAppState, SendResult } from '../_lib/channels.js';
 
 async function run(request: Request) {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -37,8 +37,10 @@ async function run(request: Request) {
     }
   }
 
-  const { data: jobs } = await svc.rpc('claim_notification_jobs', { p_limit: 50 });
+  const { data: jobs, error: je } = await svc.rpc('claim_notification_jobs', { p_limit: 50 });
+  if (je) throw new Error(je.message);
   const counts: Record<string, number> = {};
+  const waClosed = new Map<string, boolean>();
   for (const job of jobs || []) {
     let res: SendResult;
     try {
@@ -57,8 +59,15 @@ async function run(request: Request) {
         const wa = ctx.whatsapp;
         if (!wa?.enabled || !wa.instance) res = { status: 'disabled', error: 'WhatsApp não conectado neste condomínio' };
         else {
-          const { data: allowed } = await svc.rpc('consume_whatsapp', { p_tenant: job.tenant_id });
-          res = allowed ? await sendWhatsApp(wa.instance, job.recipient, m.whatsapp) : { status: 'disabled', error: 'Franquia de WhatsApp esgotada' };
+          // Instância caída: não gasta franquia; reagenda e avisa o síndico.
+          if (!waClosed.has(wa.instance)) waClosed.set(wa.instance, (await whatsAppState(wa.instance)) === 'closed');
+          if (waClosed.get(wa.instance)) {
+            res = { status: 'failed', error: 'WhatsApp do condomínio desconectado' };
+            await svc.rpc('ops_alert_whatsapp', { p_tenant: job.tenant_id });
+          } else {
+            const { data: allowed } = await svc.rpc('consume_whatsapp', { p_tenant: job.tenant_id });
+            res = allowed ? await sendWhatsApp(wa.instance, job.recipient, m.whatsapp) : { status: 'disabled', error: 'Franquia de WhatsApp esgotada' };
+          }
         }
       } else {
         const { data: subs } = await svc.from('push_subscriptions').select('id, endpoint, p256dh, auth')
@@ -76,10 +85,11 @@ async function run(request: Request) {
     } catch (e: any) {
       res = { status: 'failed', error: String(e?.message || e) };
     }
-    await svc.rpc('complete_notification_job', { p_job: job.id, p_status: res.status, p_provider_ref: res.ref || null, p_error: res.error || null });
+    await svc.rpc('complete_notification_job', { p_job: job.id, p_status: res.status, p_provider_ref: res.ref || null, p_error: res.error || null, p_final: !!res.permanent });
     counts[`${job.channel}:${res.status}`] = (counts[`${job.channel}:${res.status}`] || 0) + 1;
   }
   report.notifications = counts;
+  await svc.rpc('record_worker_run', { p_name: 'tick', p_result: report });
   return json(report);
 }
 

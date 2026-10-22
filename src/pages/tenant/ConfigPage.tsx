@@ -24,6 +24,7 @@ export function ConfigPage() {
       <StorageCard />
       <ChannelsCard />
       {t.overview?.entitlements?.feature_whatsapp && <WhatsAppCard />}
+      {t.link.role === 'admin' && <NotificationHealthCard />}
       {t.overview?.entitlements?.feature_totem && <TotemCard />}
     </div>
   );
@@ -211,13 +212,57 @@ function WhatsAppCard() {
       <p className="text-sm text-muted">Conecte um número do condomínio para enviar avisos de chegada e retirada. A entrega da mensagem depende do WhatsApp e do telefone do morador.</p>
       {st && <Badge tone={st.connected ? 'success' : 'warning'}>{st.connected ? 'Conectado' : 'Não conectado'}</Badge>}
       {qr && <img src={qr} alt="QR Code para conectar o WhatsApp" className="w-56 h-56 bg-white p-2 rounded-xl" />}
-      <div className="flex gap-2">
+      <div className="flex flex-wrap gap-2">
         <Button variant="secondary" loading={busy} onClick={check}>Verificar conexão</Button>
         <Button loading={busy} onClick={() => run(async () => {
           const r = await api('/api/whatsapp/connect', { tenantId: t.tenant.id });
           if (r.alreadyConnected) { setSt({ connected: true }); setQr(null); } else setQr(r.qrCodeBase64);
         })}>Conectar</Button>
       </div>
+      <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => {
+        e.preventDefault();
+        const phone = String(new FormData(e.currentTarget).get('phone') || '');
+        run(async () => { await api('/api/whatsapp/test', { tenantId: t.tenant.id, phone }); }, 'Teste aceito pelo WhatsApp. Confira o celular informado.');
+      }}>
+        <Field label="Enviar teste para (número autorizado)"><Input name="phone" inputMode="tel" placeholder="11 99999-0000" required /></Field>
+        <Button type="submit" variant="secondary" loading={busy}>Enviar teste</Button>
+      </form>
+    </Card>
+  );
+}
+
+/** Saúde dos avisos: worker, fila, falhas e reenvio. Destinatários mascarados. */
+function NotificationHealthCard() {
+  const t = useTenant();
+  const [h, setH] = useState<any>(null);
+  const { busy, run } = useAction();
+  const load = useCallback(() => rpc('notification_health', { p_tenant: t.tenant.id }).then(setH).catch(() => setH(null)), [t.tenant.id]);
+  useEffect(() => { load(); }, [load]);
+  if (!h) return null;
+  const last = h.worker_last_run ? new Date(h.worker_last_run) : null;
+  const stale = !last || Date.now() - last.getTime() > 15 * 60_000;
+  const CH: Record<string, string> = { whatsapp: 'WhatsApp', email: 'E-mail', push: 'Push' };
+  const ST: Record<string, string> = { queued: 'na fila', sending: 'enviando', accepted: 'aceito pelo provedor', delivered: 'entregue',
+    failed_retryable: 'falhou (vai tentar de novo)', failed_final: 'falha final', disabled: 'desativado/sem canal' };
+  return (
+    <Card className="space-y-3" data-tour="config-avisos">
+      <div className="flex items-center justify-between"><p className="font-semibold">Avisos e WhatsApp — diagnóstico</p><Button variant="ghost" onClick={load}>Atualizar</Button></div>
+      <Alert tone={stale ? 'danger' : 'success'}>{last ? `Última execução do envio: ${last.toLocaleString('pt-BR')}.` : 'O envio automático ainda não executou.'}{stale ? ' Avisos podem estar parados; contate o suporte.' : ''}</Alert>
+      {h.whatsapp && <p className="text-sm">WhatsApp: {h.whatsapp.enabled ? 'conectado' : 'não conectado'}</p>}
+      <p className="text-sm text-muted">Últimos 7 dias. “Aceito pelo provedor” significa que o WhatsApp/serviço recebeu a mensagem, não que o morador leu.</p>
+      <ul className="text-sm grid sm:grid-cols-2 gap-1">
+        {Object.entries(h.counts || {}).map(([k, n]) => { const [c, s] = k.split(':'); return <li key={k}>{CH[c] || c}: {ST[s] || s} — <strong>{String(n)}</strong></li>; })}
+      </ul>
+      {h.failures?.length > 0 && (
+        <ul className="divide-y divide-line text-sm">
+          {h.failures.map((f: any) => (
+            <li key={f.id} className="py-2 flex flex-wrap justify-between gap-2">
+              <span>{CH[f.channel] || f.channel} para {f.recipient} · {f.error || 'erro'}{f.ambiguous ? ' (pode ter sido enviado; confira antes de reenviar)' : ''}</span>
+              {f.final && <Button variant="secondary" loading={busy} onClick={() => run(async () => { await rpc('retry_notification_job', { p_tenant: t.tenant.id, p_job: f.id }); await load(); }, 'Reenvio agendado.')}>Reenviar</Button>}
+            </li>
+          ))}
+        </ul>
+      )}
     </Card>
   );
 }
@@ -236,7 +281,7 @@ function TotemCard() {
   return (
     <Card className="space-y-3" data-tour="config-totem">
       <p className="font-semibold">Totem de autoatendimento</p>
-      <p className="text-sm text-muted">No tablet da portaria, abra <strong>{location.host}/c/{t.tenant.slug}/totem</strong> e digite o código de pareamento (vale 15 minutos). O totem só pré-registra; o porteiro confere antes do aviso ao morador.</p>
+      <p className="text-sm text-muted">No tablet da portaria, abra <strong>{location.host}/c/{t.tenant.slug}/totem</strong> e digite o código de pareamento (vale 15 minutos). O totem lê a etiqueta, registra a encomenda, indica o local de guarda e avisa os moradores da unidade.</p>
       {code && <Alert tone="success">Código de pareamento: <strong className="font-mono text-lg tracking-widest">{code}</strong></Alert>}
       <Button loading={busy} onClick={() => run(async () => {
         const r = await rpc('create_device', { p_tenant: t.tenant.id, p_name: `Totem ${devices.length + 1}`, p_concierge: null });

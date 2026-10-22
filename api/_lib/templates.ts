@@ -57,6 +57,12 @@ export function render(event: string, ctx: MessageCtx, payload: any, appUrl: str
         cta: ['Ver comprovante', receiptLink],
         intro: 'Uma encomenda da sua unidade foi retirada na portaria.',
       };
+    case 'ops_alert':
+      return {
+        subject: `Alerta — ${ctx.tenant_name}`,
+        push: { title: 'Alerta da portaria', body: 'Há um alerta operacional. Toque para ver.', url: `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/configuracoes` },
+        intro: 'Há um alerta operacional no condomínio.', lines: [], cta: ['Abrir configurações', `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/configuracoes`],
+      };
     case 'trial_reminder': {
       const when = fmt(payload.trial_ends_at, ctx.timezone);
       const after = `${brl(payload.amount_cents)} (${CYCLE[payload.cycle] || payload.cycle})`;
