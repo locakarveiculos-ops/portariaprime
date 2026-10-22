@@ -2,6 +2,8 @@ import React, { useEffect, useRef, useState } from 'react';
 import { Alert, Button, Card, Field, Input, Select } from '../components/ui';
 import { PortariaPrimeLogo } from '../components/Brand';
 import { CARRIERS, unitName } from '../lib/format';
+import { CameraCapture } from '../components/CameraCapture';
+import { blobToDataUrl, reencode } from '../lib/files';
 
 // Credencial restrita ao dispositivo; nunca uma sessão Auth de funcionário.
 export default function TotemPage({ slug }: { slug: string }) {
@@ -15,11 +17,29 @@ export default function TotemPage({ slug }: { slug: string }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [done, setDone] = useState(false);
+  const [ocrBusy, setOcrBusy] = useState(false);
+  const [ocrMessage, setOcrMessage] = useState('');
+  const reading = useRef(false);
+  async function scanLabel(photo: Blob) {
+    if (reading.current) return;
+    reading.current = true; setOcrBusy(true); setError(''); setOcrMessage('');
+    try {
+      const result = await call('ocr', { imageBase64: await blobToDataUrl(await reencode(photo, { max: 1600 })) });
+      setTracking(result.trackingCode || '');
+      setCarrier(CARRIERS.includes(result.carrier) ? result.carrier : 'Outra');
+      // Apenas unidades já disponíveis no contexto do dispositivo; nunca consulta moradores.
+      const norm = (v: string | null) => (v || '').trim().toLocaleUpperCase('pt-BR');
+      const matches = units.filter(u => norm(u.label) === norm(result.unit) && (!result.block || norm(u.block) === norm(result.block)));
+      setUnit(matches.length === 1 ? matches[0].id : '');
+      setOcrMessage(matches.length === 1 ? 'Etiqueta lida. Confira unidade, transportadora e rastreio antes de enviar.' : 'Confira os dados lidos e selecione a unidade. A leitura não identificou uma unidade única.');
+    } catch (e: any) { setError(e.message); }
+    finally { reading.current = false; setOcrBusy(false); }
+  }
   const key = useRef(crypto.randomUUID());
   async function call(action: string, body = {}, credential = secret) {
     const response = await fetch(`/api/totem/${action}`, {
       method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Device-Secret': credential },
-      body: JSON.stringify(body), signal: AbortSignal.timeout(15000),
+      body: JSON.stringify(body), signal: AbortSignal.timeout(action === 'ocr' ? 35000 : 15000),
     });
     const data = await response.json();
     if (!response.ok) throw new Error(data.error || 'Totem indisponível. Procure a portaria.');
@@ -45,7 +65,7 @@ export default function TotemPage({ slug }: { slug: string }) {
         setSecret(result.deviceSecret); setCode('');
       } else {
         await call('preregister', { idempotencyKey: key.current, unitId: unit || null, trackingCode: tracking, carrier, courierName: courier });
-        setUnit(''); setTracking(''); setCourier(''); setCarrier('Correios'); key.current = crypto.randomUUID(); setDone(true);
+        setUnit(''); setTracking(''); setCourier(''); setCarrier('Correios'); setOcrMessage(''); key.current = crypto.randomUUID(); setDone(true);
       }
     } catch (e: any) { setError(e.message); } finally { setBusy(false); }
   }
@@ -53,14 +73,20 @@ export default function TotemPage({ slug }: { slug: string }) {
     <PortariaPrimeLogo /><h1 className="text-2xl font-semibold">Entrega na portaria</h1>
     {done ? <Alert tone="success">Pré-registro recebido. Entregue a encomenda ao porteiro para conferência. O aviso ao morador será feito depois da conferência.</Alert> : <form onSubmit={submit} className="space-y-4">
       {!secret ? <><p>Peça ao administrador um código de pareamento para este dispositivo.</p><Field label="Código de pareamento"><Input required value={code} maxLength={8} onChange={e => setCode(e.target.value.toUpperCase())} /></Field></> : <>
+        <fieldset disabled={busy || ocrBusy} className="space-y-3">
+          <p className="font-semibold">Leitura de etiqueta com OCR</p>
+          <CameraCapture onCapture={scanLabel} label="Escanear etiqueta (câmera)" />
+        </fieldset>
+        {ocrBusy && <p role="status">Lendo etiqueta…</p>}
+        {ocrMessage && <Alert>{ocrMessage}</Alert>}
         <Field label="Unidade"><Select required value={unit} onChange={e => setUnit(e.target.value)}><option value="">Selecione…</option>{units.map(u => <option key={u.id} value={u.id}>{unitName(u.block, u.label)}</option>)}</Select></Field>
         <Field label="Transportadora"><Select value={carrier} onChange={e => setCarrier(e.target.value)}>{CARRIERS.map(c => <option key={c}>{c}</option>)}</Select></Field>
         <Field label="Rastreio"><Input value={tracking} maxLength={80} onChange={e => setTracking(e.target.value)} /></Field>
         <Field label="Nome do entregador"><Input value={courier} maxLength={80} onChange={e => setCourier(e.target.value)} /></Field>
       </>}
-      {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" className="w-full" loading={busy}>{secret ? 'Pré-registrar entrega' : 'Parear dispositivo'}</Button>
+      {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" className="w-full" loading={busy} disabled={ocrBusy}>{secret ? 'Pré-registrar entrega' : 'Parear dispositivo'}</Button>
     </form>}
     <p className="text-xs text-muted">Sem acesso a moradores, telefones ou histórico. Operações administrativas exigem autenticação na área do condomínio.</p>
-    <a className="block text-sm underline min-h-11" href={`/entrar?next=${encodeURIComponent(`/c/${slug}/totem-equipe`)}`}>Sou da equipe da portaria: entrar no totem com leitor de etiqueta</a>
+    <p className="text-xs text-muted">O leitor de etiqueta funciona neste dispositivo pareado, sem conta de porteiro ou administrador.</p>
   </Card></main>;
 }

@@ -1,6 +1,14 @@
 # Totem da portaria (equipe logada)
 
-Rota: `/c/:slug/totem-equipe` (menu “Totem da portaria”). Quem da equipe abre `/c/:slug/totem` logado é levado para cá; sem login, o totem público mostra “Sou da equipe da portaria” → login → totem da equipe. Com OCR no plano, a leitura roda sozinha após a foto. Só porteiro e administrador ativos. Usa a sessão do operador (RLS), nunca service role. O totem público de entregadores (`/c/:slug/totem`, credencial de dispositivo) continua separado: só pré-registro, sem dados pessoais, sem retirada.
+Rota da equipe: `/c/:slug/totem-equipe` (menu “Totem da portaria”). Quem da equipe abre `/c/:slug/totem` logado é levado para cá. Com OCR no plano, a leitura roda sozinha após a foto. Só porteiro e administrador ativos. Usa a sessão do operador (RLS), nunca service role.
+
+## OCR sem conta no totem pareado
+
+Em `/c/:slug/totem`, sem sessão de usuário, o dispositivo pareado oferece **Escanear etiqueta (câmera)** e envio de arquivo. A foto dispara `/api/totem/ocr` com `X-Device-Secret`, sem JWT. Não aparece o link “Sou da equipe”.
+
+`device_consume_ocr` valida dispositivo ativo, plano, condição comercial e franquia mensal compartilhada; intervalo persistente mínimo de 10 segundos por dispositivo. Tenant vem do dispositivo, nunca do corpo. A API revalida a credencial após a chamada ao Gemini. Retorna apenas transportadora, rastreio, bloco, unidade e confiança extraídos da imagem, sem consulta a moradores, nomes, contatos ou histórico. O cliente não armazena a imagem. Pré-registro continua sujeito à conferência da equipe; não autoriza retirada.
+
+Testes: `tests/db/device-ocr.test.mjs`, `tests/api/device-ocr.test.mjs` e `tests/e2e/device-ocr-ui.mjs` (UI anônima com provedor simulado). Câmera física e leitura real nesse endpoint não homologadas nesta execução.
 
 ## Registrar encomenda
 

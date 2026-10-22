@@ -11,6 +11,9 @@
  */
 import { handler, json, readJson, HttpError, sha256Hex, randomToken, isUuid } from '../_lib/http.js';
 import { serviceClient, rpcError } from '../_lib/supabase.js';
+import { GoogleGenAI } from '@google/genai';
+import { env } from '../_lib/env.js';
+import { normalizeLabel, readLabel } from '../ocr/analyze-label.js';
 
 const attempts = new Map<string, { n: number; at: number }>();
 function limit(key: string, max: number) {
@@ -45,6 +48,27 @@ export const POST = handler(async (request) => {
     const { data, error } = await svc.rpc('device_context', { p_secret_hash: await secretHash(request) });
     if (error) rpcError(error);
     return json({ deviceName: data.device_name, units: data.units });
+  }
+
+  if (action === 'ocr') {
+    const hash = await secretHash(request);
+    const body = await readJson(request, 6 * 1024 * 1024);
+    const image = typeof body.imageBase64 === 'string' && body.imageBase64.match(/^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z0-9+/=]+)$/);
+    if (!image) throw new HttpError(400, 'Envie uma foto JPEG, PNG ou WebP.');
+    if (image[2].length * 3 / 4 > 4 * 1024 * 1024) throw new HttpError(413, 'Foto grande demais (máx. 4 MB).');
+    const ai = new GoogleGenAI({ apiKey: env('GEMINI_API_KEY') });
+    const { data: allowed, error } = await svc.rpc('device_consume_ocr', { p_secret_hash: hash });
+    if (error) rpcError(error);
+    if (!allowed) return json({ error: 'OCR indisponível no plano ou franquia esgotada. Preencha manualmente.', manual: true }, 402);
+    let label;
+    try { label = normalizeLabel(await readLabel(ai, image[1], image[2])); }
+    catch { return json({ error: 'Não foi possível ler a etiqueta. Tente outra foto ou preencha manualmente.', manual: true }, 502); }
+    // Revogação durante a chamada externa também impede devolver a leitura.
+    const checked = await svc.rpc('device_context', { p_secret_hash: hash });
+    if (checked.error) rpcError(checked.error);
+    // Só dados extraídos da foto, nunca busca de moradores ou contatos do cadastro.
+    return json({ carrier: label.carrier, trackingCode: label.trackingCode, block: label.block,
+      unit: label.unit, confidence: label.confidence });
   }
 
   if (action === 'preregister') {

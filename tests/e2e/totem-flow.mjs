@@ -84,9 +84,8 @@ try {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  // Link público do totem leva a equipe ao login e, logada, ao totem da equipe.
-  await page.goto(`${APP}/c/${slug}/totem`);
-  await page.getByRole('link', { name: /Sou da equipe/ }).click();
+  // O fluxo da equipe segue separado do OCR do dispositivo público pareado.
+  await page.goto(`${APP}/entrar?next=${encodeURIComponent(`/c/${slug}/totem-equipe`)}`);
   await page.getByLabel('E-mail', { exact: true }).fill(porteiro.email);
   await page.getByLabel('Senha', { exact: true }).fill(porteiro.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
