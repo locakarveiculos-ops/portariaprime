@@ -1,345 +1,131 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../../lib/supabase';
-import { api, rpc } from '../../lib/api';
+import React, { useState } from 'react';
+import { ChevronRight, Search } from 'lucide-react';
 import { useTenant } from '../../lib/tenant';
-import { applyTheme, contrast, publicLogoUrl } from '../../lib/theme';
-import { uploadLogo } from '../../lib/files';
-import { query } from '../../lib/router';
-import { Alert, Badge, Button, Card, Field, Input, Select, Spinner, toast, useAction } from '../../components/ui';
+import { navigate, query } from '../../lib/router';
+import { dateTime } from '../../lib/format';
+import { Alert, Input, Select } from '../../components/ui';
 import { ReceiptLayoutCard } from './ReceiptLayoutCard';
 import { PortalCard } from './PortalCard';
-import { onLink } from '../../lib/router';
+import { AssinaturaPage } from './AssinaturaPage';
+import { BrandingCard, ChannelsCard, NotificationHealthCard, StorageCard, TotemCard, WhatsAppCard } from './config/cards';
+import { TeamCard } from './config/TeamCard';
+import { SecurityCard } from './config/SecurityCard';
+import { CondoCard } from './config/CondoCard';
 
-const DEFAULTS = { color_primary: '#101F30', color_secondary: '#126B61', color_accent: '#C8AB78' };
+type T = ReturnType<typeof useTenant>;
+interface Mod { id: string; title: string; desc: string; keys: string; allowed: (t: T) => boolean; render: (t: T) => React.ReactNode }
+
+const settings = (t: T) => t.can('settings');
 
 /**
- * Configurações do condomínio por módulo. Cada módulo agrupa cards que já
- * existiam (nada foi removido); a busca filtra por nome e palavras-chave.
+ * Configurações do condomínio: índice com busca + uma página por módulo
+ * (/c/{slug}/configuracoes?m={id}). Os cards são os mesmos de antes, só reorganizados.
  */
-const MODULES: { id: string; title: string; desc: string; keys: string; render: (t: ReturnType<typeof useTenant>) => React.ReactNode; show?: (t: ReturnType<typeof useTenant>) => boolean }[] = [
-  { id: 'portal', title: 'Portal e aplicativo', desc: 'Link público, QR de acesso e ícone do app.', keys: 'link endereco qr compartilhar app pwa instalar icone', render: () => <PortalCard /> },
-  { id: 'identidade', title: 'Identidade visual', desc: 'Nome exibido, logo, cores e tema.', keys: 'marca logo cores tema nome', render: () => <BrandingCard /> },
-  { id: 'comprovantes', title: 'Comprovantes', desc: 'Layout do PDF de entrega e prévia.', keys: 'pdf comprovante layout rodape modelo', render: () => <ReceiptLayoutCard /> },
-  { id: 'armazenamento', title: 'Portarias e armazenamento', desc: 'Portarias, estantes, prateleiras e capacidade.', keys: 'estante prateleira local guarda capacidade portaria', render: () => <StorageCard /> },
-  { id: 'avisos', title: 'Avisos e notificações', desc: 'Canais, diagnóstico, falhas e reenvio.', keys: 'notificacao aviso email whatsapp push falha reenviar', render: (t) => <><ChannelsCard />{t.link.role === 'admin' && <NotificationHealthCard />}</> },
-  { id: 'integracoes', title: 'Integrações', desc: 'WhatsApp do condomínio e teste de envio.', keys: 'whatsapp evolution conectar qr teste', render: () => <WhatsAppCard />, show: (t) => !!t.overview?.entitlements?.feature_whatsapp },
-  { id: 'totem', title: 'Totem de autoatendimento', desc: 'Pareamento e dispositivos do totem.', keys: 'totem tablet parear dispositivo', render: () => <TotemCard />, show: (t) => !!t.overview?.entitlements?.feature_totem },
+export const MODULES: Mod[] = [
+  { id: 'condominio', title: 'Condomínio', desc: 'Nome, CNPJ/CPF, contatos e fuso horário.', keys: 'dados cadastrais cnpj cpf endereco contato fuso horario nome',
+    allowed: settings, render: () => <CondoCard /> },
+  { id: 'identidade', title: 'Identidade visual', desc: 'Logo principal, cores, tema e prévia.', keys: 'marca logo cores tema aparencia nome exibido',
+    allowed: settings, render: () => <BrandingCard /> },
+  { id: 'portal', title: 'Portal e aplicativo', desc: 'Link público, QR de acesso, autocadastro e ícone do app.', keys: 'link endereco qr compartilhar app pwa instalar icone autocadastro',
+    allowed: settings, render: () => <PortalCard /> },
+  { id: 'operacao', title: 'Operação e armazenamento', desc: 'Portarias, estantes, prateleiras e capacidade.', keys: 'estante prateleira local guarda capacidade portaria armazenamento',
+    allowed: settings, render: () => <StorageCard /> },
+  { id: 'equipe', title: 'Equipe e permissões', desc: 'Porteiros, administradores, convites e revogações.', keys: 'equipe porteiro administrador sindico convite permissao revogar acesso',
+    allowed: (t) => t.can('team'), render: () => <TeamCard /> },
+  { id: 'comunicacoes', title: 'Comunicações', desc: 'Canais de aviso, validade do QR e limite por unidade.', keys: 'notificacao aviso email whatsapp push canal qr validade moradores',
+    allowed: settings, render: () => <ChannelsCard /> },
+  { id: 'integracoes', title: 'Integrações e diagnóstico', desc: 'WhatsApp do condomínio, teste de envio, falhas e reenvio.', keys: 'whatsapp evolution conectar teste diagnostico falha reenviar fila',
+    allowed: (t) => settings(t) && !!t.overview?.entitlements?.feature_whatsapp, render: (t) => <><WhatsAppCard />{t.link.role === 'admin' && <NotificationHealthCard />}</> },
+  { id: 'comprovantes', title: 'Comprovantes', desc: 'Modelo do PDF de entrega, cores, textos e prévia.', keys: 'pdf comprovante layout rodape modelo recibo',
+    allowed: settings, render: () => <ReceiptLayoutCard /> },
+  { id: 'totens', title: 'Totens e dispositivos', desc: 'Pareamento, estado e revogação dos totens.', keys: 'totem tablet parear dispositivo revogar',
+    allowed: (t) => settings(t) && !!t.overview?.entitlements?.feature_totem, render: () => <TotemCard /> },
+  { id: 'plano', title: 'Plano e assinatura', desc: 'Mês grátis, plano, limites e pagamentos.', keys: 'assinatura plano pagamento cobranca teste gratis fatura pix cartao',
+    allowed: (t) => t.can('billing'), render: () => <AssinaturaPage embedded /> },
+  { id: 'seguranca', title: 'Segurança e auditoria', desc: 'Histórico de ações e sessão deste aparelho.', keys: 'seguranca auditoria historico sessao sair log',
+    allowed: (t) => t.link.role === 'admin', render: () => <SecurityCard /> },
 ];
 
-export function ConfigPage() {
+const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+
+export function ConfigPage({ section }: { section: string | null }) {
   const t = useTenant();
-  const first = query('inicio') === '1';
+  const mods = MODULES.filter((m) => m.allowed(t));
+  const current = section ? mods.find((m) => m.id === section) : null;
+  const base = `/c/${t.tenant.slug}/configuracoes`;
+  const go = (id: string | null) => navigate(id ? `${base}?m=${id}` : base);
+  if (section && !current) {
+    return <div className="space-y-4"><Alert tone="warning">Este módulo não existe ou não está disponível para o seu acesso.</Alert>
+      <button className="underline text-sm" onClick={() => go(null)}>‹ Voltar para Configurações</button></div>;
+  }
+  return current ? <Module mod={current} mods={mods} go={go} /> : <Index mods={mods} go={go} />;
+}
+
+function Index({ mods, go }: { mods: Mod[]; go: (id: string | null) => void }) {
+  const t = useTenant();
   const [q, setQ] = useState('');
-  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
-  const mods = MODULES.filter((m) => (!m.show || m.show(t)) && (!q || norm(`${m.title} ${m.desc} ${m.keys}`).includes(norm(q))));
-  const base = `/c/${t.tenant.slug}`;
+  const shown = mods.filter((m) => !q || norm(`${m.title} ${m.desc} ${m.keys}`).includes(norm(q)));
+  const ov = t.overview;
   return (
-    <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Configurações</h1>
-      {first && (
+    <div className="space-y-5 max-w-5xl">
+      <div><h1 className="text-2xl font-semibold">Configurações</h1><p className="text-sm text-muted">Escolha um módulo ou busque pelo que deseja ajustar.</p></div>
+      {query('inicio') === '1' && (
         <Alert tone="success">
-          Condomínio criado e mês grátis ativo. Enviamos o link do portal para o seu e-mail. Próximos passos: 1) marca e logo; 2) locais de guarda; 3) unidades em “Unidades e pessoas”; 4) compartilhar o link do portal com os moradores; 5) registrar uma encomenda de teste.
+          Condomínio criado e mês grátis ativo. Enviamos o link do portal para o seu e-mail. Próximos passos: 1) identidade e logo; 2) locais de guarda; 3) unidades; 4) compartilhar o link do portal com os moradores; 5) registrar uma encomenda de teste.
         </Alert>
       )}
-      <div className="grid lg:grid-cols-[220px_1fr] gap-4 items-start">
-        <nav aria-label="Módulos de configuração" className="lg:sticky lg:top-4 space-y-2">
-          <Input aria-label="Buscar configuração" placeholder="Buscar configuração" value={q} onChange={(e) => setQ(e.target.value)} />
-          <ul className="flex lg:flex-col gap-1 overflow-x-auto text-sm">
-            {mods.map((m) => <li key={m.id}><a href={`#${m.id}`} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">{m.title}</a></li>)}
-            <li><a href={`${base}/pessoas`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Unidades, moradores e equipe ›</a></li>
-            {t.can('billing') && <li><a href={`${base}/assinatura`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Plano e cobrança ›</a></li>}
-            <li><a href={`${base}/ajuda`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Ajuda e treinamento ›</a></li>
-          </ul>
-        </nav>
-        <div className="space-y-6 min-w-0">
-          {mods.length === 0 && <Alert>Nenhuma configuração encontrada para “{q}”.</Alert>}
-          {mods.map((m) => (
-            <section key={m.id} id={m.id} className="space-y-2 scroll-mt-20" aria-labelledby={`h-${m.id}`}>
-              <div><h2 id={`h-${m.id}`} className="text-lg font-semibold">{m.title}</h2><p className="text-sm text-muted">{m.desc}</p></div>
-              {m.render(t)}
-            </section>
-          ))}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-function BrandingCard() {
-  const t = useTenant();
-  const b = t.branding || {};
-  const [form, setForm] = useState({
-    display_name: b.display_name || t.tenant.name, color_primary: b.color_primary || DEFAULTS.color_primary,
-    color_secondary: b.color_secondary || DEFAULTS.color_secondary, color_accent: b.color_accent || DEFAULTS.color_accent,
-    theme: b.theme || 'light', logo_path: b.logo_path || null,
-  });
-  const { busy, run } = useAction();
-  const preview = () => applyTheme(form as any);
-  useEffect(() => { preview(); /* prévia ao vivo */ }, [form]); // eslint-disable-line react-hooks/exhaustive-deps
-
-  const ratio = contrast(form.color_primary, '#FFFFFF');
-  const ratioDark = contrast(form.color_primary, '#18283A');
-  const legible = Math.max(ratio, ratioDark) >= 4.5;
-
-  const save = () => run(async () => {
-    if (!legible) throw new Error('A cor primária não tem contraste suficiente com o texto. Escolha um tom mais escuro ou mais claro.');
-    const { error } = await supabase.from('tenant_branding').update({ ...form, display_name: form.display_name.trim() || null }).eq('tenant_id', t.tenant.id);
-    if (error) throw new Error('Não foi possível salvar a marca.');
-    await t.reload();
-  }, 'Marca salva.');
-
-  const reset = () => setForm({ ...form, ...DEFAULTS, theme: 'light' });
-  if (!t.can('settings')) return null;
-  return (
-    <Card className="space-y-4" data-tour="config-marca">
-      <p className="font-semibold">Marca do condomínio</p>
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Nome exibido"><Input value={form.display_name} maxLength={80} onChange={(e) => setForm({ ...form, display_name: e.target.value })} /></Field>
-        <Field label="Tema">
-          <Select value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value as any })}>
-            <option value="light">Claro</option><option value="dark">Escuro</option><option value="system">Seguir o dispositivo</option>
-          </Select>
-        </Field>
-      </div>
-      <div className="grid grid-cols-3 gap-4">
-        {(['color_primary', 'color_secondary', 'color_accent'] as const).map((k) => (
-          <Field key={k} label={{ color_primary: 'Primária', color_secondary: 'Secundária', color_accent: 'Destaque' }[k]}>
-            <input type="color" value={form[k]} onChange={(e) => setForm({ ...form, [k]: e.target.value })} className="h-11 w-full rounded-xl border border-line bg-surface p-1" />
-          </Field>
-        ))}
-      </div>
-      {!legible && <Alert tone="warning">Contraste baixo: textos sobre a cor primária ficariam ilegíveis.</Alert>}
-      <div className="flex items-center gap-4">
-        {form.logo_path ? <img src={publicLogoUrl(form.logo_path)!} alt="Logo atual" className="h-16 w-16 object-contain rounded-lg bg-surface-2" /> : <span className="text-sm text-muted">Sem logo</span>}
-        <label className="text-sm">
-          <span className="sr-only">Enviar logo</span>
-          <input type="file" accept="image/png,image/jpeg,image/webp" onChange={(e) => {
-            const f = e.target.files?.[0];
-            if (f) run(async () => setForm({ ...form, logo_path: await uploadLogo(t.tenant.id, f) }), 'Logo enviado. Clique em salvar.');
-          }} />
-        </label>
-        {form.logo_path && <Button variant="ghost" onClick={() => setForm({ ...form, logo_path: null })}>Remover logo</Button>}
-      </div>
-      <div className="rounded-xl p-4 bg-primary text-primary-fg"><p className="font-semibold">{form.display_name}</p><p className="text-sm opacity-80">Prévia do cabeçalho e botões</p></div>
-      <div className="flex gap-2">
-        <Button onClick={save} loading={busy}>Salvar</Button>
-        <Button variant="secondary" onClick={reset}>Restaurar padrão</Button>
-      </div>
-    </Card>
-  );
-}
-
-function StorageCard() {
-  const t = useTenant();
-  const [concierges, setConcierges] = useState<any[] | null>(null);
-  const [locs, setLocs] = useState<any[]>([]);
-  const { busy, run } = useAction();
-  const load = useCallback(async () => {
-    const [{ data: c }, { data: l }] = await Promise.all([
-      supabase.from('concierge_locations').select('*').eq('tenant_id', t.tenant.id).order('created_at'),
-      supabase.from('storage_locations').select('*').eq('tenant_id', t.tenant.id).order('sort_order').order('code'),
-    ]);
-    setConcierges(c || []);
-    setLocs(l || []);
-  }, [t.tenant.id]);
-  useEffect(() => { load(); }, [load]);
-  if (t.link.role !== 'admin') return null;
-
-  const addLoc = (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const form = e.currentTarget;
-    run(async () => {
-      const { error } = await supabase.from('storage_locations').insert({
-        tenant_id: t.tenant.id, concierge_location_id: f.get('concierge'), code: String(f.get('code')).trim(),
-        rack: String(f.get('rack') || '').trim() || null, shelf: String(f.get('shelf') || '').trim() || null,
-        notes: String(f.get('notes') || '').trim() || null, capacity: Number(f.get('capacity')), is_contingency: f.get('contingency') === 'on', sort_order: locs.length + 1,
-      });
-      if (error) throw new Error(/unique|duplicate/.test(error.message) ? 'Já existe um local com esse código.' : 'Não foi possível salvar.');
-      form.reset();
-      await load();
-    }, 'Local adicionado.');
-  };
-  const addConcierge = () => {
-    const name = prompt('Nome da portaria');
-    if (name) run(async () => {
-      const { error } = await supabase.from('concierge_locations').insert({ tenant_id: t.tenant.id, name });
-      if (error) throw new Error(error.message.replace(/^.*?:\s*/, ''));
-      await load();
-    }, 'Portaria adicionada.');
-  };
-  const toggle = (l: any) => run(async () => {
-    const { error } = await supabase.from('storage_locations').update({ active: !l.active }).eq('id', l.id);
-    if (error) throw new Error('Não foi possível atualizar.');
-    await load();
-  });
-
-  return (
-    <Card className="space-y-3" data-tour="config-locais">
-      <div className="flex justify-between items-center"><p className="font-semibold">Portarias e locais de guarda</p><Button variant="ghost" onClick={addConcierge}>Nova portaria</Button></div>
-      {!concierges ? <Spinner /> : (
-        <>
-          <p className="text-sm text-muted">Portarias: {concierges.map((c) => c.name).join(', ')}</p>
-          <ul className="divide-y divide-line text-sm">
-            {locs.map((l) => (
-              <li key={l.id} className="py-2 flex justify-between items-center">
-                <span className={l.active ? '' : 'line-through text-muted'}>{l.code}{l.rack || l.shelf ? ` — ${[l.rack, l.shelf].filter(Boolean).join(' › ')}` : ''} · capacidade {l.capacity}{l.notes ? ` · ${l.notes}` : ''} {l.is_contingency && <Badge tone="warning">contingência</Badge>}</span>
-                <Button variant="ghost" onClick={() => toggle(l)}>{l.active ? 'Desativar' : 'Reativar'}</Button>
-              </li>
-            ))}
-          </ul>
-          <form onSubmit={addLoc} className="grid sm:grid-cols-4 gap-2 items-end">
-            <Field label="Portaria"><Select name="concierge">{concierges.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-            <Field label="Código curto"><Input name="code" required maxLength={20} placeholder="A-2" /></Field>
-            <Field label="Estante"><Input name="rack" maxLength={40} placeholder="Estante A" /></Field>
-            <Field label="Prateleira"><Input name="shelf" maxLength={40} placeholder="Prateleira 2" /></Field>
-            <Field label="Observação"><Input name="notes" maxLength={300} placeholder="Itens grandes no chão" /></Field>
-            <Field label="Capacidade"><Input name="capacity" type="number" min={1} max={1000} required defaultValue={20} /></Field>
-            <label className="flex items-center gap-2 text-sm min-h-11"><input type="checkbox" name="contingency" /> Contingência</label>
-            <Button type="submit" loading={busy}>Adicionar</Button>
-          </form>
-        </>
+      {t.can('billing') && ov?.status === 'trialing' && (
+        <p className="text-sm text-muted">Mês grátis até <strong>{dateTime(ov.trial_ends_at, t.tenant.timezone)}</strong>. Detalhes em <button className="underline" onClick={() => go('plano')}>Plano e assinatura</button>.</p>
       )}
-    </Card>
-  );
-}
-
-function ChannelsCard() {
-  const t = useTenant();
-  const [s, setS] = useState<any>(null);
-  const { busy, run } = useAction();
-  useEffect(() => { supabase.from('tenant_settings').select('*').eq('tenant_id', t.tenant.id).single().then(({ data }) => setS(data)); }, [t.tenant.id]);
-  if (!s || !t.can('settings')) return null;
-  const save = () => run(async () => {
-    const { error } = await supabase.from('tenant_settings').update({
-      notify_whatsapp: s.notify_whatsapp, notify_email: s.notify_email, notify_push: s.notify_push,
-      qr_ttl_hours: Number(s.qr_ttl_hours), max_residents_per_unit: Number(s.max_residents_per_unit),
-    }).eq('tenant_id', t.tenant.id);
-    if (error) throw new Error('Não foi possível salvar.');
-  }, 'Preferências salvas.');
-  return (
-    <Card className="space-y-3" data-tour="config-canais">
-      <p className="font-semibold">Avisos e regras</p>
-      <div className="flex flex-wrap gap-4 text-sm">
-        {[['notify_email', 'E-mail'], ['notify_push', 'Notificação no app'], ['notify_whatsapp', 'WhatsApp']].map(([k, l]) => (
-          <label key={k} className="flex items-center gap-2"><input type="checkbox" checked={s[k]} onChange={(e) => setS({ ...s, [k]: e.target.checked })} /> {l}</label>
-        ))}
-      </div>
-      <div className="grid sm:grid-cols-2 gap-4">
-        <Field label="Validade do QR de retirada (horas)"><Input type="number" min={1} max={720} value={s.qr_ttl_hours} onChange={(e) => setS({ ...s, qr_ttl_hours: e.target.value })} /></Field>
-        <Field label="Máximo de moradores por unidade"><Input type="number" min={1} max={50} value={s.max_residents_per_unit} onChange={(e) => setS({ ...s, max_residents_per_unit: e.target.value })} /></Field>
-      </div>
-      <Button onClick={save} loading={busy}>Salvar</Button>
-    </Card>
-  );
-}
-
-function WhatsAppCard() {
-  const t = useTenant();
-  const [st, setSt] = useState<{ connected: boolean } | null>(null);
-  const [qr, setQr] = useState<string | null>(null);
-  const { busy, run } = useAction();
-  const check = () => run(async () => setSt(await api('/api/whatsapp/status', { tenantId: t.tenant.id })));
-  if (!t.can('settings')) return null;
-  return (
-    <Card className="space-y-3">
-      <p className="font-semibold">WhatsApp do condomínio</p>
-      <p className="text-sm text-muted">Conecte um número do condomínio para enviar avisos de chegada e retirada. A entrega da mensagem depende do WhatsApp e do telefone do morador.</p>
-      {st && <Badge tone={st.connected ? 'success' : 'warning'}>{st.connected ? 'Conectado' : 'Não conectado'}</Badge>}
-      {qr && <img src={qr} alt="QR Code para conectar o WhatsApp" className="w-56 h-56 bg-white p-2 rounded-xl" />}
-      <div className="flex flex-wrap gap-2">
-        <Button variant="secondary" loading={busy} onClick={check}>Verificar conexão</Button>
-        <Button loading={busy} onClick={() => run(async () => {
-          const r = await api('/api/whatsapp/connect', { tenantId: t.tenant.id });
-          if (r.alreadyConnected) { setSt({ connected: true }); setQr(null); } else setQr(r.qrCodeBase64);
-        })}>Conectar</Button>
-      </div>
-      <form className="flex flex-wrap items-end gap-2" onSubmit={(e) => {
-        e.preventDefault();
-        const phone = String(new FormData(e.currentTarget).get('phone') || '');
-        run(async () => { await api('/api/whatsapp/test', { tenantId: t.tenant.id, phone }); }, 'Teste aceito pelo WhatsApp. Confira o celular informado.');
-      }}>
-        <Field label="Enviar teste para (número autorizado)"><Input name="phone" inputMode="tel" placeholder="11 99999-0000" required /></Field>
-        <Button type="submit" variant="secondary" loading={busy}>Enviar teste</Button>
-      </form>
-    </Card>
-  );
-}
-
-/** Saúde dos avisos: worker, fila, falhas e reenvio. Destinatários mascarados. */
-function NotificationHealthCard() {
-  const t = useTenant();
-  const [h, setH] = useState<any>(null);
-  const { busy, run } = useAction();
-  const [pdf, setPdf] = useState<any>(null);
-  const load = useCallback(() => Promise.all([
-    rpc('notification_health', { p_tenant: t.tenant.id }).then(setH).catch(() => setH(null)),
-    rpc('receipt_pdf_health', { p_tenant: t.tenant.id }).then(setPdf).catch(() => setPdf(null)),
-  ]), [t.tenant.id]);
-  useEffect(() => { load(); }, [load]);
-  if (!h) return null;
-  const last = h.worker_last_run ? new Date(h.worker_last_run) : null;
-  const stale = !last || Date.now() - last.getTime() > 15 * 60_000;
-  const CH: Record<string, string> = { whatsapp: 'WhatsApp', email: 'E-mail', push: 'Push' };
-  const ST: Record<string, string> = { queued: 'na fila', sending: 'enviando', accepted: 'aceito pelo provedor', delivered: 'entregue',
-    failed_retryable: 'falhou (vai tentar de novo)', failed_final: 'falha final', disabled: 'desativado/sem canal', hold: 'aguardando o PDF' };
-  return (
-    <Card className="space-y-3" data-tour="config-avisos">
-      <div className="flex items-center justify-between"><p className="font-semibold">Avisos e WhatsApp — diagnóstico</p><Button variant="ghost" onClick={load}>Atualizar</Button></div>
-      <Alert tone={stale ? 'danger' : 'success'}>{last ? `Última execução do envio: ${last.toLocaleString('pt-BR')}.` : 'O envio automático ainda não executou.'}{stale ? ' Avisos podem estar parados; contate o suporte.' : ''}</Alert>
-      {h.whatsapp && <p className="text-sm">WhatsApp: {h.whatsapp.enabled ? 'conectado' : 'não conectado'}</p>}
-      <p className="text-sm text-muted">Últimos 7 dias. “Aceito pelo provedor” significa que o WhatsApp/serviço recebeu a mensagem, não que o morador leu.</p>
-      <ul className="text-sm grid sm:grid-cols-2 gap-1">
-        {Object.entries(h.counts || {}).map(([k, n]) => { const [c, s] = k.split(':'); return <li key={k}>{CH[c] || c}: {ST[s] || s} — <strong>{String(n)}</strong></li>; })}
-      </ul>
-      {pdf && <p className="text-sm">Comprovantes PDF (7 dias): {Object.entries(pdf.counts || {}).map(([k, n]) => `${{ ready: 'prontos', pending: 'na fila', processing: 'gerando', failed: 'com falha' }[k] || k} ${n}`).join(' · ') || 'nenhum'}</p>}
-      {pdf?.failed?.map((r: any) => (
-        <div key={r.id} className="flex flex-wrap justify-between gap-2 text-sm"><span>Comprovante {r.protocol}: {r.error || 'falha'}</span>
-          <Button variant="secondary" loading={busy} onClick={() => run(async () => { await rpc('retry_receipt_pdf', { p_tenant: t.tenant.id, p_receipt: r.id }); await load(); }, 'Comprovante na fila de geração.')}>Gerar novamente</Button></div>
-      ))}
-      {h.failures?.length > 0 && (
-        <ul className="divide-y divide-line text-sm">
-          {h.failures.map((f: any) => (
-            <li key={f.id} className="py-2 flex flex-wrap justify-between gap-2">
-              <span>{CH[f.channel] || f.channel} para {f.recipient} · {f.error || 'erro'}{f.ambiguous ? ' (pode ter sido enviado; confira antes de reenviar)' : ''}</span>
-              {f.final && <Button variant="secondary" loading={busy} onClick={() => run(async () => { await rpc('retry_notification_job', { p_tenant: t.tenant.id, p_job: f.id }); await load(); }, 'Reenvio agendado.')}>Reenviar</Button>}
+      <label className="relative block max-w-md">
+        <span className="sr-only">Buscar configuração</span>
+        <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
+        <Input className="pl-9" placeholder="Buscar por função (ex.: logo, estante, WhatsApp)" value={q} onChange={(e) => setQ(e.target.value)} />
+      </label>
+      {shown.length === 0 ? <Alert>Nenhum módulo encontrado para “{q}”.</Alert> : (
+        <ul className="grid sm:grid-cols-2 xl:grid-cols-3 gap-3">
+          {shown.map((m) => (
+            <li key={m.id}>
+              <a href={`/c/${t.tenant.slug}/configuracoes?m=${m.id}`} onClick={(e) => { e.preventDefault(); go(m.id); }}
+                className="flex h-full items-start justify-between gap-3 rounded-2xl border border-line bg-surface p-4 hover:bg-surface-2 focus:outline-none focus-visible:ring-2 focus-visible:ring-primary min-h-24">
+                <span><span className="block font-semibold">{m.title}</span><span className="block text-sm text-muted mt-1">{m.desc}</span></span>
+                <ChevronRight className="w-4 h-4 mt-1 shrink-0 text-muted" aria-hidden />
+              </a>
             </li>
           ))}
         </ul>
       )}
-    </Card>
+    </div>
   );
 }
 
-function TotemCard() {
+function Module({ mod, mods, go }: { mod: Mod; mods: Mod[]; go: (id: string | null) => void }) {
   const t = useTenant();
-  const [devices, setDevices] = useState<any[]>([]);
-  const [code, setCode] = useState<string | null>(null);
-  const { busy, run } = useAction();
-  const load = useCallback(async () => {
-    const { data } = await supabase.from('device_enrollments').select('id, name, status, last_seen_at, created_at').eq('tenant_id', t.tenant.id).order('created_at', { ascending: false });
-    setDevices(data || []);
-  }, [t.tenant.id]);
-  useEffect(() => { load(); }, [load]);
-  if (!t.can('settings')) return null;
   return (
-    <Card className="space-y-3" data-tour="config-totem">
-      <p className="font-semibold">Totem de autoatendimento</p>
-      <p className="text-sm text-muted">No tablet da portaria, abra <strong>{location.host}/c/{t.tenant.slug}/totem</strong> e digite o código de pareamento (vale 15 minutos). O totem lê a etiqueta, registra a encomenda, indica o local de guarda e avisa os moradores da unidade.</p>
-      {code && <Alert tone="success">Código de pareamento: <strong className="font-mono text-lg tracking-widest">{code}</strong></Alert>}
-      <Button loading={busy} onClick={() => run(async () => {
-        const r = await rpc('create_device', { p_tenant: t.tenant.id, p_name: `Totem ${devices.length + 1}`, p_concierge: null });
-        setCode(r.pairing_code);
-        await load();
-      })}>Gerar código de pareamento</Button>
-      <ul className="divide-y divide-line text-sm">
-        {devices.map((d) => (
-          <li key={d.id} className="py-2 flex justify-between items-center">
-            <span>{d.name} · <Badge tone={d.status === 'active' ? 'success' : d.status === 'revoked' ? 'danger' : 'warning'}>{d.status === 'active' ? 'pareado' : d.status === 'revoked' ? 'revogado' : 'aguardando'}</Badge></span>
-            {d.status !== 'revoked' && <Button variant="ghost" onClick={() => run(async () => { await rpc('revoke_device', { p_device: d.id }); await load(); }, 'Totem revogado.')}>Revogar</Button>}
-          </li>
-        ))}
-      </ul>
-    </Card>
+    <div className="grid lg:grid-cols-[220px_minmax(0,1fr)] gap-6 items-start">
+      <nav aria-label="Módulos de configuração" className="hidden lg:block lg:sticky lg:top-4">
+        <ul className="space-y-0.5 text-sm">
+          {mods.map((m) => (
+            <li key={m.id}>
+              <a href={`/c/${t.tenant.slug}/configuracoes?m=${m.id}`} onClick={(e) => { e.preventDefault(); go(m.id); }}
+                aria-current={m.id === mod.id ? 'page' : undefined}
+                className={`block rounded-lg px-3 py-2 ${m.id === mod.id ? 'bg-surface-2 font-semibold text-text' : 'text-muted hover:bg-surface-2 hover:text-text'}`}>{m.title}</a>
+            </li>
+          ))}
+        </ul>
+      </nav>
+      <div className="min-w-0 space-y-4 max-w-4xl">
+        <nav aria-label="Trilha" className="text-sm">
+          <a href={`/c/${t.tenant.slug}/configuracoes`} onClick={(e) => { e.preventDefault(); go(null); }} className="text-muted hover:text-text underline-offset-2 hover:underline">‹ Configurações</a>
+        </nav>
+        <div className="lg:hidden">
+          <Select aria-label="Ir para outro módulo" value={mod.id} onChange={(e) => go(e.target.value)}>
+            {mods.map((m) => <option key={m.id} value={m.id}>{m.title}</option>)}
+          </Select>
+        </div>
+        <div><h1 className="text-2xl font-semibold">{mod.title}</h1><p className="text-sm text-muted">{mod.desc}</p></div>
+        {mod.render(t)}
+      </div>
+    </div>
   );
 }

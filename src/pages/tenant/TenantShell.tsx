@@ -1,16 +1,22 @@
-import React, { useState } from 'react';
-import { Bell, Building2, CreditCard, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Smartphone, Tablet, Users, X } from 'lucide-react';
+import React, { useEffect, useRef, useState } from 'react';
+import { BarChart3, Building2, ChevronsLeft, ChevronsRight, CircleUser, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Shield, Smartphone, Users, X } from 'lucide-react';
 import { useSession } from '../../lib/session';
 import { useTenant } from '../../lib/tenant';
 import { navigate, onLink } from '../../lib/router';
 import { publicLogoUrl } from '../../lib/theme';
-import { dateTime } from '../../lib/format';
 import { Alert } from '../../components/ui';
+import { NotificationBell } from '../../components/NotificationBell';
 import { useTour } from '../../components/TourGuide';
 import { articleFor } from '../../lib/help';
 import { loadProgress, saveProgress, toursFor } from '../../lib/tours';
 
-interface NavItem { area: string; label: string; icon: React.ElementType; show: boolean }
+interface NavItem { area: string; label: string; icon: React.ElementType; show: boolean; match?: string[] }
+
+const TITLES: Record<string, string> = {
+  painel: 'Visão geral', portaria: 'Encomendas', 'totem-equipe': 'Totem da portaria', pessoas: 'Unidades e moradores', relatorios: 'Relatórios',
+  configuracoes: 'Configurações', assinatura: 'Plano e assinatura', ajuda: 'Ajuda', morador: 'Minhas encomendas', avisos: 'Notificações',
+  aplicativo: 'Meu aplicativo e notificações', comprovante: 'Comprovante',
+};
 
 /** “Ajuda desta tela” + oferta do tutorial no primeiro acesso à área (sem obrigar). */
 function ScreenHelp({ area, base }: { area: string; base: string }) {
@@ -32,93 +38,134 @@ function ScreenHelp({ area, base }: { area: string; base: string }) {
           <button className="text-muted underline min-h-9" onClick={() => { saveProgress(ctx!.user_id, t.tenant.id, tour.id, 'skipped'); setProgress(loadProgress(ctx!.user_id, t.tenant.id)); }}>Agora não</button>
         </span>
       )}
-      <a href={`${base}/ajuda?artigo=${article.slug}`} onClick={onLink} className="inline-flex items-center gap-1 text-secondary font-medium min-h-9"><HelpCircle className="w-4 h-4" aria-hidden />Ajuda desta tela</a>
+      <a href={`${base}/ajuda?artigo=${article.slug}`} onClick={onLink} className="inline-flex items-center gap-1 text-muted hover:text-text min-h-9" aria-label="Ajuda desta tela"><HelpCircle className="w-4 h-4" aria-hidden /><span className="hidden sm:inline">Ajuda desta tela</span></a>
+    </div>
+  );
+}
+
+function loadCollapsed() { try { return localStorage.getItem('pp_nav_collapsed') === '1'; } catch { return false; } }
+
+/** Menu da conta: app deste aparelho, troca de condomínio, administração global (se houver), sair. */
+function AccountMenu({ base }: { base: string }) {
+  const t = useTenant();
+  const { ctx, signOut } = useSession();
+  const [open, setOpen] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: MouseEvent | KeyboardEvent) => { if (e instanceof KeyboardEvent ? e.key === 'Escape' : !ref.current?.contains(e.target as Node)) setOpen(false); };
+    document.addEventListener('mousedown', close); document.addEventListener('keydown', close);
+    return () => { document.removeEventListener('mousedown', close); document.removeEventListener('keydown', close); };
+  }, [open]);
+  const others = Array.from(new Map((ctx?.tenants || []).filter((x) => x.tenant_id !== t.link.tenant_id).map((x) => [x.tenant_id, x])).values());
+  const item = 'flex items-center gap-2 w-full text-left rounded-lg px-3 min-h-11 text-sm hover:bg-surface-2';
+  return (
+    <div className="relative" ref={ref}>
+      <button onClick={() => setOpen((v) => !v)} aria-expanded={open} aria-haspopup="menu" aria-label="Conta" className="p-2 rounded-xl hover:bg-surface-2 min-h-11 min-w-11 grid place-items-center"><CircleUser className="w-5 h-5" /></button>
+      {open && (
+        <div role="menu" className="absolute right-0 top-12 z-50 w-72 max-w-[calc(100vw-1rem)] rounded-2xl border border-line bg-surface shadow-lg p-2">
+          <p className="px-3 py-2 text-xs text-muted truncate">{ctx?.email}</p>
+          <a role="menuitem" href={`${base}/aplicativo`} onClick={(e) => { onLink(e); setOpen(false); }} className={item}><Smartphone className="w-4 h-4" /> Meu aplicativo e notificações</a>
+          {others.length > 0 && <>
+            <p className="px-3 pt-2 text-xs text-muted">Trocar de condomínio</p>
+            {others.map((o) => <a key={o.tenant_id} role="menuitem" href={`/c/${o.slug}`} onClick={(e) => { onLink(e); setOpen(false); }} className={item}><Building2 className="w-4 h-4" /> <span className="truncate">{o.name}</span></a>)}
+          </>}
+          {(ctx?.platform_admin || ctx?.platform_role) && <a role="menuitem" href="/admin" onClick={(e) => { onLink(e); setOpen(false); }} className={item}><Shield className="w-4 h-4" /> Administração da plataforma</a>}
+          <button role="menuitem" className={`${item} text-danger`} onClick={async () => { await signOut(); navigate('/entrar', true); }}><LogOut className="w-4 h-4" /> Sair</button>
+        </div>
+      )}
     </div>
   );
 }
 
 export function TenantShell({ area, children }: { area: string; children: React.ReactNode }) {
   const t = useTenant();
-  const { ctx, signOut } = useSession();
   const [open, setOpen] = useState(false);
+  const [collapsed, setCollapsed] = useState(loadCollapsed);
+  const menuBtn = useRef<HTMLButtonElement>(null);
+  const drawer = useRef<HTMLElement>(null);
   const base = `/c/${t.tenant.slug}`;
   const role = t.link.role;
+  const admin = role === 'admin';
   const items: NavItem[] = [
-    { area: 'portaria', label: 'Portaria', icon: Package, show: t.isStaff },
-    { area: 'totem-equipe', label: 'Totem da portaria', icon: Tablet, show: t.isStaff },
-    { area: 'painel', label: 'Painel', icon: LayoutDashboard, show: role === 'admin' },
-    { area: 'pessoas', label: 'Unidades e pessoas', icon: Users, show: t.can('team') || t.can('approve') || role === 'admin' },
-    { area: 'morador', label: 'Minhas encomendas', icon: Package, show: role === 'morador' },
-    { area: 'avisos', label: 'Avisos', icon: Bell, show: true },
-    { area: 'aplicativo', label: 'Aplicativo e notificações', icon: Smartphone, show: true },
-    { area: 'configuracoes', label: 'Configurações', icon: Settings, show: t.can('settings') },
-    { area: 'assinatura', label: 'Assinatura', icon: CreditCard, show: t.can('billing') },
+    { area: 'painel', label: 'Visão geral', icon: LayoutDashboard, show: admin },
+    { area: 'portaria', label: 'Encomendas', icon: Package, show: t.isStaff, match: ['portaria', 'totem-equipe'] },
+    { area: 'pessoas', label: 'Unidades e moradores', icon: Users, show: t.can('approve') || admin },
+    { area: 'relatorios', label: 'Relatórios', icon: BarChart3, show: admin },
+    { area: 'morador', label: 'Minhas encomendas', icon: Package, show: role === 'morador', match: ['morador', 'comprovante'] },
+  ];
+  const bottom: NavItem[] = [
+    { area: 'configuracoes', label: 'Configurações', icon: Settings, show: t.can('settings') || t.can('billing') || t.can('team'), match: ['configuracoes', 'assinatura'] },
     { area: 'ajuda', label: 'Ajuda', icon: HelpCircle, show: true },
   ];
-  const others = (ctx?.tenants || []).filter((x) => x.tenant_id !== t.link.tenant_id);
   const name = t.branding?.display_name || t.tenant.name;
   const logo = publicLogoUrl(t.branding?.logo_path);
-  const ov = t.overview;
-  const state = ov?.commercial_state ?? t.link.commercial_state;
+  const state = t.overview?.commercial_state ?? t.link.commercial_state;
 
-  const nav = (
-    <nav aria-label="Principal" className="space-y-1">
-      {items.filter((i) => i.show).map((i) => {
-        const active = area === i.area;
-        return (
-          <a key={i.area} href={`${base}/${i.area}`} onClick={(e) => { onLink(e); setOpen(false); }} aria-current={active ? 'page' : undefined}
-            className={`flex items-center gap-3 rounded-xl px-3 min-h-11 text-sm font-medium ${active ? 'bg-primary text-primary-fg' : 'text-text hover:bg-surface-2'}`}>
-            <i.icon className="w-5 h-5" aria-hidden /> {i.label}
-          </a>
-        );
-      })}
-    </nav>
+  // Drawer: foco no primeiro item; Escape fecha e devolve o foco ao botão.
+  useEffect(() => {
+    if (!open) return;
+    drawer.current?.querySelector<HTMLElement>('a,button')?.focus();
+    const key = (e: KeyboardEvent) => { if (e.key === 'Escape') { setOpen(false); menuBtn.current?.focus(); } };
+    document.addEventListener('keydown', key);
+    return () => document.removeEventListener('keydown', key);
+  }, [open]);
+  const toggleCollapsed = () => setCollapsed((v) => { try { localStorage.setItem('pp_nav_collapsed', v ? '0' : '1'); } catch { /* ok */ } return !v; });
+
+  const link = (i: NavItem, mini: boolean) => {
+    const active = (i.match || [i.area]).includes(area);
+    return (
+      <a key={i.area} href={`${base}/${i.area}`} onClick={(e) => { onLink(e); setOpen(false); }} aria-current={active ? 'page' : undefined}
+        title={mini ? i.label : undefined} aria-label={mini ? i.label : undefined}
+        className={`flex items-center gap-3 rounded-xl ${mini ? 'justify-center' : 'px-3'} min-h-11 text-sm font-medium transition-colors ${active ? 'bg-primary text-primary-fg' : 'text-text hover:bg-surface-2'}`}>
+        <i.icon className="w-5 h-5 shrink-0" aria-hidden />{!mini && <span className="truncate">{i.label}</span>}
+      </a>
+    );
+  };
+  const nav = (mini: boolean) => (
+    <div className="flex flex-col flex-1 min-h-0">
+      <div className={`flex items-center gap-3 min-w-0 ${mini ? 'justify-center' : ''}`} title={mini ? name : undefined}>
+        {logo ? <img src={logo} alt={mini ? name : ''} className="h-10 w-10 rounded-lg object-contain bg-surface-2 shrink-0" />
+          : <span className="h-10 w-10 rounded-lg bg-primary text-primary-fg grid place-items-center shrink-0" aria-label={mini ? name : undefined}><Building2 className="w-5 h-5" /></span>}
+        {!mini && <div className="min-w-0"><p className="font-semibold truncate" title={name}>{name}</p><p className="text-xs text-muted">{admin ? 'Administração' : role === 'porteiro' ? 'Portaria' : 'Morador'}</p></div>}
+      </div>
+      <nav aria-label="Principal" className="mt-6 space-y-1 overflow-y-auto flex-1 min-h-0">{items.filter((i) => i.show).map((i) => link(i, mini))}</nav>
+      <div className="pt-3 mt-3 border-t border-line space-y-1">{bottom.filter((i) => i.show).map((i) => link(i, mini))}
+        {!mini && <p className="text-[11px] text-muted pt-2 px-3">Tecnologia Portaria Prime</p>}</div>
+    </div>
   );
 
   return (
-    <div className="min-h-dvh lg:grid lg:grid-cols-[260px_1fr]">
-      <aside className={`${open ? 'fixed inset-0 z-40 block' : 'hidden'} lg:static lg:block bg-surface border-r border-line p-4`}>
-        <div className="flex items-center justify-between lg:block">
-          <div className="flex items-center gap-3 min-w-0">
-            {logo ? <img src={logo} alt="" className="h-10 w-10 rounded-lg object-contain bg-surface-2" /> : <span className="h-10 w-10 rounded-lg bg-primary text-primary-fg grid place-items-center"><Building2 className="w-5 h-5" /></span>}
-            <div className="min-w-0"><p className="font-semibold truncate">{name}</p><p className="text-xs text-muted capitalize">{role === 'admin' ? 'Administração' : role}</p></div>
-          </div>
-          <button className="lg:hidden p-2" onClick={() => setOpen(false)} aria-label="Fechar menu"><X /></button>
-        </div>
-        <div className="mt-6">{nav}</div>
-        {others.length > 0 && (
-          <div className="mt-6">
-            <label className="text-xs text-muted" htmlFor="switch-tenant">Trocar de condomínio</label>
-            <select id="switch-tenant" className="mt-1 w-full min-h-10 rounded-lg border border-line bg-surface px-2 text-sm" value=""
-              onChange={(e) => e.target.value && navigate(`/c/${e.target.value}`)}>
-              <option value="">Selecione…</option>
-              {others.map((o) => <option key={o.tenant_id + o.role} value={o.slug}>{o.name}</option>)}
-            </select>
-          </div>
-        )}
-        <div className="mt-6 border-t border-line pt-4 space-y-2">
-          <p className="text-xs text-muted truncate">{ctx?.email}</p>
-          {(ctx?.platform_admin || ctx?.platform_role) && <a href="/admin" onClick={onLink} className="block text-sm text-secondary">Administração da plataforma</a>}
-          <button onClick={async () => { await signOut(); navigate('/entrar', true); }} className="flex items-center gap-2 text-sm text-muted hover:text-text min-h-10">
-            <LogOut className="w-4 h-4" /> Sair
-          </button>
-          <p className="text-[11px] text-muted pt-2">Tecnologia Portaria Prime</p>
-        </div>
+    <div className={`min-h-dvh lg:grid ${collapsed ? 'lg:grid-cols-[72px_1fr]' : 'lg:grid-cols-[248px_1fr]'}`}>
+      <aside className="hidden lg:flex flex-col sticky top-0 h-dvh bg-surface border-r border-line p-3">
+        {nav(collapsed)}
+        <button onClick={toggleCollapsed} className="mt-2 flex items-center justify-center min-h-10 rounded-xl text-muted hover:bg-surface-2" aria-label={collapsed ? 'Expandir menu' : 'Recolher menu'}>
+          {collapsed ? <ChevronsRight className="w-5 h-5" /> : <ChevronsLeft className="w-5 h-5" />}
+        </button>
       </aside>
-      <div className="min-w-0">
-        <header className="lg:hidden sticky top-0 z-30 flex items-center gap-3 border-b border-line bg-surface px-4 h-14">
-          <button onClick={() => setOpen(true)} aria-label="Abrir menu" className="p-2 -ml-2"><Menu /></button>
-          <span className="font-semibold truncate">{name}</span>
+      {open && (
+        <div className="lg:hidden fixed inset-0 z-40" role="dialog" aria-modal="true" aria-label="Menu">
+          <div className="absolute inset-0 bg-black/40" onClick={() => { setOpen(false); menuBtn.current?.focus(); }} />
+          <aside ref={drawer} className="absolute inset-y-0 left-0 w-72 max-w-[85vw] bg-surface p-4 flex flex-col pb-[max(1rem,env(safe-area-inset-bottom))]">
+            <button onClick={() => { setOpen(false); menuBtn.current?.focus(); }} className="self-end p-2 -mt-1 mb-1 min-h-11 min-w-11 grid place-items-center" aria-label="Fechar menu"><X /></button>
+            {nav(false)}
+          </aside>
+        </div>
+      )}
+      <div className="min-w-0 flex flex-col" inert={open ? true : undefined}>
+        <header className="sticky top-0 z-30 flex items-center gap-1 border-b border-line bg-surface px-2 sm:px-4 min-h-14 pt-[env(safe-area-inset-top)]">
+          <button ref={menuBtn} onClick={() => setOpen(true)} aria-label="Abrir menu" className="lg:hidden min-h-11 min-w-11 grid place-items-center"><Menu /></button>
+          <p className="font-semibold truncate flex-1 px-1">{TITLES[area] || name}</p>
+          <NotificationBell />
+          <AccountMenu base={base} />
         </header>
-        <main className="max-w-6xl mx-auto px-4 py-6 space-y-4">
-          {t.isStaff && ov?.status === 'trialing' && state === 'full' && (
-            <Alert tone="info">Mês grátis até <strong>{dateTime(ov.trial_ends_at, t.tenant.timezone)}</strong>.{t.can('billing') && <> <a className="underline" href={`${base}/assinatura`} onClick={onLink}>Ver assinatura</a></>}</Alert>
-          )}
-          {t.isStaff && state === 'grace' && (
-            <Alert tone="warning">O acesso pago terminou. Período de carência: regularize para não bloquear novos recebimentos.{t.can('billing') && <> <a className="underline" href={`${base}/assinatura`} onClick={onLink}>Pagar assinatura</a></>}</Alert>
-          )}
+        <main className="w-full max-w-6xl mx-auto px-4 py-6 space-y-4 flex-1">
+          {/* Só bloqueio real aparece aqui; o prazo do teste fica em Plano e assinatura e no sino. */}
           {t.isStaff && state === 'restricted' && (
-            <Alert tone="danger">Assinatura inativa: novos recebimentos estão bloqueados. Consulta, exportação e retirada de encomendas já guardadas continuam liberadas.</Alert>
+            <Alert tone="danger">Assinatura inativa: novos recebimentos estão bloqueados. Consulta, exportação e retirada de encomendas já guardadas continuam liberadas.{t.can('billing') && <> <a className="underline" href={`${base}/configuracoes?m=plano`} onClick={onLink}>Regularizar</a></>}</Alert>
+          )}
+          {t.isStaff && state === 'grace' && t.can('billing') && (
+            <Alert tone="warning">O acesso pago terminou. Período de carência: regularize para não bloquear novos recebimentos. <a className="underline" href={`${base}/configuracoes?m=plano`} onClick={onLink}>Pagar assinatura</a></Alert>
           )}
           <ScreenHelp area={area} base={base} />
           {children}

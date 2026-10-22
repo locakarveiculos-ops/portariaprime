@@ -68,7 +68,8 @@ export function TenantProvider({ link, children }: { link: TenantLink; children:
 export function useRealtime(table: 'packages' | 'notifications', tenantId: string, onChange: () => void) {
   useEffect(() => {
     const ch = supabase
-      .channel(`${table}:${tenantId}`)
+      // Nome único: mais de um componente pode ouvir a mesma tabela.
+      .channel(`${table}:${tenantId}:${Math.random().toString(36).slice(2, 8)}`)
       .on('postgres_changes', { event: '*', schema: 'public', table, filter: `tenant_id=eq.${tenantId}` }, onChange)
       .subscribe();
     return () => { supabase.removeChannel(ch); };

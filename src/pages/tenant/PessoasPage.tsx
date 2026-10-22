@@ -1,136 +1,263 @@
-import React, { useCallback, useEffect, useState } from 'react';
-import { Copy, Upload } from 'lucide-react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { Copy, MoreVertical, Plus, Upload } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
 import { api, rpc } from '../../lib/api';
 import { useTenant } from '../../lib/tenant';
+import { navigate, onLink } from '../../lib/router';
 import { parseCsv, unitName } from '../../lib/format';
 import { loadUnits, UnitRow } from '../../lib/packages';
 import { Alert, Badge, Button, Card, Empty, Field, Input, Modal, Select, Spinner, toast, useAction } from '../../components/ui';
 
-export function PessoasPage() {
+type Tab = 'unidades' | 'moradores' | 'solicitacoes';
+const PAGE = 50;
+
+/** Unidades e moradores: abas Unidades, Moradores e Solicitações (equipe fica em Configurações). */
+export function PessoasPage({ tab }: { tab: string | null }) {
   const t = useTenant();
+  const canTeam = t.can('team');
+  const canApprove = t.can('approve');
+  const isAdmin = t.link.role === 'admin';
   const [units, setUnits] = useState<UnitRow[] | null>(null);
   const [members, setMembers] = useState<any[] | null>(null);
   const [invites, setInvites] = useState<any[]>([]);
+  const [pending, setPending] = useState(0);
   const [invite, setInvite] = useState<{ role: string; unitId?: string } | null>(null);
   const [importing, setImporting] = useState(false);
-  const [filter, setFilter] = useState('');
-  const { busy, run } = useAction();
-  const canTeam = t.can('team');
-  const canApprove = t.can('approve');
+  const [adding, setAdding] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const [u, m, { data: inv }] = await Promise.all([
+      const [u, m, { data: inv }, req] = await Promise.all([
         loadUnits(t.tenant.id),
-        canTeam || canApprove ? rpc('list_members', { p_tenant: t.tenant.id }) : Promise.resolve([]),
-        supabase.from('invitations').select('id, email, role, unit_id, expires_at, accepted_at, revoked_at').eq('tenant_id', t.tenant.id)
+        canTeam || canApprove ? rpc<any[]>('list_members', { p_tenant: t.tenant.id }) : Promise.resolve([]),
+        supabase.from('invitations').select('id, email, role, unit_id, expires_at').eq('tenant_id', t.tenant.id).eq('role', 'morador')
           .is('accepted_at', null).is('revoked_at', null).order('created_at', { ascending: false }).limit(200),
+        canApprove ? rpc<any[]>('list_access_requests', { p_tenant: t.tenant.id, p_status: 'pending' }).catch(() => []) : Promise.resolve([]),
       ]);
       setUnits(u);
       setMembers(m);
       setInvites(inv || []);
+      setPending((req || []).length);
     } catch (e: any) {
       toast.error(e.message);
     }
   }, [t.tenant.id, canTeam, canApprove]);
   useEffect(() => { load(); }, [load]);
 
-  const addUnit = async (e: React.FormEvent<HTMLFormElement>) => {
-    e.preventDefault();
-    const f = new FormData(e.currentTarget);
-    const form = e.currentTarget;
-    await run(async () => {
-      const { error } = await supabase.from('units').insert({ tenant_id: t.tenant.id, block: String(f.get('block') || '').trim() || null, label: String(f.get('label')).trim() });
-      if (error) throw new Error(/duplicate|unique/.test(error.message) ? 'Unidade já cadastrada.' : error.message.replace(/^.*?:\s*/, ''));
-      form.reset();
-      await load();
-    }, 'Unidade cadastrada.');
-  };
-
-  const toggleUnit = (u: UnitRow) => run(async () => {
-    const { error } = await supabase.from('units').update({ active: !u.active }).eq('id', u.id);
-    if (error) throw new Error(error.message);
-    await load();
-  });
-
-  const unitsById = Object.fromEntries((units || []).map((u) => [u.id, u]));
-  const shown = (units || []).filter((u) => `${u.block || ''} ${u.label}`.toLowerCase().includes(filter.toLowerCase()));
+  const tabs: [Tab, string][] = [['unidades', 'Unidades'], ['moradores', 'Moradores']];
+  if (canApprove) tabs.push(['solicitacoes', `Solicitações${pending ? ` (${pending})` : ''}`]);
+  const valid = tabs.map(([id]) => id);
+  const current: Tab = valid.includes(tab as Tab) ? (tab as Tab) : pending ? 'solicitacoes' : 'unidades';
+  const go = (id: Tab) => navigate(`/c/${t.tenant.slug}/pessoas?aba=${id}`, true);
+  const unitsById = useMemo(() => Object.fromEntries((units || []).map((u) => [u.id, u])), [units]);
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Unidades e pessoas</h1>
-      {canApprove && units && <AccessRequests units={units} onDecided={load} />}
-      {t.link.role === 'admin' && (
-        <Card className="space-y-3">
-          <div className="flex flex-wrap justify-between gap-2 items-center">
-            <p className="font-semibold">Unidades ({units?.filter((u) => u.active).length ?? '…'} ativas{t.overview?.entitlements ? ` de ${t.overview.entitlements.max_units} no plano` : ''})</p>
-            <Button variant="secondary" onClick={() => setImporting(true)} data-tour="unidades-importar"><Upload className="w-4 h-4" /> Importar CSV</Button>
-          </div>
-          <form onSubmit={addUnit} className="grid grid-cols-[1fr_1fr_auto] gap-2 items-end" data-tour="unidades-form">
-            <Field label="Bloco/Torre (opcional)"><Input name="block" maxLength={30} /></Field>
-            <Field label="Unidade"><Input name="label" required maxLength={30} placeholder="101A, Casa 12…" /></Field>
-            <Button type="submit" loading={busy}>Adicionar</Button>
-          </form>
-          <Input aria-label="Filtrar unidades" placeholder="Filtrar" value={filter} onChange={(e) => setFilter(e.target.value)} />
-          {!units ? <Spinner /> : shown.length === 0 ? <Empty title="Nenhuma unidade" /> : (
-            <ul className="divide-y divide-line max-h-96 overflow-y-auto" data-tour="unidades-lista">
-              {shown.map((u) => (
-                <li key={u.id} className="py-2 flex items-center justify-between gap-2 text-sm">
-                  <span className={u.active ? '' : 'text-muted line-through'}>{unitName(u.block, u.label)}</span>
-                  <span className="flex gap-2">
-                    {canApprove && u.active && <Button variant="ghost" onClick={() => setInvite({ role: 'morador', unitId: u.id })}>Convidar morador</Button>}
-                    <Button variant="ghost" onClick={() => toggleUnit(u)}>{u.active ? 'Desativar' : 'Reativar'}</Button>
-                  </span>
-                </li>
-              ))}
-            </ul>
-          )}
-        </Card>
+      <div className="flex flex-wrap items-end justify-between gap-2">
+        <h1 className="text-2xl font-semibold">Unidades e moradores</h1>
+        {canTeam && (
+          <a href={`/c/${t.tenant.slug}/configuracoes?m=equipe`} onClick={onLink} className="text-sm text-muted hover:text-text underline min-h-11 inline-flex items-center">
+            Equipe da portaria e administradores › Configurações
+          </a>
+        )}
+      </div>
+      <div role="tablist" aria-label="Seções" className="flex gap-1 border-b border-line overflow-x-auto">
+        {tabs.map(([id, label]) => (
+          <button key={id} role="tab" aria-selected={current === id} onClick={() => go(id)}
+            className={`min-h-11 px-4 -mb-px border-b-2 text-sm font-medium whitespace-nowrap ${current === id ? 'border-primary text-text' : 'border-transparent text-muted hover:text-text'}`}>{label}</button>
+        ))}
+      </div>
+      {!units ? <Spinner /> : (
+        <>
+          {current === 'unidades' && <UnitsTab units={units} isAdmin={isAdmin} canApprove={canApprove} onAdd={() => setAdding(true)} onImport={() => setImporting(true)}
+            onInvite={(id) => setInvite({ role: 'morador', unitId: id })} onChanged={load} />}
+          {current === 'moradores' && <ResidentsTab members={members} invites={invites} unitsById={unitsById} canApprove={canApprove} onChanged={load} />}
+          {current === 'solicitacoes' && <AccessRequests units={units} onDecided={load} />}
+        </>
       )}
-
-      {(canTeam || canApprove) && (
-        <Card className="space-y-3">
-          <div className="flex flex-wrap justify-between gap-2 items-center">
-            <p className="font-semibold">Pessoas com acesso</p>
-            {canTeam && <Button variant="secondary" onClick={() => setInvite({ role: 'porteiro' })} data-tour="equipe-convite">Convidar equipe</Button>}
-          </div>
-          {!members ? <Spinner /> : (
-            <ul className="divide-y divide-line" data-tour="equipe-lista">
-              {members.map((m) => (
-                <li key={m.membership_id} className="py-2 flex flex-wrap items-center justify-between gap-2 text-sm">
-                  <span>
-                    <strong>{m.full_name || m.email}</strong> <span className="text-muted">{m.email}</span>{' '}
-                    <Badge tone={m.role === 'admin' ? 'accent' : 'neutral'}>{m.role}</Badge>{' '}
-                    {m.status !== 'active' && <Badge tone="danger">revogado</Badge>}
-                    {m.units?.length > 0 && <span className="text-muted"> · {m.units.filter((x: any) => x.status === 'active').map((x: any) => unitName(x.block, x.label)).join(', ')}</span>}
-                  </span>
-                  {((m.role === 'morador' && canApprove) || (m.role !== 'morador' && canTeam)) && (
-                    <Button variant="ghost" onClick={() => run(async () => { await rpc('set_membership_status', { p_membership: m.membership_id, p_status: m.status === 'active' ? 'revoked' : 'active' }); await load(); }, 'Acesso atualizado.')}>
-                      {m.status === 'active' ? 'Revogar acesso' : 'Reativar'}
-                    </Button>
-                  )}
-                </li>
-              ))}
-            </ul>
-          )}
-          {invites.length > 0 && (
-            <>
-              <p className="font-semibold pt-2">Convites pendentes</p>
-              <ul className="divide-y divide-line" data-tour="convites-pendentes">
-                {invites.map((i) => (
-                  <li key={i.id} className="py-2 flex justify-between gap-2 text-sm">
-                    <span>{i.email} · {i.role}{i.unit_id && unitsById[i.unit_id] ? ` · ${unitName(unitsById[i.unit_id].block, unitsById[i.unit_id].label)}` : ''} · expira {new Date(i.expires_at).toLocaleDateString('pt-BR')}</span>
-                    <Button variant="ghost" onClick={() => run(async () => { await rpc('revoke_invitation', { p_invitation: i.id }); await load(); }, 'Convite revogado.')}>Revogar</Button>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
-        </Card>
-      )}
+      {adding && <NewUnitModal onClose={() => setAdding(false)} onDone={() => { setAdding(false); load(); }} />}
       {invite && <InviteModal {...invite} units={units || []} onClose={() => setInvite(null)} onDone={() => { setInvite(null); load(); }} />}
       {importing && <ImportModal onClose={() => setImporting(false)} onDone={() => { setImporting(false); load(); }} />}
+    </div>
+  );
+}
+
+/** Menu de ações da linha (Escape ou clique fora fecha). */
+function RowMenu({ label, items }: { label: string; items: { label: string; danger?: boolean; onClick: () => void }[] }) {
+  const [open, setOpen] = useState(false);
+  useEffect(() => {
+    if (!open) return;
+    const close = (e: KeyboardEvent) => e.key === 'Escape' && setOpen(false);
+    document.addEventListener('keydown', close);
+    return () => document.removeEventListener('keydown', close);
+  }, [open]);
+  if (!items.length) return null;
+  return (
+    <div className="relative" onBlur={(e) => !e.currentTarget.contains(e.relatedTarget as Node) && setOpen(false)}>
+      <button className="rounded-lg hover:bg-surface-2 min-h-11 min-w-11 grid place-items-center" aria-haspopup="menu" aria-expanded={open} aria-label={label} onClick={() => setOpen((v) => !v)}>
+        <MoreVertical className="w-4 h-4" />
+      </button>
+      {open && (
+        <div role="menu" className="absolute right-0 z-20 mt-1 w-60 rounded-xl border border-line bg-surface shadow-lg py-1">
+          {items.map((i) => (
+            <button key={i.label} role="menuitem" className={`w-full text-left px-3 min-h-11 text-sm hover:bg-surface-2 ${i.danger ? 'text-danger' : ''}`} onClick={() => { setOpen(false); i.onClick(); }}>{i.label}</button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function UnitsTab({ units, isAdmin, canApprove, onAdd, onImport, onInvite, onChanged }: {
+  units: UnitRow[]; isAdmin: boolean; canApprove: boolean; onAdd: () => void; onImport: () => void; onInvite: (id: string) => void; onChanged: () => void;
+}) {
+  const t = useTenant();
+  const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(PAGE);
+  const { run } = useAction();
+  const active = units.filter((u) => u.active).length;
+  const max = (t.overview as any)?.entitlements?.max_units;
+  const needle = q.trim().toLowerCase();
+  const shown = units.filter((u) => `${u.block || ''} ${u.label}`.toLowerCase().includes(needle));
+  const toggle = (u: UnitRow) => {
+    const name = unitName(u.block, u.label);
+    const msg = u.active
+      ? `Desativar ${name}? Ela deixa de aparecer no recebimento de encomendas e libera vaga no plano. Moradores e histórico são mantidos.`
+      : `Reativar ${name}? Ela volta a aparecer no recebimento e conta no limite do plano.`;
+    if (!confirm(msg)) return;
+    run(async () => {
+      const { error } = await supabase.from('units').update({ active: !u.active }).eq('id', u.id);
+      if (error) throw new Error(/limit|limite/i.test(error.message) ? 'Limite de unidades do plano atingido.' : error.message);
+      onChanged();
+    }, u.active ? 'Unidade desativada.' : 'Unidade reativada.');
+  };
+  return (
+    <Card className="space-y-3">
+      <div className="flex flex-wrap justify-between gap-2 items-center">
+        <p className="text-sm"><strong>{active}</strong> unidade(s) ativa(s){max ? <span className="text-muted"> de {max} no plano</span> : null}</p>
+        {isAdmin && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="secondary" onClick={onImport} data-tour="unidades-importar"><Upload className="w-4 h-4" /> Importar CSV</Button>
+            <Button onClick={onAdd} data-tour="unidades-form"><Plus className="w-4 h-4" /> Nova unidade</Button>
+          </div>
+        )}
+      </div>
+      <Input aria-label="Buscar unidade" placeholder="Buscar por bloco ou unidade" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
+      {shown.length === 0
+        ? <Empty title={units.length ? 'Nenhuma unidade encontrada' : 'Nenhuma unidade cadastrada'}>{units.length ? null : 'Use “Nova unidade” ou importe uma planilha.'}</Empty>
+        : (
+          <ul className="divide-y divide-line" data-tour="unidades-lista">
+            {shown.slice(0, limit).map((u) => (
+              <li key={u.id} className="py-1 flex items-center justify-between gap-2 text-sm">
+                <span className={u.active ? '' : 'text-muted line-through'}>{unitName(u.block, u.label)}</span>
+                {isAdmin && <RowMenu label={`Ações de ${unitName(u.block, u.label)}`} items={[
+                  ...(canApprove && u.active ? [{ label: 'Convidar morador (opcional)', onClick: () => onInvite(u.id) }] : []),
+                  { label: u.active ? 'Desativar unidade' : 'Reativar unidade', danger: u.active, onClick: () => toggle(u) },
+                ]} />}
+              </li>
+            ))}
+          </ul>
+        )}
+      {shown.length > limit && <Button variant="ghost" onClick={() => setLimit(limit + PAGE)}>Mostrar mais ({shown.length - limit} restantes)</Button>}
+    </Card>
+  );
+}
+
+function NewUnitModal({ onClose, onDone }: { onClose: () => void; onDone: () => void }) {
+  const t = useTenant();
+  const [block, setBlock] = useState('');
+  const [label, setLabel] = useState('');
+  const [error, setError] = useState<string | null>(null);
+  const { busy, run } = useAction();
+  const submit = (e: React.FormEvent) => {
+    e.preventDefault();
+    setError(null);
+    run(async () => {
+      const { error } = await supabase.from('units').insert({ tenant_id: t.tenant.id, block: block.trim() || null, label: label.trim() });
+      if (error) {
+        const msg = /duplicate|unique/.test(error.message) ? 'Unidade já cadastrada.' : error.message.replace(/^.*?:\s*/, '');
+        setError(msg);
+        throw new Error(msg);
+      }
+      onDone();
+    }, 'Unidade cadastrada.');
+  };
+  return (
+    <Modal title="Nova unidade" onClose={onClose}>
+      <form onSubmit={submit} className="space-y-4">
+        <Field label="Bloco/Torre (opcional)"><Input value={block} maxLength={30} onChange={(e) => setBlock(e.target.value)} /></Field>
+        <Field label="Unidade" error={error}><Input required maxLength={30} placeholder="101A, Casa 12…" value={label} onChange={(e) => setLabel(e.target.value)} /></Field>
+        <Button type="submit" loading={busy} className="w-full">Adicionar unidade</Button>
+      </form>
+    </Modal>
+  );
+}
+
+function ResidentsTab({ members, invites, unitsById, canApprove, onChanged }: {
+  members: any[] | null; invites: any[]; unitsById: Record<string, UnitRow>; canApprove: boolean; onChanged: () => void;
+}) {
+  const [q, setQ] = useState('');
+  const [limit, setLimit] = useState(PAGE);
+  const { run } = useAction();
+  if (!members) return <Spinner />;
+  const residents = members.filter((m) => m.role === 'morador');
+  const unitsOf = (m: any) => (m.units || []).filter((x: any) => x.status === 'active').map((x: any) => unitName(x.block, x.label)).join(', ');
+  const needle = q.trim().toLowerCase();
+  const shown = residents.filter((m) => `${m.full_name || ''} ${m.email} ${unitsOf(m)}`.toLowerCase().includes(needle));
+  const toggle = (m: any) => {
+    const who = m.full_name || m.email;
+    const msg = m.status === 'active'
+      ? `Revogar o acesso de ${who}? A pessoa deixa na hora de ver as encomendas e de receber avisos da unidade. O histórico é mantido e o acesso pode ser reativado.`
+      : `Reativar o acesso de ${who}? A pessoa volta a ver as encomendas e a receber avisos da unidade.`;
+    if (!confirm(msg)) return;
+    run(async () => {
+      await rpc('set_membership_status', { p_membership: m.membership_id, p_status: m.status === 'active' ? 'revoked' : 'active' });
+      onChanged();
+    }, 'Acesso atualizado.');
+  };
+  return (
+    <div className="space-y-4">
+      <Card className="space-y-3" data-tour="moradores-lista">
+        <p className="text-sm"><strong>{residents.filter((m) => m.status === 'active').length}</strong> morador(es) com acesso ativo</p>
+        <Input aria-label="Buscar morador" placeholder="Buscar por nome, e-mail ou unidade" value={q} onChange={(e) => { setQ(e.target.value); setLimit(PAGE); }} />
+        {shown.length === 0
+          ? <Empty title={residents.length ? 'Nenhum morador encontrado' : 'Nenhum morador ainda'}>{residents.length ? null : 'Compartilhe o link do portal do condomínio para os moradores pedirem acesso.'}</Empty>
+          : (
+            <ul className="divide-y divide-line">
+              {shown.slice(0, limit).map((m) => {
+                const us = unitsOf(m);
+                return (
+                  <li key={m.membership_id} className="py-2 flex items-center justify-between gap-2 text-sm">
+                    <div className="min-w-0">
+                      <p className="font-medium truncate">{m.full_name || <span className="text-muted">Sem nome</span>} {m.status !== 'active' && <Badge tone="danger">revogado</Badge>}</p>
+                      <p className="text-muted truncate">{m.email} · {us || 'sem unidade ativa'}</p>
+                    </div>
+                    {canApprove && <RowMenu label={`Ações de ${m.full_name || m.email}`} items={[
+                      { label: m.status === 'active' ? 'Revogar acesso' : 'Reativar acesso', danger: m.status === 'active', onClick: () => toggle(m) },
+                    ]} />}
+                  </li>
+                );
+              })}
+            </ul>
+          )}
+        {shown.length > limit && <Button variant="ghost" onClick={() => setLimit(limit + PAGE)}>Mostrar mais ({shown.length - limit} restantes)</Button>}
+      </Card>
+      {invites.length > 0 && (
+        <Card className="space-y-2">
+          <p className="font-semibold">Convites de morador pendentes ({invites.length})</p>
+          <ul className="divide-y divide-line">
+            {invites.map((i) => {
+              const u = i.unit_id ? unitsById[i.unit_id] : null;
+              return (
+                <li key={i.id} className="py-2 flex flex-wrap justify-between items-center gap-2 text-sm">
+                  <span className="min-w-0 break-all">{i.email}{u ? ` · ${unitName(u.block, u.label)}` : ''} <span className="text-muted">· expira {new Date(i.expires_at).toLocaleDateString('pt-BR')}</span></span>
+                  {canApprove && <Button variant="ghost" onClick={() => run(async () => { await rpc('revoke_invitation', { p_invitation: i.id }); onChanged(); }, 'Convite revogado.')}>Revogar</Button>}
+                </li>
+              );
+            })}
+          </ul>
+        </Card>
+      )}
     </div>
   );
 }
@@ -241,8 +368,7 @@ function AccessRequests({ units, onDecided }: { units: UnitRow[]; onDecided: () 
     await rpc('decide_access_request', { p_request: r.id, p_approve: approve, p_unit: pick[r.id] || r.unit_id || null, p_reason: reason });
     await load(); onDecided();
   }, approve ? 'Cadastro aprovado.' : 'Solicitação recusada.');
-  if (!rows) return null;
-  if (status === 'pending' && rows.length === 0) return null;
+  if (!rows) return <Spinner />;
   return (
     <Card className="space-y-3" data-tour="solicitacoes">
       <div className="flex flex-wrap justify-between items-center gap-2">
@@ -251,7 +377,7 @@ function AccessRequests({ units, onDecided }: { units: UnitRow[]; onDecided: () 
           <option value="pending">Pendentes</option><option value="approved">Aprovadas</option><option value="rejected">Recusadas</option><option value="">Todas</option>
         </Select>
       </div>
-      {rows.length === 0 ? <Empty title="Nenhuma solicitação" /> : (
+      {rows.length === 0 ? <Empty title="Nenhuma solicitação">{status === 'pending' ? 'Moradores pedem acesso pelo link do portal do condomínio. Os pedidos aparecem aqui para aprovação.' : null}</Empty> : (
         <ul className="divide-y divide-line">
           {rows.map((r) => (
             <li key={r.id} className="py-3 space-y-2 text-sm">

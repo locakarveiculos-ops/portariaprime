@@ -9,14 +9,15 @@ export function navigate(to: string, replace = false) {
   window.scrollTo(0, 0);
 }
 
+/** Pathname atual; também re-renderiza quando só a query muda (?m=, ?aba=). */
 export function usePath() {
-  const [path, setPath] = useState(() => location.pathname);
+  const [, setUrl] = useState(() => location.pathname + location.search);
   useEffect(() => {
-    const on = () => setPath(location.pathname);
+    const on = () => setUrl(location.pathname + location.search);
     window.addEventListener('popstate', on);
     return () => window.removeEventListener('popstate', on);
   }, []);
-  return path;
+  return location.pathname;
 }
 
 export function query(name: string) {

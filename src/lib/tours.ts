@@ -17,7 +17,7 @@ export const TOURS: Tour[] = [
       { area: 'configuracoes', target: 'config-marca', title: 'Marca do condomínio', body: 'Coloque nome, logo e cores. Só o seu condomínio vê esta identidade.' },
       { area: 'configuracoes', target: 'config-locais', title: 'Locais de guarda', body: 'Cadastre prateleiras ou salas com a capacidade de cada uma. O sistema sugere o local com mais espaço.' },
       { area: 'pessoas', target: 'unidades-form', title: 'Unidades', body: 'Cadastre bloco e unidade um a um, ou importe uma planilha CSV.' },
-      { area: 'pessoas', target: 'equipe-convite', title: 'Equipe', body: 'Convide porteiros pelo e-mail. Cada pessoa só recebe o acesso que você conceder.' },
+      { area: 'configuracoes', target: 'config-equipe', title: 'Equipe', body: 'Em Configurações › Equipe, convide porteiros pelo e-mail. Cada pessoa só recebe o acesso que você conceder.' },
       { area: 'portaria', target: 'portaria-abas', title: 'Teste na portaria', body: 'Registre uma encomenda de teste em Receber e entregue em Entregar.' },
     ],
   },
@@ -25,26 +25,26 @@ export const TOURS: Tour[] = [
     id: 'unidades', title: 'Unidades e importação', roles: ['admin'], requires: 'approve', article: 'unidades-e-importacao',
     goal: 'Cadastrar as unidades do condomínio.',
     steps: [
-      { area: 'pessoas', target: 'unidades-form', title: 'Uma unidade', body: 'Bloco/Torre é opcional. Unidade é obrigatória, por exemplo 101 ou Casa 12.' },
+      { area: 'pessoas', target: 'unidades-form', title: 'Nova unidade', body: 'Toque em “Nova unidade”. Bloco/Torre é opcional; Unidade é obrigatória, por exemplo 101 ou Casa 12.' },
       { area: 'pessoas', target: 'unidades-importar', title: 'Planilha CSV', body: 'Importe várias de uma vez. Você vê uma prévia antes de confirmar.' },
-      { area: 'pessoas', target: 'unidades-lista', title: 'Lista', body: 'Desative unidades que não existem mais. O histórico é preservado.' },
+      { area: 'pessoas', target: 'unidades-lista', title: 'Lista', body: 'No menu (⋮) da unidade, desative as que não existem mais. O histórico é preservado.' },
     ],
   },
   {
     id: 'moradores', title: 'Moradores, convites e aprovação', roles: ['admin'], requires: 'approve', article: 'moradores-e-convites',
     goal: 'Dar acesso aos moradores certos.',
     steps: [
-      { area: 'pessoas', target: 'unidades-lista', title: 'Convidar morador', body: 'Use “Convidar morador” na linha da unidade. O convite vale para um e-mail e expira em 7 dias.' },
-      { area: 'pessoas', target: 'convites-pendentes', title: 'Convites pendentes', body: 'Revogue um convite enviado por engano. Saber o apartamento não dá acesso a ninguém.' },
-      { area: 'pessoas', target: 'equipe-lista', title: 'Mudança de morador', body: 'Quando alguém se mudar, revogue o acesso. Vale na hora, mesmo com o app aberto.' },
+      { area: 'pessoas', target: 'unidades-lista', title: 'Convidar morador', body: 'Convite é opcional: no menu (⋮) da unidade, toque em “Convidar morador”. Vale para um e-mail e expira em 7 dias.' },
+      { area: 'pessoas?aba=solicitacoes', target: 'solicitacoes', title: 'Solicitações', body: 'Moradores pedem acesso pelo link do portal. Confira a unidade e aprove; saber o apartamento não dá acesso a ninguém.' },
+      { area: 'pessoas?aba=moradores', target: 'moradores-lista', title: 'Mudança de morador', body: 'Quando alguém se mudar, revogue o acesso no menu (⋮). Vale na hora, mesmo com o app aberto.' },
     ],
   },
   {
     id: 'equipe', title: 'Equipe e permissões', roles: ['admin'], requires: 'team', article: 'equipe-e-permissoes',
     goal: 'Convidar porteiros e outros administradores com o mínimo de acesso.',
     steps: [
-      { area: 'pessoas', target: 'equipe-convite', title: 'Convidar', body: 'Escolha porteiro ou administrador. Administradores recebem só as permissões marcadas.' },
-      { area: 'pessoas', target: 'equipe-lista', title: 'Desligar', body: 'Revogue o acesso de quem saiu da equipe. Convites que essa pessoa emitiu também perdem validade.' },
+      { area: 'configuracoes', target: 'config-equipe', title: 'Convidar', body: 'Em Configurações › Equipe, escolha porteiro ou administrador. Administradores recebem só as permissões marcadas.' },
+      { area: 'configuracoes', target: 'config-equipe', title: 'Desligar', body: 'Na mesma tela, revogue o acesso de quem saiu da equipe. Convites que essa pessoa emitiu também perdem validade.' },
     ],
   },
   {
@@ -76,13 +76,14 @@ export const TOURS: Tour[] = [
     ],
   },
   {
-    id: 'relatorios', title: 'Painel e relatórios', roles: ['admin'], article: 'relatorios',
-    goal: 'Acompanhar pendências e exportar dados.',
+    id: 'relatorios', title: 'Visão geral e relatórios', roles: ['admin'], article: 'relatorios',
+    goal: 'Acompanhar a operação, analisar tendências e exportar dados.',
     steps: [
-      { area: 'painel', target: 'painel-filtros', title: 'Período e situação', body: 'Escolha as datas e a situação. Os números vêm do banco, no fuso do condomínio.' },
-      { area: 'painel', target: 'painel-kpis', title: 'Indicadores', body: 'Pendentes agora, entradas, retiradas e tempo médio até a retirada.' },
-      { area: 'painel', target: 'painel-ocupacao', title: 'Ocupação', body: 'Veja quanto de cada local está ocupado. Vermelho indica lotado.' },
-      { area: 'painel', target: 'painel-exportar', title: 'Exportar', body: 'Baixe uma planilha CSV com o período filtrado.' },
+      { area: 'painel', target: 'painel-kpis', title: 'Indicadores de agora', body: 'Aguardando retirada, acima do prazo, ocupação e pendências. Toque para ver a lista.' },
+      { area: 'painel', target: 'painel-atencao', title: 'Precisa de atenção', body: 'O que exige ação, em ordem de prioridade, com o atalho para resolver.' },
+      { area: 'painel', target: 'painel-ocupacao', title: 'Ocupação', body: 'Quanto de cada local está ocupado. Laranja a partir de 85%, vermelho lotado.' },
+      { area: 'painel', target: 'painel-abas', title: 'Análise', body: 'Na aba Análise: período, comparação com o anterior, tempo até a retirada e horários de pico.' },
+      { area: 'relatorios', target: 'painel-exportar', title: 'Relatórios', body: 'Lista completa com filtros e planilha CSV do período.' },
     ],
   },
   {

@@ -11,7 +11,8 @@ const STATUS: Record<string, [string, 'success' | 'warning' | 'danger' | 'accent
   past_due: ['Vencida', 'danger'], suspended: ['Suspensa', 'danger'], canceled: ['Cancelada', 'neutral'],
 };
 
-export function AssinaturaPage() {
+/** `embedded`: renderizada dentro de Configurações › Plano e assinatura (sem título próprio). */
+export function AssinaturaPage({ embedded = false }: { embedded?: boolean } = {}) {
   const t = useTenant();
   const ov = t.overview;
   const tz = t.tenant.timezone;
@@ -47,7 +48,7 @@ export function AssinaturaPage() {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">Assinatura</h1>
+      {!embedded && <h1 className="text-2xl font-semibold">Assinatura</h1>}
       <Card className="space-y-3" data-tour="assinatura-resumo">
         <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-lg">{ov.plan.name} · {CYCLE_LABEL[ov.cycle]}</p><Badge tone={tone}>{label}</Badge></div>
         {ov.status === 'trialing' && (

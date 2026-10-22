@@ -151,7 +151,7 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4 lg:grid-cols-2">
+    <form onSubmit={submit} className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
       <Card className="space-y-3" data-tour="receber-foto">
         <p className="font-semibold">1. Foto da etiqueta <span className="text-muted font-normal">(opcional)</span></p>
         {preview ? (

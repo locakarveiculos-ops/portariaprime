@@ -2,7 +2,7 @@ import React, { lazy, Suspense, useEffect } from 'react';
 import { configError } from './lib/supabase';
 import { SessionProvider, useSession } from './lib/session';
 import { TenantProvider } from './lib/tenant';
-import { matchTenant, navigate, onLink, usePath } from './lib/router';
+import { matchTenant, navigate, onLink, query, usePath } from './lib/router';
 import { Alert, Button, Card, Spinner, Toaster } from './components/ui';
 import { PortariaPrimeLogo } from './components/Brand';
 import { TourProvider } from './components/TourGuide';
@@ -23,9 +23,9 @@ const Comprovante = lazy(() => import('./pages/tenant/Receipt').then(m => ({ def
 const Morador = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.MoradorPage })));
 const Avisos = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.AvisosPage })));
 const Painel = lazy(() => import('./pages/tenant/PainelPage').then(m => ({ default: m.PainelPage })));
+const Relatorios = lazy(() => import('./pages/tenant/PainelPage').then(m => ({ default: m.RelatoriosPage })));
 const Pessoas = lazy(() => import('./pages/tenant/PessoasPage').then(m => ({ default: m.PessoasPage })));
 const Config = lazy(() => import('./pages/tenant/ConfigPage').then(m => ({ default: m.ConfigPage })));
-const Assinatura = lazy(() => import('./pages/tenant/AssinaturaPage').then(m => ({ default: m.AssinaturaPage })));
 const Retorno = lazy(() => import('./pages/tenant/AssinaturaPage').then(m => ({ default: m.CheckoutReturnPage })));
 const Totem = lazy(() => import('./pages/TotemPage'));
 const Admin = lazy(() => import('./pages/AdminPage'));
@@ -38,8 +38,6 @@ function Redirect({ to }: { to: string }) {
   useEffect(() => { navigate(to, true); }, [to]);
   return <Spinner />;
 }
-
-const admin0 = (l: { role: string; permissions: string[] }) => l.role === 'admin' && l.permissions.includes('settings');
 
 function Routes() {
   const path = usePath();
@@ -84,7 +82,7 @@ function Routes() {
     const link = links.find(t => t.role === 'admin') || links.find(t => t.role === 'porteiro') || links[0];
     // Logado sem vínculo aqui: portal (pedir cadastro), nunca dados deste condomínio.
     if (!link) return <Portal slug={route.slug} />;
-    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'morador' : admin0(link) ? 'configuracoes' : 'portaria'}`} />;
+    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'morador' : link.role === 'admin' ? 'painel' : 'portaria'}`} />;
     const admin = link.role === 'admin';
     const staff = admin || link.role === 'porteiro';
     const perm = (p: string) => admin && link.permissions.includes(p);
@@ -92,9 +90,11 @@ function Routes() {
     if (route.area === 'portaria' && staff) page = <Portaria />;
     if (route.area === 'totem-equipe' && staff) page = <Portaria totem />;
     if (route.area === 'painel' && admin) page = <Painel />;
-    if (route.area === 'pessoas' && admin) page = <Pessoas />;
-    if (route.area === 'configuracoes' && perm('settings')) page = <Config />;
-    if (route.area === 'assinatura' && perm('billing')) page = <Assinatura />;
+    if (route.area === 'relatorios' && admin) page = <Relatorios />;
+    if (route.area === 'pessoas' && admin) page = <Pessoas tab={query('aba')} />;
+    // Cada módulo valida a própria permissão (settings/team/billing).
+    if (route.area === 'configuracoes' && (perm('settings') || perm('team') || perm('billing'))) page = <Config section={query('m')} />;
+    if (route.area === 'assinatura') return <Redirect to={`/c/${route.slug}/configuracoes?m=plano`} />;
     if (route.area === 'morador' && links.some(t => t.role === 'morador')) page = <Morador />;
     if (route.area === 'avisos') page = <Avisos />;
     if (route.area === 'aplicativo') page = <AppInfo />;

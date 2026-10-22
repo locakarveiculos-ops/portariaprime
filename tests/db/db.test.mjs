@@ -224,6 +224,10 @@ test('cobrança: sem checkout durante o teste; job cria exatamente 1 pedido na e
   await db.service(`select public.billing_tick()`);
   const [rem] = await db.sql(`select reminders_sent from public.subscriptions where tenant_id = $1`, [A]);
   assert.deepEqual(rem.reminders_sent, ['trial_d3']);
+  // Lembrete também no sino do administrador de cobrança, uma única vez por marco.
+  await db.service(`select public.billing_tick()`);
+  const bell = await db.sql(`select title from public.notifications where tenant_id = $1 and kind = 'trial_reminder'`, [A]);
+  assert.deepEqual(bell.map((b) => b.title), ['Mês grátis termina em breve']);
   db.setNow('2026-02-28T15:00:00Z');
   await Promise.all([db.service(`select public.billing_tick()`), db.service(`select public.billing_tick()`)]);
   await db.service(`select public.billing_tick()`);

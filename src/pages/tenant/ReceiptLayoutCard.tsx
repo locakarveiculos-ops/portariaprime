@@ -3,7 +3,8 @@ import { supabase } from '../../lib/supabase';
 import { rpc } from '../../lib/api';
 import { useTenant } from '../../lib/tenant';
 import { contrast, publicLogoUrl } from '../../lib/theme';
-import { uploadLogo } from '../../lib/files';
+import { navigate } from '../../lib/router';
+import { useUnsaved } from './config/cards';
 import { Alert, Button, Card, Field, Input, Select, useAction } from '../../components/ui';
 
 type Layout = {
@@ -20,7 +21,8 @@ export function ReceiptLayoutCard() {
   const t = useTenant();
   const [f, setF] = useState<Layout | null>(null);
   const [saved, setSaved] = useState<Layout | null>(null);
-  const [logo, setLogo] = useState<string | null>(t.branding?.logo_path || null);
+  // Logo único do condomínio (Identidade visual); o PDF guarda o snapshot no momento da entrega.
+  const logo = t.branding?.logo_path || null;
   const [preview, setPreview] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const { busy, run } = useAction();
@@ -33,20 +35,6 @@ export function ReceiptLayoutCard() {
   if (!f) return error ? <Alert tone="danger">{error}</Alert> : null;
   const set = (k: keyof Layout, v: any) => setF({ ...f, [k]: v });
   const legible = contrast(f.color_primary, '#FFFFFF') >= 4.5 || contrast(f.color_primary, '#18283A') >= 4.5;
-
-  const onLogo = (file: File) => run(async () => {
-    setError(null);
-    if (file.size > 5 * 1024 * 1024) throw new Error('Logo muito grande (máx. 5 MB).');
-    const path = await uploadLogo(t.tenant.id, file); // valida conteúdo real ao redesenhar no canvas
-    const { error } = await supabase.from('tenant_branding').update({ logo_path: path }).eq('tenant_id', t.tenant.id);
-    if (error) throw new Error('Logo enviado, mas não foi salvo. O logo anterior continua valendo.');
-    setLogo(path); await t.reload();
-  }, 'Logo atualizado. Vale para os próximos comprovantes.');
-  const removeLogo = () => run(async () => {
-    const { error } = await supabase.from('tenant_branding').update({ logo_path: null }).eq('tenant_id', t.tenant.id);
-    if (error) throw new Error('Não foi possível remover o logo.');
-    setLogo(null); await t.reload();
-  }, 'Logo removido dos próximos comprovantes (os já emitidos não mudam).');
 
   const body = () => ({ template: f.template, color_primary: f.color_primary, color_accent: f.color_accent, logo_position: f.logo_position,
     logo_size: f.logo_size, title: f.title, message: f.message, footer: f.footer, address: f.address, contact: f.contact,
@@ -65,18 +53,16 @@ export function ReceiptLayoutCard() {
     setPreview(URL.createObjectURL(await res.blob()));
   });
   const dirty = JSON.stringify(f) !== JSON.stringify(saved);
+  useUnsaved(dirty);
 
   return (
     <Card className="space-y-4" data-tour="config-comprovante">
       <div><p className="font-semibold">Identidade e comprovantes</p>
         <p className="text-sm text-muted">Logo e layout do PDF de entrega enviado aos moradores. Alterações valem para <strong>novos comprovantes</strong>; os já emitidos não mudam.</p></div>
       <div className="flex flex-wrap items-center gap-4">
-        {logo ? <img src={publicLogoUrl(logo)!} alt="Logo atual" className="h-16 max-w-40 object-contain rounded-lg bg-surface-2 p-1" /> : <span className="text-sm text-muted">Sem logo: o nome do condomínio aparece no lugar.</span>}
-        <label className="inline-flex items-center gap-2 text-sm min-h-11 cursor-pointer underline">
-          {logo ? 'Substituir logo' : 'Anexar logo'} (PNG, JPEG ou WebP, até 5 MB)
-          <input type="file" className="sr-only" accept="image/png,image/jpeg,image/webp" onChange={(e) => { const x = e.target.files?.[0]; if (x) onLogo(x); e.target.value = ''; }} />
-        </label>
-        {logo && <Button variant="ghost" onClick={removeLogo}>Remover logo</Button>}
+        {logo ? <img src={publicLogoUrl(logo)!} alt="Logo do condomínio" className="h-16 max-w-40 object-contain rounded-lg bg-surface-2 p-1" /> : <span className="text-sm text-muted">Sem logo: o nome do condomínio aparece no lugar.</span>}
+        <p className="text-sm text-muted">O comprovante usa o logo principal do condomínio.{' '}
+          <a href={`/c/${t.tenant.slug}/configuracoes?m=identidade`} onClick={(e) => { e.preventDefault(); navigate(`/c/${t.tenant.slug}/configuracoes?m=identidade`); }} className="underline">Alterar em Identidade visual</a></p>
       </div>
       <div className="grid sm:grid-cols-3 gap-3">
         <Field label="Modelo"><Select value={f.template} onChange={(e) => set('template', e.target.value)}><option value="classico">Clássico</option><option value="moderno">Moderno</option><option value="compacto">Compacto</option></Select></Field>
@@ -103,6 +89,7 @@ export function ReceiptLayoutCard() {
         <Button onClick={save} loading={busy} disabled={!dirty}>Salvar</Button>
         <Button variant="secondary" onClick={showPreview} loading={busy}>Prévia em PDF (dados fictícios)</Button>
         {dirty && <Button variant="ghost" onClick={() => setF(saved)}>Cancelar alterações</Button>}
+        {dirty && <span className="self-center text-sm text-warning">Alterações não salvas</span>}
         <Button variant="ghost" onClick={() => setF({ ...DEFAULT, document: f.document, version: f.version })}>Restaurar padrão</Button>
       </div>
       {preview && <div className="space-y-2">

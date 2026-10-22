@@ -1,5 +1,6 @@
 import React, { useCallback, useEffect, useState } from 'react';
-import { ArrowRightLeft, FileText, PackageCheck, PackagePlus, Search } from 'lucide-react';
+import { ArrowRightLeft, FileText, PackageCheck, PackagePlus, Search, Tablet } from 'lucide-react';
+import { navigate, query } from '../../../lib/router';
 import { useRealtime, useTenant } from '../../../lib/tenant';
 import { rpc } from '../../../lib/api';
 import { dateTime, STATUS_LABEL, unitName } from '../../../lib/format';
@@ -14,7 +15,7 @@ type Tab = 'receber' | 'entregar' | 'buscar';
 /** Portaria completa; `totem` = balcão da equipe logada, só Registrar/Entregar, botões grandes. */
 export function PortariaPage({ totem = false }: { totem?: boolean }) {
   const t = useTenant();
-  const [tab, setTab] = useState<Tab>('receber');
+  const [tab, setTab] = useState<Tab>(() => { const a = query('aba'); return a === 'entregar' || (a === 'buscar' && !totem) ? a : 'receber'; });
   const [units, setUnits] = useState<UnitRow[] | null>(null);
   const [storage, setStorage] = useState<StorageLoc[]>([]);
   const [pending, setPending] = useState<PackageRow[] | null>(null);
@@ -53,7 +54,11 @@ export function PortariaPage({ totem = false }: { totem?: boolean }) {
 
   return (
     <div className="space-y-4">
-      <h1 className="text-2xl font-semibold">{totem ? 'Totem da portaria' : 'Portaria'}</h1>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <h1 className="text-2xl font-semibold">{totem ? 'Totem da portaria' : 'Encomendas'}</h1>
+        {totem ? <Button variant="ghost" onClick={() => navigate(`/c/${t.tenant.slug}/portaria`)}>Voltar às encomendas</Button>
+          : <Button variant="secondary" onClick={() => navigate(`/c/${t.tenant.slug}/totem-equipe`)}><Tablet className="w-4 h-4" /> Abrir totem</Button>}
+      </div>
       {error && <Alert tone="danger">{error}</Alert>}
       <div className={`grid ${totem ? 'grid-cols-2' : 'grid-cols-3'} gap-2`} role="tablist" data-tour="portaria-abas">
         {tabs.map(([id, label, Icon]) => (
@@ -77,7 +82,7 @@ export function PortariaPage({ totem = false }: { totem?: boolean }) {
       )}
 
       {tab === 'receber' && (units ? (
-        units.length === 0 ? <Alert tone="warning">Nenhuma unidade cadastrada ainda. O administrador cadastra em “Unidades e pessoas”.</Alert>
+        units.length === 0 ? <Alert tone="warning">Nenhuma unidade cadastrada ainda. O administrador cadastra em “Unidades e moradores”.</Alert>
           : <ReceiveForm units={units} storage={storage} onDone={refresh} />
       ) : <Spinner />)}
 
