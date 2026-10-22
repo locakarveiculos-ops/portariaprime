@@ -42,7 +42,12 @@ function Routes() {
   const route = matchTenant(path);
   if (path === '/termos' || path === '/privacidade') return <LegalPage privacy={path === '/privacidade'} />;
   if (configError) return <main className="max-w-lg mx-auto p-6"><PortariaPrimeLogo /><Alert tone="danger">{configError}</Alert></main>;
-  if (route?.area === 'totem') return <Totem slug={route.slug} />;
+  // /totem: equipe logada vai ao totem da equipe (OCR, entrega); sem login segue o totem público pareado.
+  if (route?.area === 'totem') {
+    if (loading) return <Spinner />;
+    const staffHere = ctx?.tenants.some(t => t.slug === route.slug && t.tenant_status === 'active' && (t.role === 'admin' || t.role === 'porteiro'));
+    return staffHere ? <Redirect to={`/c/${route.slug}/totem-equipe`} /> : <Totem slug={route.slug} />;
+  }
   // Landing pública: não espera a sessão; com sessão mostra "Acessar meu condomínio".
   if (path === '/') return <Landing />;
   if (loading) return <Spinner />;

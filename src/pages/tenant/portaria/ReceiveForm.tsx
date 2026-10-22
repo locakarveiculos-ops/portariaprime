@@ -77,17 +77,19 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
       setPreview(URL.createObjectURL(jpg));
       setOcr(null);
       setOcrMsg(null);
+      // Leitura automática logo após a foto (plano com OCR); operador ainda confere tudo.
+      if (ocrEnabled) void runOcr(jpg);
     } catch (e: any) {
       toast.error(e.message);
     }
   };
 
-  const runOcr = async () => {
-    if (!photo) return;
+  const runOcr = async (img: Blob | null = photo) => {
+    if (!img) return;
     setOcrBusy(true);
     setOcrMsg(null);
     try {
-      const r = await api<Ocr>('/api/ocr/analyze-label', { tenantId: t.tenant.id, imageBase64: await blobToDataUrl(photo) });
+      const r = await api<Ocr>('/api/ocr/analyze-label', { tenantId: t.tenant.id, imageBase64: await blobToDataUrl(img) });
       setOcr(r);
       if (r.carrier) setCarrier(CARRIERS.includes(r.carrier) ? r.carrier : 'Outra');
       if (r.trackingCode) setTracking(r.trackingCode);
@@ -157,9 +159,9 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
             <img src={preview} alt="Foto da etiqueta" className="w-full rounded-xl max-h-72 object-contain bg-surface-2" />
             <button type="button" onClick={() => { setPhoto(null); setPreview(null); setOcr(null); }} className="absolute top-2 right-2 p-2 rounded-full bg-surface" aria-label="Remover foto"><X className="w-4 h-4" /></button>
           </div>
-        ) : <CameraCapture onCapture={takePhoto} label="Fotografar etiqueta" />}
+        ) : <CameraCapture onCapture={takePhoto} label={ocrEnabled ? 'Escanear etiqueta (câmera)' : 'Fotografar etiqueta'} />}
         {photo && ocrEnabled && (
-          <Button type="button" variant="secondary" onClick={runOcr} loading={ocrBusy}><ScanText className="w-4 h-4" /> Ler etiqueta automaticamente</Button>
+          <Button type="button" variant="secondary" onClick={() => runOcr()} loading={ocrBusy}><ScanText className="w-4 h-4" /> {ocr ? 'Ler etiqueta de novo' : 'Ler etiqueta automaticamente'}</Button>
         )}
         {photo && !ocrEnabled && <p className="text-xs text-muted">Leitura automática não incluída no plano. Preencha os dados ao lado.</p>}
         {ocrMsg && <Alert tone={ocr && ocr.confidence >= 70 ? 'info' : 'warning'}>{ocrMsg}</Alert>}

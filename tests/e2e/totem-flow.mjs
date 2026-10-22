@@ -74,10 +74,19 @@ try {
   await invite(outro, 'morador', u34);
 
   const ctx = await browser.newContext({ viewport: { width: 1024, height: 900 } });
+  // Provedor de OCR externo substituído: resposta no formato real, correspondência calculada pelo banco.
+  await ctx.route('**/api/ocr/analyze-label', async (route) => {
+    const match = await call(porteiro, 'match_recipient', { p_tenant: T, p_name: 'Jefferson Gomes dos Santos', p_block: null, p_unit: '12B' });
+    await route.fulfill({ json: { carrier: 'Mercado Livre', recipientName: 'Jefferson Gomes dos Santos', senderName: 'Loja Exemplo', block: null, unit: '12B',
+      complement: 'Apto 12B', trackingCode: `${run}BR1`.toUpperCase(), orderNumber: '2000001', invoiceNumber: null,
+      evidence: [{ field: 'recipientName', text: 'Jefferson Gomes dos Santos' }], alerts: ['“LSP-105” parece código de triagem, não unidade.'], confidence: 92, match } });
+  });
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
-  await page.goto(`${APP}/entrar?next=${encodeURIComponent(`/c/${slug}/totem-equipe`)}`);
+  // Link público do totem leva a equipe ao login e, logada, ao totem da equipe.
+  await page.goto(`${APP}/c/${slug}/totem`);
+  await page.getByRole('link', { name: /Sou da equipe/ }).click();
   await page.getByLabel('E-mail', { exact: true }).fill(porteiro.email);
   await page.getByLabel('Senha', { exact: true }).fill(porteiro.password);
   await page.getByRole('button', { name: 'Entrar' }).click();
@@ -88,10 +97,11 @@ try {
   await page.getByRole('tab', { name: 'Registrar encomenda' }).click();
   await page.locator('input[type=file]').first().setInputFiles({ name: 'etiqueta.png', mimeType: 'image/png', buffer: png });
   await page.getByAltText('Foto da etiqueta').waitFor();
-  await page.getByPlaceholder('Buscar unidade').fill('A 12B');
-  await page.getByRole('option', { name: 'Bloco A · 12B' }).click();
-  await page.getByLabel('Rastreio').fill(`${run}BR1`.toUpperCase());
-  await page.getByLabel('Destinatário (como está na etiqueta)').fill('Jefferson Gomes dos Santos');
+  // OCR roda sozinho após a foto; servidor confirma morador ativo e pré-seleciona a unidade.
+  await page.getByText('Destinatário confere com um morador ativo da unidade.').waitFor();
+  await page.getByText(/LSP-105/).waitFor();
+  assert.match(await page.getByText(/Selecionada:/).innerText(), /12B/);
+  assert.equal(await page.getByLabel('Rastreio').inputValue(), `${run}BR1`.toUpperCase());
   const sel = page.getByLabel('Local de guarda');
   await assert.doesNotReject(async () => assert.match(await sel.locator('option:checked').innerText(), /Estante A › Prateleira 2/));
   await page.getByRole('button', { name: 'Registrar encomenda' }).click();

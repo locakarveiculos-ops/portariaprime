@@ -61,5 +61,6 @@ export default function TotemPage({ slug }: { slug: string }) {
       {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" className="w-full" loading={busy}>{secret ? 'Pré-registrar entrega' : 'Parear dispositivo'}</Button>
     </form>}
     <p className="text-xs text-muted">Sem acesso a moradores, telefones ou histórico. Operações administrativas exigem autenticação na área do condomínio.</p>
+    <a className="block text-sm underline min-h-11" href={`/entrar?next=${encodeURIComponent(`/c/${slug}/totem-equipe`)}`}>Sou da equipe da portaria: entrar no totem com leitor de etiqueta</a>
   </Card></main>;
 }

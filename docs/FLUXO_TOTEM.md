@@ -1,6 +1,6 @@
 # Totem da portaria (equipe logada)
 
-Rota: `/c/:slug/totem-equipe` (menu “Totem da portaria”). Só porteiro e administrador ativos. Usa a sessão do operador (RLS), nunca service role. O totem público de entregadores (`/c/:slug/totem`, credencial de dispositivo) continua separado: só pré-registro, sem dados pessoais, sem retirada.
+Rota: `/c/:slug/totem-equipe` (menu “Totem da portaria”). Quem da equipe abre `/c/:slug/totem` logado é levado para cá; sem login, o totem público mostra “Sou da equipe da portaria” → login → totem da equipe. Com OCR no plano, a leitura roda sozinha após a foto. Só porteiro e administrador ativos. Usa a sessão do operador (RLS), nunca service role. O totem público de entregadores (`/c/:slug/totem`, credencial de dispositivo) continua separado: só pré-registro, sem dados pessoais, sem retirada.
 
 ## Registrar encomenda
 
