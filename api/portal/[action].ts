@@ -30,7 +30,8 @@ function icons(base: string, i: any) {
 
 export const GET = handler(async (request) => {
   const url = new URL(request.url);
-  const action = url.pathname.split('/').pop();
+  // Após o rewrite da Vercel o pathname pode ser o original (/c/slug/...); a ação vem na query.
+  const action = url.searchParams.get('a') || url.pathname.split('/').pop();
   const slug = url.searchParams.get('slug');
   const base = appUrl();
 
