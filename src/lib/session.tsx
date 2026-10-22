@@ -88,7 +88,8 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       const sub = await (await navigator.serviceWorker?.getRegistration())?.pushManager?.getSubscription();
       if (sub) await supabase.from('push_subscriptions').delete().eq('endpoint', sub.endpoint);
     } catch { /* sem push neste navegador */ }
-    await supabase.auth.signOut();
+    // Sai só deste aparelho; o padrão (global) derrubava a sessão de todos os outros.
+    await supabase.auth.signOut({ scope: 'local' });
     applyTheme(null);
     try { sessionStorage.clear(); } catch { /* sem storage */ }
     setCtx(null);
