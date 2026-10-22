@@ -4,7 +4,8 @@
  *
  *   POST /api/totem/pair         { code }                -> { deviceSecret, tenantSlug }
  *   POST /api/totem/context      header X-Device-Secret  -> unidades (bloco/unidade apenas)
- *   POST /api/totem/preregister  header X-Device-Secret  -> pré-registro p/ conferência
+ *   POST /api/totem/receive      header X-Device-Secret  -> recebimento direto + local + avisos
+ *   POST /api/totem/preregister  header X-Device-Secret  -> legado, somente clientes antigos
  *
  * O dispositivo guarda só a própria credencial (hash no banco, revogável pelo síndico).
  * Nenhum token de usuário, lista de moradores, telefone ou histórico é exposto.
@@ -71,19 +72,22 @@ export const POST = handler(async (request) => {
       unit: label.unit, confidence: label.confidence });
   }
 
-  if (action === 'preregister') {
+  if (action === 'preregister' || action === 'receive') {
     const hash = await secretHash(request);
     limit(`pre:${hash}`, 30);
     const b = await readJson(request, 4096);
     if (typeof b.idempotencyKey !== 'string' || !/^[A-Za-z0-9-]{8,80}$/.test(b.idempotencyKey)) throw new HttpError(400, 'Requisição inválida.');
-    if (b.unitId != null && !isUuid(b.unitId)) throw new HttpError(400, 'Unidade inválida.');
+    if ((action === 'receive' || b.unitId != null) && !isUuid(b.unitId)) throw new HttpError(400, 'Selecione uma unidade válida.');
     const s = (v: unknown, n: number) => (typeof v === 'string' ? v.slice(0, n) : null);
-    const { data, error } = await svc.rpc('device_preregister', {
+    const { data, error } = await svc.rpc(action === 'receive' ? 'device_receive' : 'device_preregister', {
       p_secret_hash: hash, p_idempotency_key: b.idempotencyKey, p_unit: b.unitId ?? null,
       p_carrier: s(b.carrier, 40), p_tracking: s(b.trackingCode, 80), p_courier: s(b.courierName, 80),
     });
     if (error) rpcError(error);
-    return json({ ok: true, replayed: data.replayed });
+    return json({ ok: true, replayed: data.replayed, ...(action === 'receive' ? {
+      storage_code: data.storage_code, storage_rack: data.storage_rack,
+      storage_shelf: data.storage_shelf, concierge_name: data.concierge_name,
+    } : {}) });
   }
 
   throw new HttpError(404, 'Ação desconhecida.');

@@ -17,7 +17,7 @@ const routes = {
   '/api/contact': '../api/contact.ts',
   '/api/funnel': '../api/funnel.ts',
   '/api/platform/users': '../api/platform/users.ts',
-  ...Object.fromEntries(['pair', 'context', 'preregister', 'ocr'].map(action => [`/api/totem/${action}`, '../api/totem/[action].ts'])),
+  ...Object.fromEntries(['pair', 'context', 'preregister', 'ocr', 'receive'].map(action => [`/api/totem/${action}`, '../api/totem/[action].ts'])),
   ...Object.fromEntries(['connect', 'status'].map(action => [`/api/whatsapp/${action}`, '../api/whatsapp/[action].ts'])),
 };
 

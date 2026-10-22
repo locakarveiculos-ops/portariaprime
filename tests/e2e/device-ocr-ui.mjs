@@ -13,6 +13,10 @@ try {
     assert.equal(route.request().headers()['x-device-secret'], 'a'.repeat(64));
     assert.equal(route.request().headers().authorization, undefined);
     if (route.request().url().endsWith('/context')) return route.fulfill({ json: { units: [{ id: 'u1', block: 'A', label: '12B' }] } });
+    if (route.request().url().endsWith('/receive')) {
+      assert.equal(route.request().postDataJSON().unitId, 'u1');
+      return route.fulfill({ json: { ok: true, replayed: false, storage_code: 'A2', storage_rack: 'Estante A', storage_shelf: '2', concierge_name: 'Principal' } });
+    }
     assert.ok(route.request().url().endsWith('/ocr'));
     assert.match(route.request().postDataJSON().imageBase64, /^data:image\/jpeg;base64,/);
     calls++;
@@ -33,5 +37,11 @@ try {
   assert.equal(await page.getByLabel('Unidade', { exact: true }).inputValue(), 'u1');
   assert.equal(calls, 1);
   assert.match(page.url(), /\/totem$/);
-  console.log('PASS: OCR no totem pareado sem conta, sem JWT, sem link de login. Provedor simulado.');
+  await page.getByRole('button', { name: 'Registrar encomenda e avisar moradores' }).click();
+  await page.getByText('Encomenda registrada e disponível para os moradores da unidade. Avisos colocados na fila de envio.').waitFor();
+  await page.getByText(/Deposite a encomenda em: Principal · Estante A/).waitFor();
+  assert.equal(await page.getByText(/Pré-registro recebido/).count(), 0);
+  await page.getByRole('button', { name: 'Registrar outra encomenda' }).click();
+  assert.equal(await page.getByLabel('Rastreio').inputValue(), '');
+  console.log('PASS: OCR e recebimento direto sem login ou conferência posterior. API simulada.');
 } finally { await browser.close(); }

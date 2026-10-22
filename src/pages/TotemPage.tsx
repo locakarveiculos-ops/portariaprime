@@ -16,7 +16,8 @@ export default function TotemPage({ slug }: { slug: string }) {
   const [courier, setCourier] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
-  const [done, setDone] = useState(false);
+  const [done, setDone] = useState<{ location: string } | null>(null);
+  const submitting = useRef(false);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrMessage, setOcrMessage] = useState('');
   const reading = useRef(false);
@@ -50,13 +51,11 @@ export default function TotemPage({ slug }: { slug: string }) {
     if (secret) call('context').then(d => { if (active) setUnits(d.units); }).catch(e => { if (active) setError(e.message); });
     return () => { active = false; };
   }, [secret]);
-  useEffect(() => {
-    if (!done) return;
-    const timer = setTimeout(() => setDone(false), 6000);
-    return () => clearTimeout(timer);
-  }, [done]);
   async function submit(event: React.FormEvent) {
-    event.preventDefault(); setBusy(true); setError('');
+    event.preventDefault();
+    if (submitting.current || reading.current) return;
+    if (!navigator.onLine) return setError('Sem conexão. Aguarde a internet voltar para registrar.');
+    submitting.current = true; setBusy(true); setError('');
     try {
       if (!secret) {
         const result = await call('pair', { code });
@@ -64,14 +63,19 @@ export default function TotemPage({ slug }: { slug: string }) {
         try { localStorage.setItem(`pp_device:${slug}`, result.deviceSecret); } catch { /* Pareamento vale nesta sessão. */ }
         setSecret(result.deviceSecret); setCode('');
       } else {
-        await call('preregister', { idempotencyKey: key.current, unitId: unit || null, trackingCode: tracking, carrier, courierName: courier });
-        setUnit(''); setTracking(''); setCourier(''); setCarrier('Correios'); setOcrMessage(''); key.current = crypto.randomUUID(); setDone(true);
+        const result = await call('receive', { idempotencyKey: key.current, unitId: unit || null, trackingCode: tracking, carrier, courierName: courier });
+        const location = [result.concierge_name, result.storage_rack, result.storage_shelf, result.storage_code].filter(Boolean).join(' · ');
+        setUnit(''); setTracking(''); setCourier(''); setCarrier('Correios'); setOcrMessage(''); key.current = crypto.randomUUID(); setDone({ location });
       }
-    } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+    } catch (e: any) { setError(e.message); } finally { submitting.current = false; setBusy(false); }
   }
   return <main className="min-h-dvh flex items-center justify-center px-4 py-8"><Card className="max-w-xl w-full space-y-5">
     <PortariaPrimeLogo /><h1 className="text-2xl font-semibold">Entrega na portaria</h1>
-    {done ? <Alert tone="success">Pré-registro recebido. Entregue a encomenda ao porteiro para conferência. O aviso ao morador será feito depois da conferência.</Alert> : <form onSubmit={submit} className="space-y-4">
+    {done ? <div className="space-y-4">
+      <Alert tone="success">Encomenda registrada e disponível para os moradores da unidade. Avisos colocados na fila de envio.</Alert>
+      <p className="text-lg font-semibold">Deposite a encomenda em: {done.location}</p>
+      <Button className="w-full" onClick={() => setDone(null)}>Registrar outra encomenda</Button>
+    </div> : <form onSubmit={submit} className="space-y-4">
       {!secret ? <><p>Peça ao administrador um código de pareamento para este dispositivo.</p><Field label="Código de pareamento"><Input required value={code} maxLength={8} onChange={e => setCode(e.target.value.toUpperCase())} /></Field></> : <>
         <fieldset disabled={busy || ocrBusy} className="space-y-3">
           <p className="font-semibold">Leitura de etiqueta com OCR</p>
@@ -84,7 +88,7 @@ export default function TotemPage({ slug }: { slug: string }) {
         <Field label="Rastreio"><Input value={tracking} maxLength={80} onChange={e => setTracking(e.target.value)} /></Field>
         <Field label="Nome do entregador"><Input value={courier} maxLength={80} onChange={e => setCourier(e.target.value)} /></Field>
       </>}
-      {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" className="w-full" loading={busy} disabled={ocrBusy}>{secret ? 'Pré-registrar entrega' : 'Parear dispositivo'}</Button>
+      {error && <Alert tone="danger">{error}</Alert>}<Button type="submit" className="w-full" loading={busy} disabled={ocrBusy}>{secret ? 'Registrar encomenda e avisar moradores' : 'Parear dispositivo'}</Button>
     </form>}
     <p className="text-xs text-muted">Sem acesso a moradores, telefones ou histórico. Operações administrativas exigem autenticação na área do condomínio.</p>
     <p className="text-xs text-muted">O leitor de etiqueta funciona neste dispositivo pareado, sem conta de porteiro ou administrador.</p>

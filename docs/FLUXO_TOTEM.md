@@ -6,7 +6,13 @@ Rota da equipe: `/c/:slug/totem-equipe` (menu “Totem da portaria”). Quem da 
 
 Em `/c/:slug/totem`, sem sessão de usuário, o dispositivo pareado oferece **Escanear etiqueta (câmera)** e envio de arquivo. A foto dispara `/api/totem/ocr` com `X-Device-Secret`, sem JWT. Não aparece o link “Sou da equipe”.
 
-`device_consume_ocr` valida dispositivo ativo, plano, condição comercial e franquia mensal compartilhada; intervalo persistente mínimo de 10 segundos por dispositivo. Tenant vem do dispositivo, nunca do corpo. A API revalida a credencial após a chamada ao Gemini. Retorna apenas transportadora, rastreio, bloco, unidade e confiança extraídos da imagem, sem consulta a moradores, nomes, contatos ou histórico. O cliente não armazena a imagem. Pré-registro continua sujeito à conferência da equipe; não autoriza retirada.
+`device_consume_ocr` valida dispositivo ativo, plano, condição comercial e franquia mensal compartilhada; intervalo persistente mínimo de 10 segundos por dispositivo. Tenant vem do dispositivo, nunca do corpo. A API revalida a credencial após a chamada ao Gemini. Retorna apenas transportadora, rastreio, bloco, unidade e confiança extraídos da imagem, sem consulta a moradores, nomes, contatos ou histórico. O cliente não armazena a imagem. O recebimento direto descrito abaixo dispensa conferência posterior; não autoriza retirada.
+
+## Recebimento automático no totem pareado
+
+Após conferir a unidade na própria tela, **Registrar encomenda e avisar moradores** chama `/api/totem/receive`. O servidor identifica o condomínio pelo dispositivo, escolhe um local cadastrado com vaga, registra a encomenda diretamente e cria os avisos na mesma transação. A encomenda fica visível aos moradores ativos da unidade sem aprovação da portaria. A tela mostra onde depositar o item e só avança ao tocar em **Registrar outra encomenda**.
+
+Sem unidade válida, dispositivo revogado, plano indisponível, local cadastrado ou vaga, nada é registrado. Repetir a mesma operação não duplica encomenda nem avisos. Não há promessa de WhatsApp entregue no clique: o worker envia a fila conforme conexão do canal, franquia e agendador. Registros antigos `PRE_REGISTRADA` não são convertidos automaticamente por esta alteração.
 
 Testes: `tests/db/device-ocr.test.mjs`, `tests/api/device-ocr.test.mjs` e `tests/e2e/device-ocr-ui.mjs` (UI anônima com provedor simulado). Câmera física e leitura real nesse endpoint não homologadas nesta execução.
 
