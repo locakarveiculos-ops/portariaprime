@@ -6,7 +6,7 @@
  *  3. envia a fila de notificações (outbox) com retry/backoff
  */
 import { handler, json, safeEqual, HttpError } from '../_lib/http.js';
-import { env, appUrl } from '../_lib/env.js';
+import { env, appUrl, optionalEnv } from '../_lib/env.js';
 import { serviceClient } from '../_lib/supabase.js';
 import { verifyAndApply } from '../_lib/payments.js';
 import { render, emailHtml } from '../_lib/templates.js';
@@ -114,6 +114,11 @@ async function run(request: Request) {
       }
       if (job.channel === 'email') {
         res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined);
+      } else if (job.channel === 'whatsapp' && job.event === 'portal_welcome') {
+        // Condomínio recém-criado ainda não tem WhatsApp: usa o canal da plataforma, se configurado.
+        const platform = optionalEnv('PLATFORM_WHATSAPP_INSTANCE');
+        res = platform ? await sendWhatsApp(platform, job.recipient, m.whatsapp)
+          : { status: 'disabled', error: 'WhatsApp da plataforma não configurado' };
       } else if (job.channel === 'whatsapp') {
         const wa = ctx.whatsapp;
         if (!wa?.enabled || !wa.instance) res = { status: 'disabled', error: 'WhatsApp não conectado neste condomínio' };

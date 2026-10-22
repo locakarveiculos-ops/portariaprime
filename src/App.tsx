@@ -31,11 +31,15 @@ const Totem = lazy(() => import('./pages/TotemPage'));
 const Admin = lazy(() => import('./pages/AdminPage'));
 const Ajuda = lazy(() => import('./pages/HelpPage'));
 const Landing = lazy(() => import('./pages/LandingPage'));
+const Portal = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.PortalPage })));
+const RequestAccess = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.RequestAccessPage })));
 
 function Redirect({ to }: { to: string }) {
   useEffect(() => { navigate(to, true); }, [to]);
   return <Spinner />;
 }
+
+const admin0 = (l: { role: string; permissions: string[] }) => l.role === 'admin' && l.permissions.includes('settings');
 
 function Routes() {
   const path = usePath();
@@ -57,6 +61,9 @@ function Routes() {
   if (path === '/recuperar-senha') return <RecoverPage />;
   if (path === '/nova-senha') return <NewPasswordPage />;
   if (path === '/convite') return <InvitePage />;
+  // Portal do condomínio: página pública com a marca dele (sem sessão não há dados internos).
+  if (route && !session) return route.area ? <Redirect to={`/c/${route.slug}`} /> : <Portal slug={route.slug} />;
+  if (route?.area === 'solicitar') return <RequestAccess slug={route.slug} />;
   if (!session) return <Redirect to={`/entrar?next=${encodeURIComponent(location.pathname + location.search)}`} />;
   if (error || !ctx) return <main className="max-w-lg mx-auto p-6 space-y-4"><Alert tone="danger">{error || 'Não foi possível carregar seus vínculos.'}</Alert><Button onClick={refresh}>Tentar novamente</Button><Button variant="ghost" onClick={signOut}>Sair</Button></main>;
   if (path === '/onboarding') return <Onboarding />;
@@ -75,8 +82,9 @@ function Routes() {
   if (route) {
     const links = ctx.tenants.filter(t => t.slug === route.slug && t.tenant_status === 'active');
     const link = links.find(t => t.role === 'admin') || links.find(t => t.role === 'porteiro') || links[0];
-    if (!link) return <Alert tone="danger">Sem vínculo ativo neste condomínio. <a href="/app" onClick={onLink}>Escolher outro</a></Alert>;
-    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'morador' : 'portaria'}`} />;
+    // Logado sem vínculo aqui: portal (pedir cadastro), nunca dados deste condomínio.
+    if (!link) return <Portal slug={route.slug} />;
+    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'morador' : admin0(link) ? 'configuracoes' : 'portaria'}`} />;
     const admin = link.role === 'admin';
     const staff = admin || link.role === 'porteiro';
     const perm = (p: string) => admin && link.permissions.includes(p);

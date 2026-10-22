@@ -11,6 +11,7 @@ export interface Branding {
   color_secondary?: string | null;
   color_accent?: string | null;
   theme?: 'light' | 'dark' | 'system';
+  app_icons_version?: number | null;
 }
 
 const HEX = /^#[0-9A-Fa-f]{6}$/;

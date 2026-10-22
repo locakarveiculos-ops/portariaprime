@@ -60,6 +60,7 @@ export function PessoasPage() {
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Unidades e pessoas</h1>
+      {canApprove && units && <AccessRequests units={units} onDecided={load} />}
       {t.link.role === 'admin' && (
         <Card className="space-y-3">
           <div className="flex flex-wrap justify-between gap-2 items-center">
@@ -221,5 +222,58 @@ function ImportModal({ onClose, onDone }: { onClose: () => void; onDone: () => v
         )}
       </div>
     </Modal>
+  );
+}
+
+/** Solicitações de cadastro feitas pelo portal (sem convite). Aprovar cria o vínculo; recusar exige motivo. */
+function AccessRequests({ units, onDecided }: { units: UnitRow[]; onDecided: () => void }) {
+  const t = useTenant();
+  const [status, setStatus] = useState('pending');
+  const [rows, setRows] = useState<any[] | null>(null);
+  const [pick, setPick] = useState<Record<string, string>>({});
+  const { busy, run } = useAction();
+  const load = useCallback(() => rpc<any[]>('list_access_requests', { p_tenant: t.tenant.id, p_status: status || null }).then(setRows).catch(() => setRows([])), [t.tenant.id, status]);
+  useEffect(() => { load(); }, [load]);
+  const active = units.filter((u) => u.active);
+  const decide = (r: any, approve: boolean) => run(async () => {
+    const reason = approve ? null : prompt('Motivo da recusa (o morador verá esta mensagem):');
+    if (!approve && (!reason || reason.trim().length < 3)) throw new Error('Informe o motivo da recusa.');
+    await rpc('decide_access_request', { p_request: r.id, p_approve: approve, p_unit: pick[r.id] || r.unit_id || null, p_reason: reason });
+    await load(); onDecided();
+  }, approve ? 'Cadastro aprovado.' : 'Solicitação recusada.');
+  if (!rows) return null;
+  if (status === 'pending' && rows.length === 0) return null;
+  return (
+    <Card className="space-y-3" data-tour="solicitacoes">
+      <div className="flex flex-wrap justify-between items-center gap-2">
+        <p className="font-semibold">Solicitações de cadastro {status === 'pending' ? `(${rows.length})` : ''}</p>
+        <Select aria-label="Filtrar solicitações" value={status} onChange={(e) => setStatus(e.target.value)} className="w-44">
+          <option value="pending">Pendentes</option><option value="approved">Aprovadas</option><option value="rejected">Recusadas</option><option value="">Todas</option>
+        </Select>
+      </div>
+      {rows.length === 0 ? <Empty title="Nenhuma solicitação" /> : (
+        <ul className="divide-y divide-line">
+          {rows.map((r) => (
+            <li key={r.id} className="py-3 space-y-2 text-sm">
+              <p><strong>{r.full_name}</strong> <span className="text-muted">{r.email}{r.phone ? ` · ${r.phone}` : ''}</span></p>
+              <p>Informou: <strong>{[r.block_text, r.unit_text].filter(Boolean).join(' ')}</strong> · {new Date(r.created_at).toLocaleString('pt-BR')}
+                {r.status !== 'pending' && <> · <Badge tone={r.status === 'approved' ? 'success' : 'danger'}>{r.status === 'approved' ? 'aprovada' : 'recusada'}</Badge>{r.reason ? ` ${r.reason}` : ''}</>}</p>
+              {r.status === 'pending' && (
+                <div className="flex flex-wrap items-end gap-2">
+                  <Field label={r.unit_id ? 'Unidade (encontrada)' : 'Unidade não encontrada: escolha'}>
+                    <Select value={pick[r.id] ?? r.unit_id ?? ''} onChange={(e) => setPick({ ...pick, [r.id]: e.target.value })}>
+                      <option value="">Selecione…</option>
+                      {active.map((u) => <option key={u.id} value={u.id}>{unitName(u.block, u.label)}</option>)}
+                    </Select>
+                  </Field>
+                  <Button loading={busy} disabled={!(pick[r.id] || r.unit_id)} onClick={() => decide(r, true)}>Aprovar</Button>
+                  <Button variant="ghost" loading={busy} onClick={() => decide(r, false)}>Recusar</Button>
+                </div>
+              )}
+            </li>
+          ))}
+        </ul>
+      )}
+    </Card>
   );
 }

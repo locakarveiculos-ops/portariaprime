@@ -5,6 +5,21 @@ import { navigate, onLink, query } from '../../lib/router';
 import { useSession } from '../../lib/session';
 import { Alert, Button, Field, Input, Spinner } from '../../components/ui';
 import { AuthLayout } from './AuthLayout';
+import { PortalShell, usePortal } from '../PortalPage';
+
+/** Login/cadastro aberto a partir do portal: mantém a marca do condomínio. */
+function Branded({ title, subtitle, children }: { title: string; subtitle?: string; children: React.ReactNode }) {
+  const slug = query('portal');
+  return slug && /^[a-z0-9-]{3,48}$/.test(slug) ? <PortalBranded slug={slug} title={title} subtitle={subtitle}>{children}</PortalBranded>
+    : <AuthLayout title={title} subtitle={subtitle}>{children}</AuthLayout>;
+}
+function PortalBranded({ slug, title, subtitle, children }: { slug: string; title: string; subtitle?: string; children: React.ReactNode }) {
+  const { portal } = usePortal(slug);
+  if (portal === undefined) return <Spinner />;
+  if (!portal) return <AuthLayout title={title} subtitle={subtitle}>{children}</AuthLayout>;
+  return <PortalShell portal={portal}><div className="max-w-sm mx-auto"><h2 className="text-2xl font-semibold">{title}</h2>
+    {subtitle && <p className="mt-1 text-sm text-muted">{subtitle}</p>}<div className="mt-6">{children}</div></div></PortalShell>;
+}
 import { track } from '../../lib/funnel';
 
 const origin = () => location.origin;
@@ -38,7 +53,7 @@ export function LoginPage() {
   };
 
   return (
-    <AuthLayout title="Entrar" subtitle="Acesse sua portaria, seu condomínio ou suas encomendas.">
+    <Branded title="Entrar" subtitle="Acesse sua portaria, seu condomínio ou suas encomendas.">
       <form onSubmit={submit} className="space-y-4">
         <Field label="E-mail"><Input type="email" autoComplete="email" required value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
         <Field label="Senha"><Input type="password" autoComplete="current-password" required value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
@@ -47,10 +62,12 @@ export function LoginPage() {
       </form>
       <div className="mt-6 space-y-2 text-sm">
         <p><a href="/recuperar-senha" onClick={onLink} className="text-secondary font-medium underline-offset-2 hover:underline">Esqueci minha senha</a></p>
-        <p className="text-muted">Novo por aqui? <a href="/cadastro" onClick={onLink} className="text-secondary font-medium hover:underline">Cadastrar meu condomínio</a></p>
-        <p className="text-muted text-xs">Morador ou porteiro: use o link de convite que o síndico enviou.</p>
+        {query('portal')
+          ? <p className="text-muted">Mora aqui e não tem conta? <a href={`/cadastro?next=${encodeURIComponent(next)}&portal=${query('portal')}`} onClick={onLink} className="text-secondary font-medium hover:underline">Criar minha conta</a></p>
+          : <><p className="text-muted">Novo por aqui? <a href="/cadastro" onClick={onLink} className="text-secondary font-medium hover:underline">Cadastrar meu condomínio</a></p>
+            <p className="text-muted text-xs">Morador: abra o link do portal do seu condomínio para criar sua conta.</p></>}
       </div>
-    </AuthLayout>
+    </Branded>
   );
 }
 
@@ -63,7 +80,8 @@ export function SignupPage() {
   const [sent, setSent] = useState(false);
   const [busy, setBusy] = useState(false);
   const next = query('next') || '/onboarding';
-  useEffect(() => { if (!next.startsWith('/convite')) track('signup_started'); }, [next]);
+  const resident = next.startsWith('/convite') || /^\/c\/[a-z0-9-]+\/solicitar$/.test(next);
+  useEffect(() => { if (!resident) track('signup_started'); }, [resident]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -74,25 +92,25 @@ export function SignupPage() {
     const { error } = await supabase.auth.signUp({
       email: email.trim().toLowerCase(),
       password,
-      options: { data: { full_name: name.trim() }, emailRedirectTo: `${origin()}/entrar?next=${encodeURIComponent(next)}` },
+      options: { data: { full_name: name.trim() }, emailRedirectTo: `${origin()}/entrar?next=${encodeURIComponent(next)}${query('portal') ? `&portal=${query('portal')}` : ''}` },
     });
     setBusy(false);
     if (error) return setError(/registered|exists/i.test(error.message) ? 'Este e-mail já tem conta. Use "Entrar".' : friendly(error));
-    if (!next.startsWith('/convite')) track('signup_completed');
+    if (!resident) track('signup_completed');
     setSent(true);
   };
 
   if (sent) {
     return (
-      <AuthLayout title="Confirme seu e-mail">
+      <Branded title="Confirme seu e-mail">
         <Alert tone="success">Enviamos um link para <strong>{email}</strong>. Abra-o para ativar sua conta e continuar o cadastro.</Alert>
         <p className="mt-4 text-sm text-muted">Não chegou? Verifique o spam ou aguarde alguns minutos.</p>
-      </AuthLayout>
+      </Branded>
     );
   }
 
   return (
-    <AuthLayout title="Criar conta" subtitle={next.startsWith('/convite') ? 'Crie sua conta para aceitar o convite.' : 'Primeiro mês grátis para o seu condomínio. Sem cartão para começar.'}>
+    <Branded title="Criar conta" subtitle={resident ? 'Crie sua conta. Depois você informa sua unidade para a administração aprovar.' : 'Primeiro mês grátis para o seu condomínio. Sem cartão para começar.'}>
       <form onSubmit={submit} className="space-y-4">
         <Field label="Seu nome"><Input required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></Field>
         <Field label="E-mail"><Input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
@@ -104,8 +122,8 @@ export function SignupPage() {
         {error && <Alert tone="danger">{error}</Alert>}
         <Button type="submit" loading={busy} className="w-full">Criar conta</Button>
       </form>
-      <p className="mt-6 text-sm text-muted">Já tem conta? <a href={`/entrar?next=${encodeURIComponent(next)}`} onClick={onLink} className="text-secondary font-medium hover:underline">Entrar</a></p>
-    </AuthLayout>
+      <p className="mt-6 text-sm text-muted">Já tem conta? <a href={`/entrar?next=${encodeURIComponent(next)}${query('portal') ? `&portal=${query('portal')}` : ''}`} onClick={onLink} className="text-secondary font-medium hover:underline">Entrar</a></p>
+    </Branded>
   );
 }
 

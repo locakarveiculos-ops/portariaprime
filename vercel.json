@@ -4,6 +4,9 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/c/:slug/manifest.webmanifest", "destination": "/api/portal/manifest?slug=:slug" },
+    { "source": "/c/:slug", "destination": "/api/portal/page?slug=:slug" },
+    { "source": "/c/:slug/:path*", "destination": "/api/portal/page?slug=:slug" },
     { "source": "/((?!api/|assets/|brand/|screens/|sw\\.js|manifest\\.webmanifest|robots\\.txt|sitemap\\.xml|.*\\.(?:png|webp|ico|js|css|webmanifest)$).*)", "destination": "/index.html" }
   ],
   "headers": [

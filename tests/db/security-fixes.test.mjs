@@ -76,7 +76,7 @@ test('revogação impede novos avisos e desautoriza fila anterior', async () => 
     });
     await s.db.rpc(resident, 'accept_invitation', { p_token: invite.token });
     await receive(s, 'before-revocation');
-    const [job] = await s.db.sql("select id from notification_jobs where channel='email'");
+    const [job] = await s.db.sql("select id from notification_jobs where channel='email' and event='package_received'");
     assert.equal((await s.db.service('select notification_is_authorized($1) ok', [job.id]))[0].ok, true);
     const [{id}] = await s.db.sql('select id from tenant_memberships where user_id=$1', [resident]);
     await s.db.rpc(s.admin, 'set_membership_status', { p_membership: id, p_status: 'revoked' });

@@ -9,6 +9,8 @@ export const esc = (s: unknown) =>
 const wa = (s: unknown) => String(s ?? '').replace(/[*_~`]/g, '').slice(0, 120);
 
 export interface MessageCtx {
+  trial_ends_at?: string | null;
+  admin_name?: string | null;
   tenant_name: string;
   tenant_slug: string;
   timezone: string;
@@ -57,6 +59,34 @@ export function render(event: string, ctx: MessageCtx, payload: any, appUrl: str
         cta: ['Ver comprovante', receiptLink],
         intro: 'Uma encomenda da sua unidade foi retirada na portaria. O comprovante em PDF segue anexo.',
       };
+    case 'portal_welcome': {
+      const portal = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}`;
+      const until = ctx.trial_ends_at ? ` Seu período de teste termina em ${fmt(ctx.trial_ends_at, ctx.timezone).split(',')[0]}.` : '';
+      const intro = `Olá, ${ctx.admin_name || 'administrador(a)'}. O portal do ${ctx.tenant_name} está disponível: ${portal}. Acesse Administração para concluir as configurações. Você também pode compartilhar esse endereço com os moradores para que solicitem cadastro.${until}`;
+      return {
+        subject: `Portal do ${ctx.tenant_name} está no ar`,
+        whatsapp: `*${wa(ctx.tenant_name)}*
+${wa(intro).slice(0, 600)}
+
+Equipe Portaria Prime`,
+        intro, lines: [], cta: ['Abrir o portal', portal],
+      };
+    }
+    case 'access_request':
+      return {
+        subject: `Nova solicitação de cadastro — ${ctx.tenant_name}`,
+        push: { title: 'Nova solicitação de cadastro', body: 'Um morador pediu acesso. Toque para revisar.', url: `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/pessoas` },
+        intro: 'Um morador pediu acesso ao condomínio.', lines: [], cta: ['Revisar solicitações', `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/pessoas`],
+      };
+    case 'access_decision': {
+      const ok = !!payload?.approved;
+      return {
+        subject: ok ? `Cadastro aprovado — ${ctx.tenant_name}` : `Cadastro não aprovado — ${ctx.tenant_name}`,
+        intro: ok ? 'Seu cadastro foi aprovado. Você já pode acompanhar as encomendas da sua unidade.'
+          : 'Sua solicitação de cadastro não foi aprovada. Procure a administração do condomínio para mais informações.',
+        lines: [], cta: ['Abrir o portal', `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}`],
+      };
+    }
     case 'ops_alert':
       return {
         subject: `Alerta — ${ctx.tenant_name}`,

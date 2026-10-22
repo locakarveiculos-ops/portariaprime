@@ -38,12 +38,12 @@ export const ARTICLES: Article[] = [
     next: ['moradores-e-convites'],
   },
   {
-    slug: 'moradores-e-convites', title: 'Convidar, aprovar e remover moradores', category: 'Síndico', roles: ['admin'], areas: ['pessoas'], tour: 'moradores', keywords: 'morador convite aprovar vínculo mudança',
+    slug: 'moradores-e-convites', title: 'Convidar, aprovar e remover moradores', category: 'Síndico', roles: ['admin'], areas: ['pessoas'], tour: 'moradores', keywords: 'morador convite aprovar vínculo mudança cadastro solicitação portal link qr',
     forWho: 'Administrador com permissão de aprovar moradores.', when: 'Quando um morador chega ou sai.',
     before: ['Unidade cadastrada.', 'E-mail do morador.'],
-    steps: ['Em Unidades e pessoas, toque em “Convidar morador” na linha da unidade.', 'Digite o e-mail e envie.', 'Se o e-mail automático não estiver configurado, copie o link exibido e envie por um canal seguro.', 'O morador cria a conta com o mesmo e-mail e aceita o convite.', 'Quando alguém se mudar, revogue o acesso na lista de pessoas.'],
+    steps: ['Sem convite: em Configurações › Portal e aplicativo, copie o link do portal (ou baixe o QR) e compartilhe com os moradores.', 'O morador abre o portal, toca em “Criar minha conta” e informa nome, celular e unidade.', 'Em Unidades e pessoas aparece “Solicitações de cadastro”: confira a unidade e toque em Aprovar (ou Recusar com motivo).', 'Com convite (opcional): toque em “Convidar morador” na linha da unidade e envie para o e-mail dele.', 'Quando alguém se mudar, revogue o acesso na lista de pessoas.'],
     result: 'O morador vê só as encomendas da unidade dele.', confirm: 'O nome aparece em Pessoas com a unidade ativa.',
-    problems: [['Morador diz que o convite é inválido', 'Convites expiram em 7 dias e valem uma vez. Gere um novo.'], ['“Enviado para outro e-mail”', 'O morador entrou com outra conta. Ele precisa usar o e-mail do convite.'], ['Morador sem vínculo', 'Saber bloco e número não dá acesso. O vínculo só existe depois que o convite é aceito.']],
+    problems: [['Morador diz que o convite é inválido', 'Convites expiram em 7 dias e valem uma vez. Gere um novo.'], ['“Enviado para outro e-mail”', 'O morador entrou com outra conta. Ele precisa usar o e-mail do convite.'], ['Morador sem vínculo', 'Saber bloco e número não dá acesso. O vínculo só existe depois da aprovação ou do convite aceito.'], ['A unidade da solicitação não foi encontrada', 'O morador digitou diferente do cadastro. Escolha a unidade correta na lista antes de aprovar; o sistema nunca cria unidade sozinho.']],
     next: ['seguranca-acessos'],
   },
   {

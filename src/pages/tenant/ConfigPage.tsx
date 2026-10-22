@@ -7,27 +7,60 @@ import { uploadLogo } from '../../lib/files';
 import { query } from '../../lib/router';
 import { Alert, Badge, Button, Card, Field, Input, Select, Spinner, toast, useAction } from '../../components/ui';
 import { ReceiptLayoutCard } from './ReceiptLayoutCard';
+import { PortalCard } from './PortalCard';
+import { onLink } from '../../lib/router';
 
 const DEFAULTS = { color_primary: '#101F30', color_secondary: '#126B61', color_accent: '#C8AB78' };
+
+/**
+ * Configurações do condomínio por módulo. Cada módulo agrupa cards que já
+ * existiam (nada foi removido); a busca filtra por nome e palavras-chave.
+ */
+const MODULES: { id: string; title: string; desc: string; keys: string; render: (t: ReturnType<typeof useTenant>) => React.ReactNode; show?: (t: ReturnType<typeof useTenant>) => boolean }[] = [
+  { id: 'portal', title: 'Portal e aplicativo', desc: 'Link público, QR de acesso e ícone do app.', keys: 'link endereco qr compartilhar app pwa instalar icone', render: () => <PortalCard /> },
+  { id: 'identidade', title: 'Identidade visual', desc: 'Nome exibido, logo, cores e tema.', keys: 'marca logo cores tema nome', render: () => <BrandingCard /> },
+  { id: 'comprovantes', title: 'Comprovantes', desc: 'Layout do PDF de entrega e prévia.', keys: 'pdf comprovante layout rodape modelo', render: () => <ReceiptLayoutCard /> },
+  { id: 'armazenamento', title: 'Portarias e armazenamento', desc: 'Portarias, estantes, prateleiras e capacidade.', keys: 'estante prateleira local guarda capacidade portaria', render: () => <StorageCard /> },
+  { id: 'avisos', title: 'Avisos e notificações', desc: 'Canais, diagnóstico, falhas e reenvio.', keys: 'notificacao aviso email whatsapp push falha reenviar', render: (t) => <><ChannelsCard />{t.link.role === 'admin' && <NotificationHealthCard />}</> },
+  { id: 'integracoes', title: 'Integrações', desc: 'WhatsApp do condomínio e teste de envio.', keys: 'whatsapp evolution conectar qr teste', render: () => <WhatsAppCard />, show: (t) => !!t.overview?.entitlements?.feature_whatsapp },
+  { id: 'totem', title: 'Totem de autoatendimento', desc: 'Pareamento e dispositivos do totem.', keys: 'totem tablet parear dispositivo', render: () => <TotemCard />, show: (t) => !!t.overview?.entitlements?.feature_totem },
+];
 
 export function ConfigPage() {
   const t = useTenant();
   const first = query('inicio') === '1';
+  const [q, setQ] = useState('');
+  const norm = (s: string) => s.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+  const mods = MODULES.filter((m) => (!m.show || m.show(t)) && (!q || norm(`${m.title} ${m.desc} ${m.keys}`).includes(norm(q))));
+  const base = `/c/${t.tenant.slug}`;
   return (
     <div className="space-y-4">
       <h1 className="text-2xl font-semibold">Configurações</h1>
       {first && (
         <Alert tone="success">
-          Condomínio criado e mês grátis ativo. Próximos passos: 1) marca; 2) locais de guarda; 3) unidades em “Unidades e pessoas”; 4) convidar porteiros e moradores; 5) registrar uma encomenda de teste.
+          Condomínio criado e mês grátis ativo. Enviamos o link do portal para o seu e-mail. Próximos passos: 1) marca e logo; 2) locais de guarda; 3) unidades em “Unidades e pessoas”; 4) compartilhar o link do portal com os moradores; 5) registrar uma encomenda de teste.
         </Alert>
       )}
-      <BrandingCard />
-      <ReceiptLayoutCard />
-      <StorageCard />
-      <ChannelsCard />
-      {t.overview?.entitlements?.feature_whatsapp && <WhatsAppCard />}
-      {t.link.role === 'admin' && <NotificationHealthCard />}
-      {t.overview?.entitlements?.feature_totem && <TotemCard />}
+      <div className="grid lg:grid-cols-[220px_1fr] gap-4 items-start">
+        <nav aria-label="Módulos de configuração" className="lg:sticky lg:top-4 space-y-2">
+          <Input aria-label="Buscar configuração" placeholder="Buscar configuração" value={q} onChange={(e) => setQ(e.target.value)} />
+          <ul className="flex lg:flex-col gap-1 overflow-x-auto text-sm">
+            {mods.map((m) => <li key={m.id}><a href={`#${m.id}`} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">{m.title}</a></li>)}
+            <li><a href={`${base}/pessoas`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Unidades, moradores e equipe ›</a></li>
+            {t.can('billing') && <li><a href={`${base}/assinatura`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Plano e cobrança ›</a></li>}
+            <li><a href={`${base}/ajuda`} onClick={onLink} className="block whitespace-nowrap rounded-lg px-3 py-2 hover:bg-surface-2">Ajuda e treinamento ›</a></li>
+          </ul>
+        </nav>
+        <div className="space-y-6 min-w-0">
+          {mods.length === 0 && <Alert>Nenhuma configuração encontrada para “{q}”.</Alert>}
+          {mods.map((m) => (
+            <section key={m.id} id={m.id} className="space-y-2 scroll-mt-20" aria-labelledby={`h-${m.id}`}>
+              <div><h2 id={`h-${m.id}`} className="text-lg font-semibold">{m.title}</h2><p className="text-sm text-muted">{m.desc}</p></div>
+              {m.render(t)}
+            </section>
+          ))}
+        </div>
+      </div>
     </div>
   );
 }
