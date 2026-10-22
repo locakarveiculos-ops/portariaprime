@@ -54,8 +54,9 @@ export async function signedUrl(path: string, seconds = 300) {
 
 export async function uploadLogo(tenantId: string, file: File) {
   if (!['image/png', 'image/jpeg', 'image/webp'].includes(file.type)) throw new Error('Use PNG, JPG ou WebP (SVG não é aceito).');
-  if (file.size > 3 * 1024 * 1024) throw new Error('Logo muito grande (máx. 3 MB).');
-  const blob = await reencode(file, { max: 600, type: 'image/png' });
+  if (file.size > 5 * 1024 * 1024) throw new Error('Logo muito grande (máx. 5 MB).');
+  // Redesenha no canvas: arquivo que não é imagem de verdade falha aqui; PNG preserva transparência e proporção.
+  const blob = await reencode(file, { max: 800, type: 'image/png' });
   if (blob.size > 1024 * 1024) throw new Error('Logo muito detalhado; reduza a imagem.');
   const path = `${tenantId}/logo-${rand()}.png`;
   const { error } = await supabase.storage.from('tenant-public').upload(path, blob, { contentType: 'image/png' });

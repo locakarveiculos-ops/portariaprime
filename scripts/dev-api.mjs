@@ -7,9 +7,9 @@ import { pathToFileURL } from 'node:url';
 import { resolve } from 'node:path';
 
 const routes = {
-  '/api/billing/checkout': '../api/billing/checkout.ts',
-  '/api/billing/order': '../api/billing/order.ts',
-  '/api/billing/reconcile': '../api/billing/reconcile.ts',
+  '/api/billing/checkout': '../api/billing/[action].ts',
+  '/api/billing/order': '../api/billing/[action].ts',
+  '/api/billing/reconcile': '../api/billing/[action].ts',
   '/api/webhooks/infinitepay': '../api/webhooks/infinitepay.ts',
   '/api/jobs/tick': '../api/jobs/tick.ts',
   '/api/invitations/send': '../api/invitations/send.ts',
@@ -17,6 +17,7 @@ const routes = {
   '/api/contact': '../api/contact.ts',
   '/api/funnel': '../api/funnel.ts',
   '/api/platform/users': '../api/platform/users.ts',
+  ...Object.fromEntries(['download', 'preview'].map(action => [`/api/receipts/${action}`, '../api/receipts/[action].ts'])),
   ...Object.fromEntries(['pair', 'context', 'preregister', 'ocr', 'receive'].map(action => [`/api/totem/${action}`, '../api/totem/[action].ts'])),
   ...Object.fromEntries(['connect', 'status', 'test'].map(action => [`/api/whatsapp/${action}`, '../api/whatsapp/[action].ts'])),
 };

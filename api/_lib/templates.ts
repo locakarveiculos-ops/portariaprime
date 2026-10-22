@@ -15,7 +15,7 @@ export interface MessageCtx {
   color_primary?: string | null;
   package?: {
     carrier?: string; tracking_code?: string | null; received_at?: string; picked_up_at?: string | null;
-    picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string;
+    picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string; pdf_path?: string | null;
   } | null;
 }
 
@@ -48,14 +48,14 @@ export function render(event: string, ctx: MessageCtx, payload: any, appUrl: str
       };
     case 'package_picked_up':
       return {
-        subject: `Encomenda retirada — ${ctx.tenant_name}`,
+        subject: `${ctx.tenant_name} — Comprovante de entrega — Unidade ${p.unit || ''}`,
         push: { title: 'Encomenda retirada', body: 'O comprovante está disponível no app.', url: receiptLink },
         whatsapp:
           `*${wa(ctx.tenant_name)}*\nEncomenda retirada por ${wa(p.picked_up_by)} em ${fmt(p.picked_up_at, ctx.timezone)}.\n` +
           (p.protocol ? `Protocolo: ${wa(p.protocol)}\n` : '') + `Comprovante (requer login): ${receiptLink}`,
         lines: [['Unidade', p.unit], ['Retirada por', p.picked_up_by], ['Data', fmt(p.picked_up_at, ctx.timezone)], ['Protocolo', p.protocol]],
         cta: ['Ver comprovante', receiptLink],
-        intro: 'Uma encomenda da sua unidade foi retirada na portaria.',
+        intro: 'Uma encomenda da sua unidade foi retirada na portaria. O comprovante em PDF segue anexo.',
       };
     case 'ops_alert':
       return {

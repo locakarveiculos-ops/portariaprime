@@ -10,7 +10,51 @@ import { env, appUrl } from '../_lib/env.js';
 import { serviceClient } from '../_lib/supabase.js';
 import { verifyAndApply } from '../_lib/payments.js';
 import { render, emailHtml } from '../_lib/templates.js';
-import { sendEmail, sendWhatsApp, sendPush, whatsAppState, SendResult } from '../_lib/channels.js';
+import { sendEmail, sendWhatsApp, sendWhatsAppDocument, sendPush, whatsAppState, SendResult, Attachment } from '../_lib/channels.js';
+import { renderReceiptPdf, RECEIPT_TEMPLATE_VERSION } from '../_lib/receipt-pdf.js';
+import { createHash } from 'node:crypto';
+
+/** Baixa um objeto do Storage pelo backend (sem URL pública); ausente = null. */
+async function download(svc: any, bucket: string, path: string | null | undefined) {
+  if (!path) return null;
+  const { data } = await svc.storage.from(bucket).download(path);
+  return data ? new Uint8Array(await data.arrayBuffer()) : null;
+}
+
+/** Gera PDFs pendentes. Falha não afeta a retirada (já confirmada) e é reprocessada. */
+export async function processReceipts(svc: any) {
+  const { data: claimed, error } = await svc.rpc('claim_receipt_pdfs', { p_limit: 5 });
+  if (error) throw new Error(error.message);
+  const out = { ready: 0, failed: 0 };
+  for (const r of claimed || []) {
+    try {
+      const { data, error: de } = await svc.rpc('receipt_pdf_data', { p_receipt: r.id });
+      if (de || !data) throw new Error('dados do comprovante indisponíveis');
+      const layout = data.layout || {};
+      const [logo, signature, photo] = await Promise.all([
+        download(svc, 'tenant-public', layout.logo_path),
+        download(svc, 'tenant-private', data.snapshot?.signature_path),
+        download(svc, 'tenant-private', data.snapshot?.handover_path),
+      ]);
+      const storage = [data.storage_rack, data.storage_shelf].filter(Boolean).join(' › ') || data.storage_code;
+      const bytes = await renderReceiptPdf({ ...data, storage }, { logo, signature, photo });
+      const path = `${data.tenant_id}/receipts/${data.package_id}/comprovante-${data.protocol}.pdf`;
+      // upsert: retry após falha de rede reusa o caminho (o PDF só vale após complete_receipt_pdf).
+      const up = await svc.storage.from('tenant-receipts').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
+      if (up.error) throw new Error(`storage: ${up.error.message}`);
+      const sha = createHash('sha256').update(bytes).digest('hex');
+      const { error: ce } = await svc.rpc('complete_receipt_pdf', { p_receipt: r.id, p_path: path, p_sha256: sha,
+        p_bytes: bytes.length, p_version: RECEIPT_TEMPLATE_VERSION, p_error: null });
+      if (ce) throw new Error(ce.message);
+      out.ready++;
+    } catch (e: any) {
+      await svc.rpc('complete_receipt_pdf', { p_receipt: r.id, p_path: null, p_sha256: null, p_bytes: null, p_version: null,
+        p_error: String(e?.message || e).slice(0, 300) });
+      out.failed++;
+    }
+  }
+  return out;
+}
 
 async function run(request: Request) {
   const token = (request.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
@@ -37,7 +81,10 @@ async function run(request: Request) {
     }
   }
 
+  report.receipts = await processReceipts(svc);
+
   const { data: jobs, error: je } = await svc.rpc('claim_notification_jobs', { p_limit: 50 });
+  const pdfCache = new Map<string, Attachment | null>();
   if (je) throw new Error(je.message);
   const counts: Record<string, number> = {};
   const waClosed = new Map<string, boolean>();
@@ -53,8 +100,20 @@ async function run(request: Request) {
       }
       const { data: ctx } = await svc.rpc('notification_context', { p_job: job.id });
       const m: any = render(job.event, ctx, job.payload, base);
+      // Retirada: canais com anexo exigem o PDF pronto (o job só sai de "hold" depois dele).
+      let pdf: Attachment | null = null;
+      if (job.event === 'package_picked_up' && job.channel !== 'push') {
+        const path: string = ctx.package?.pdf_path || '';
+        if (!pdfCache.has(path)) {
+          const content = await download(svc, 'tenant-receipts', path);
+          const name = `comprovante-entrega-${String(ctx.package?.protocol || '').replace(/[^A-Za-z0-9-]/g, '')}.pdf`;
+          pdfCache.set(path, content ? { filename: name, content } : null);
+        }
+        pdf = pdfCache.get(path) || null;
+        if (!pdf) throw new Error('Comprovante PDF indisponível');
+      }
       if (job.channel === 'email') {
-        res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m));
+        res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined);
       } else if (job.channel === 'whatsapp') {
         const wa = ctx.whatsapp;
         if (!wa?.enabled || !wa.instance) res = { status: 'disabled', error: 'WhatsApp não conectado neste condomínio' };
@@ -66,7 +125,9 @@ async function run(request: Request) {
             await svc.rpc('ops_alert_whatsapp', { p_tenant: job.tenant_id });
           } else {
             const { data: allowed } = await svc.rpc('consume_whatsapp', { p_tenant: job.tenant_id });
-            res = allowed ? await sendWhatsApp(wa.instance, job.recipient, m.whatsapp) : { status: 'disabled', error: 'Franquia de WhatsApp esgotada' };
+            res = !allowed ? { status: 'disabled', error: 'Franquia de WhatsApp esgotada' }
+              : pdf ? await sendWhatsAppDocument(wa.instance, job.recipient, m.whatsapp, pdf)
+              : await sendWhatsApp(wa.instance, job.recipient, m.whatsapp);
           }
         }
       } else {

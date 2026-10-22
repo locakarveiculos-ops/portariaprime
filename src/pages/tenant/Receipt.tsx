@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { Printer } from 'lucide-react';
+import { Download, Printer } from 'lucide-react';
 import { supabase } from '../../lib/supabase';
+import { api } from '../../lib/api';
 import { signedUrl } from '../../lib/files';
 import { dateTime, unitName } from '../../lib/format';
 import { publicLogoUrl } from '../../lib/theme';
@@ -28,6 +29,17 @@ function ReceiptView({ packageId }: { packageId: string }) {
   const [r, setR] = useState<any>(null);
   const [img, setImg] = useState<{ sig?: string; photo?: string }>({});
   const [error, setError] = useState<string | null>(null);
+  const [pdfBusy, setPdfBusy] = useState(false);
+  const [pdfMsg, setPdfMsg] = useState<string | null>(null);
+  // URL nova a cada clique (a anterior pode ter expirado); autorização revalidada no servidor.
+  const download = async () => {
+    setPdfBusy(true); setPdfMsg(null);
+    try {
+      const r = await api<{ status: string; url?: string }>('/api/receipts/download', { tenantId: t.tenant.id, packageId });
+      if (r.status === 'ready' && r.url) window.location.assign(r.url);
+      else setPdfMsg(r.status === 'failed' ? 'A geração do PDF falhou e está sendo reprocessada. Tente em alguns minutos.' : 'Entrega registrada — comprovante em processamento. Tente em instantes.');
+    } catch (e: any) { setPdfMsg(e.message); } finally { setPdfBusy(false); }
+  };
 
   useEffect(() => {
     (async () => {
@@ -75,7 +87,11 @@ function ReceiptView({ packageId }: { packageId: string }) {
             </div>
             <p className="text-[10px] pt-2" style={{ color: '#526174' }}>Emitido em {dateTime(r.issued_at, t.tenant.timezone)} · Tecnologia Portaria Prime</p>
           </div>
-          <Button variant="secondary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Baixar PDF / imprimir</Button>
+          <div className="flex flex-wrap gap-2">
+            <Button onClick={() => download()} loading={pdfBusy}><Download className="w-4 h-4" /> Baixar PDF</Button>
+            <Button variant="secondary" onClick={() => window.print()}><Printer className="w-4 h-4" /> Imprimir</Button>
+          </div>
+          {pdfMsg && <Alert tone="info">{pdfMsg}</Alert>}
         </div>
       )}
     </>

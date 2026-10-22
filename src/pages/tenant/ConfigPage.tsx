@@ -6,6 +6,7 @@ import { applyTheme, contrast, publicLogoUrl } from '../../lib/theme';
 import { uploadLogo } from '../../lib/files';
 import { query } from '../../lib/router';
 import { Alert, Badge, Button, Card, Field, Input, Select, Spinner, toast, useAction } from '../../components/ui';
+import { ReceiptLayoutCard } from './ReceiptLayoutCard';
 
 const DEFAULTS = { color_primary: '#101F30', color_secondary: '#126B61', color_accent: '#C8AB78' };
 
@@ -21,6 +22,7 @@ export function ConfigPage() {
         </Alert>
       )}
       <BrandingCard />
+      <ReceiptLayoutCard />
       <StorageCard />
       <ChannelsCard />
       {t.overview?.entitlements?.feature_whatsapp && <WhatsAppCard />}
@@ -236,14 +238,18 @@ function NotificationHealthCard() {
   const t = useTenant();
   const [h, setH] = useState<any>(null);
   const { busy, run } = useAction();
-  const load = useCallback(() => rpc('notification_health', { p_tenant: t.tenant.id }).then(setH).catch(() => setH(null)), [t.tenant.id]);
+  const [pdf, setPdf] = useState<any>(null);
+  const load = useCallback(() => Promise.all([
+    rpc('notification_health', { p_tenant: t.tenant.id }).then(setH).catch(() => setH(null)),
+    rpc('receipt_pdf_health', { p_tenant: t.tenant.id }).then(setPdf).catch(() => setPdf(null)),
+  ]), [t.tenant.id]);
   useEffect(() => { load(); }, [load]);
   if (!h) return null;
   const last = h.worker_last_run ? new Date(h.worker_last_run) : null;
   const stale = !last || Date.now() - last.getTime() > 15 * 60_000;
   const CH: Record<string, string> = { whatsapp: 'WhatsApp', email: 'E-mail', push: 'Push' };
   const ST: Record<string, string> = { queued: 'na fila', sending: 'enviando', accepted: 'aceito pelo provedor', delivered: 'entregue',
-    failed_retryable: 'falhou (vai tentar de novo)', failed_final: 'falha final', disabled: 'desativado/sem canal' };
+    failed_retryable: 'falhou (vai tentar de novo)', failed_final: 'falha final', disabled: 'desativado/sem canal', hold: 'aguardando o PDF' };
   return (
     <Card className="space-y-3" data-tour="config-avisos">
       <div className="flex items-center justify-between"><p className="font-semibold">Avisos e WhatsApp — diagnóstico</p><Button variant="ghost" onClick={load}>Atualizar</Button></div>
@@ -253,6 +259,11 @@ function NotificationHealthCard() {
       <ul className="text-sm grid sm:grid-cols-2 gap-1">
         {Object.entries(h.counts || {}).map(([k, n]) => { const [c, s] = k.split(':'); return <li key={k}>{CH[c] || c}: {ST[s] || s} — <strong>{String(n)}</strong></li>; })}
       </ul>
+      {pdf && <p className="text-sm">Comprovantes PDF (7 dias): {Object.entries(pdf.counts || {}).map(([k, n]) => `${{ ready: 'prontos', pending: 'na fila', processing: 'gerando', failed: 'com falha' }[k] || k} ${n}`).join(' · ') || 'nenhum'}</p>}
+      {pdf?.failed?.map((r: any) => (
+        <div key={r.id} className="flex flex-wrap justify-between gap-2 text-sm"><span>Comprovante {r.protocol}: {r.error || 'falha'}</span>
+          <Button variant="secondary" loading={busy} onClick={() => run(async () => { await rpc('retry_receipt_pdf', { p_tenant: t.tenant.id, p_receipt: r.id }); await load(); }, 'Comprovante na fila de geração.')}>Gerar novamente</Button></div>
+      ))}
       {h.failures?.length > 0 && (
         <ul className="divide-y divide-line text-sm">
           {h.failures.map((f: any) => (

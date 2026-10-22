@@ -9,7 +9,9 @@ import { optionalEnv } from './env.js';
 
 export type SendResult = { status: 'accepted' | 'failed' | 'disabled'; ref?: string; error?: string; gone?: boolean; permanent?: boolean };
 
-export async function sendEmail(to: string, subject: string, html: string): Promise<SendResult> {
+export type Attachment = { filename: string; content: Uint8Array };
+
+export async function sendEmail(to: string, subject: string, html: string, attachment?: Attachment): Promise<SendResult> {
   const key = optionalEnv('RESEND_API_KEY');
   const from = optionalEnv('RESEND_FROM_EMAIL');
   if (!key || !from) return { status: 'disabled', error: 'Resend não configurado' };
@@ -17,7 +19,8 @@ export async function sendEmail(to: string, subject: string, html: string): Prom
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
-      body: JSON.stringify({ from, to: [to], subject, html }),
+      body: JSON.stringify({ from, to: [to], subject, html,
+        ...(attachment ? { attachments: [{ filename: attachment.filename, content: Buffer.from(attachment.content).toString('base64') }] } : {}) }),
       signal: AbortSignal.timeout(15000),
     });
     const d: any = await r.json().catch(() => ({}));
@@ -49,6 +52,32 @@ export async function sendWhatsApp(instance: string, phone: string, text: string
     return { status: 'failed', error: `Evolution HTTP ${r.status}: ${why}`, permanent: r.status === 400 };
   } catch (e: any) {
     // Tempo esgotado: a Evolution pode ter enviado. Não repete sozinho para não duplicar.
+    if (e?.name === 'TimeoutError') return { status: 'failed', error: 'ambiguous: tempo esgotado após envio à Evolution' };
+    return { status: 'failed', error: `rede: ${e?.message || 'indisponível'}` };
+  }
+}
+
+/** Documento (PDF) em base64 — Evolution v2: POST /message/sendMedia/{instance}. */
+export async function sendWhatsAppDocument(instance: string, phone: string, caption: string, doc: Attachment): Promise<SendResult> {
+  const base = optionalEnv('EVOLUTION_API_URL');
+  const key = optionalEnv('EVOLUTION_API_KEY');
+  if (!base || !key) return { status: 'disabled', error: 'Evolution não configurada' };
+  const digits = phone.replace(/\D/g, '');
+  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  try {
+    const r = await fetch(`${base.replace(/\/$/, '')}/message/sendMedia/${encodeURIComponent(instance)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key },
+      body: JSON.stringify({ number, mediatype: 'document', mimetype: 'application/pdf', fileName: doc.filename, caption,
+        media: Buffer.from(doc.content).toString('base64') }),
+      signal: AbortSignal.timeout(30000),
+    });
+    const d: any = await r.json().catch(() => ({}));
+    if (r.ok) return { status: 'accepted', ref: d?.key?.id };
+    const why = r.status === 400 ? 'número inválido ou documento recusado' : r.status === 401 || r.status === 403 ? 'credencial recusada'
+      : r.status === 404 ? 'instância não encontrada' : r.status === 413 ? 'arquivo grande demais' : 'erro do provedor';
+    return { status: 'failed', error: `Evolution HTTP ${r.status}: ${why}`, permanent: r.status === 400 || r.status === 413 };
+  } catch (e: any) {
     if (e?.name === 'TimeoutError') return { status: 'failed', error: 'ambiguous: tempo esgotado após envio à Evolution' };
     return { status: 'failed', error: `rede: ${e?.message || 'indisponível'}` };
   }
