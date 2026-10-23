@@ -46,7 +46,7 @@ try {
   assert.ok((await primeCard.innerText()).replace(/\s/g, ' ').includes(brl(price.amount_cents)), 'preço anual do Prime igual ao banco');
 
   step('galeria abre zoom acessível e fecha com Esc');
-  await p.locator('#telas').getByRole('button').first().click();
+  await p.locator('#demonstracao').getByRole('button', { name: /Ampliar/ }).first().click();
   await p.getByRole('dialog').waitFor();
   await p.keyboard.press('Escape');
   await p.getByRole('dialog').waitFor({ state: 'detached' });
@@ -78,11 +78,13 @@ try {
   step('formulário de contato grava e só então confirma');
   await p.goto(`${APP}/#contato`);
   const mark = `qa-${Date.now()}`;
-  await p.getByLabel('Nome').fill('Pessoa QA');
-  await p.getByLabel('E-mail').fill(`${mark}@example.invalid`);
-  await p.getByLabel('Mensagem').fill('Teste automatizado do formulário da landing.');
-  await p.getByRole('button', { name: 'Enviar mensagem' }).click();
-  await p.getByText('Mensagem recebida.').waitFor();
+  // A landing tem dois formulários (contato e proposta): mira o de contato.
+  const contact = p.locator('#contato');
+  await contact.getByLabel('Nome').fill('Pessoa QA');
+  await contact.getByLabel('E-mail').fill(`${mark}@example.invalid`);
+  await contact.getByLabel('Mensagem').fill('Teste automatizado do formulário da landing.');
+  await contact.getByRole('button', { name: 'Enviar mensagem' }).click();
+  await contact.getByText('Mensagem recebida.').waitFor();
   const { data: lead } = await svc.from('contact_requests').select('source, status').eq('email', `${mark}@example.invalid`).single();
   assert.deepEqual(lead, { source: 'landing', status: 'novo' });
 
@@ -112,6 +114,8 @@ try {
   await s.getByLabel('Nome do condomínio').fill('Condomínio Tour QA');
   await s.getByLabel(/Endereço no sistema/).fill(slug);
   await s.getByLabel(/CNPJ do condomínio/).fill(String(33_000_000_000_000 + (Date.now() % 9_000_000_000)));
+  // Aceite explícito (não pré-marcado) dos termos do teste.
+  await s.locator('form input[type=checkbox]').last().check();
   await s.getByRole('button', { name: 'Ativar mês grátis' }).click();
   await s.waitForURL(new RegExp(`/c/${slug}/configuracoes`));
   await s.getByRole('button', { name: 'Fazer o tutorial' }).click();

@@ -82,7 +82,7 @@ function ReceiptView({ packageId }: { packageId: string }) {
               <dt style={{ color: '#526174' }}>Validação</dt><dd className="text-right">{s.method === 'qr' ? 'QR Code de uso único' : 'Manual (justificada)'}</dd>
             </dl>
             {s.manual_reason && <p className="text-xs" style={{ color: '#526174' }}>Justificativa: {s.manual_reason}</p>}
-            {r.verify_code && <p className="text-xs" style={{ color: '#526174' }}>Código de verificação: <span className="font-mono">{r.verify_code}</span> · confira em {location.origin}/validar</p>}
+            {r.verify_code && <p className="text-xs" style={{ color: '#526174' }}>Código de verificação: <span className="font-mono" data-verify-code>{r.verify_code}</span> · confira em {location.origin}/validar</p>}
             <div className="grid grid-cols-2 gap-3">
               {img.sig && <figure><img src={img.sig} alt="Assinatura" className="h-24 w-full object-contain border rounded" /><figcaption className="text-[11px] mt-1" style={{ color: '#526174' }}>Assinatura</figcaption></figure>}
               {img.photo && <figure><img src={img.photo} alt="Foto do item entregue" className="h-24 w-full object-cover rounded" /><figcaption className="text-[11px] mt-1" style={{ color: '#526174' }}>Foto do item entregue</figcaption></figure>}

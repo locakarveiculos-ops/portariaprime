@@ -92,6 +92,8 @@ try {
   await s.getByLabel(/CNPJ do condomínio/).fill(String(10_000_000_000_000 + (Date.now() % 9_000_000_000_000)).slice(0, 14));
   await s.getByText('Primeiro mês grátis; depois').waitFor();
   await shot(s, 'onboarding');
+  // Aceite explícito (não pré-marcado) dos termos do teste.
+  await s.locator('form input[type=checkbox]').last().check();
   await s.getByRole('button', { name: 'Ativar mês grátis' }).click();
   await s.waitForURL(new RegExp(`/c/${slug}/configuracoes`));
   await s.getByText('Condomínio criado e mês grátis ativo').waitFor();

@@ -6,14 +6,15 @@
 export interface Screen { file: string; title: string; caption: string; width: number; height: number }
 
 export const SCREENS = {
-  painel: { file: '/screens/painel-desktop.webp', title: 'Painel do síndico', caption: 'Pendências, ocupação dos locais e retiradas do período.', width: 1440, height: 900 },
-  recebimento: { file: '/screens/recebimento-desktop.webp', title: 'Recebimento na portaria', caption: 'Unidade, destinatário, rastreio e foto da etiqueta antes de salvar.', width: 1440, height: 900 },
-  armazenamento: { file: '/screens/armazenamento-desktop.webp', title: 'Locais de guarda', caption: 'Capacidade e ocupação de cada prateleira ou sala.', width: 1440, height: 900 },
+  painel: { file: '/screens/painel-desktop.webp', title: 'Visão geral do síndico', caption: 'Aguardando agora, acima do prazo, ocupação e o que precisa de atenção.', width: 1440, height: 900 },
+  recebimento: { file: '/screens/recebimento-desktop.webp', title: 'Recebimento na portaria', caption: 'Unidade, destinatário, rastreio e local conferidos antes de salvar.', width: 1440, height: 900 },
+  armazenamento: { file: '/screens/armazenamento-desktop.webp', title: 'Ocupação dos locais', caption: 'Capacidade e ocupação de cada estante ou sala.', width: 1440, height: 900 },
   portariaMobile: { file: '/screens/portaria-mobile.webp', title: 'Portaria no celular', caption: 'Receber, Entregar e Buscar em destaque.', width: 390, height: 844 },
-  morador: { file: '/screens/morador-mobile.webp', title: 'Área do morador', caption: 'Encomendas disponíveis e QR de retirada de uso único.', width: 390, height: 844 },
-  comprovante: { file: '/screens/comprovante-desktop.webp', title: 'Comprovante de retirada', caption: 'Protocolo, datas do servidor, operador e quem retirou.', width: 1440, height: 900 },
+  morador: { file: '/screens/morador-mobile.webp', title: 'App do morador', caption: 'Quantas encomendas aguardam retirada e o botão do QR em cada uma.', width: 390, height: 844 },
+  comprovante: { file: '/screens/comprovante-desktop.webp', title: 'Comprovante de retirada', caption: 'Protocolo, quem retirou, assinatura e foto do item.', width: 1440, height: 900 },
   marcaA: { file: '/screens/marca-a-desktop.webp', title: 'Condomínio A', caption: 'Logo e cores próprias do condomínio.', width: 1440, height: 900 },
   marcaB: { file: '/screens/marca-b-desktop.webp', title: 'Condomínio B', caption: 'Outro condomínio, outra identidade, dados separados.', width: 1440, height: 900 },
+  moradorQr: { file: '/screens/morador-qr-mobile.webp', title: 'QR de retirada', caption: 'Código de uso único com unidade e encomenda identificadas (desfocado nesta imagem).', width: 390, height: 844 },
   assinatura: { file: '/screens/assinatura-desktop.webp', title: 'Mês grátis e plano', caption: 'Início e fim do teste, plano escolhido e valor depois do teste.', width: 1440, height: 900 },
 } satisfies Record<string, Screen>;
 
