@@ -84,6 +84,7 @@ try {
   const page = await ctx.newPage();
   const errors = [];
   page.on('pageerror', (e) => errors.push(e.message));
+  page.on('response', async (r) => { if (r.status() >= 400 && r.url().includes('/rpc/attach_label_photo')) console.error('Vínculo da foto:', await r.text()); });
   // O fluxo da equipe segue separado do OCR do dispositivo público pareado.
   await page.goto(`${APP}/entrar?next=${encodeURIComponent(`/c/${slug}/totem-equipe`)}`);
   await page.getByLabel('E-mail', { exact: true }).fill(porteiro.email);
@@ -101,6 +102,9 @@ try {
   await page.getByText(/LSP-105/).waitFor();
   assert.match(await page.getByText(/Selecionada:/).innerText(), /12B/);
   assert.equal(await page.getByLabel('Rastreio').inputValue(), `${run}BR1`.toUpperCase());
+  // Galeria: segunda foto (volume) depois da etiqueta; a etiqueta continua sendo a primeira.
+  await page.locator('input[type=file]').first().setInputFiles({ name: 'volume.png', mimeType: 'image/png', buffer: png });
+  await page.getByAltText('Foto 2 do volume').waitFor();
   const sel = page.getByLabel('Local de guarda');
   await assert.doesNotReject(async () => assert.match(await sel.locator('option:checked').innerText(), /Estante A › Prateleira 2/));
   await page.getByRole('button', { name: 'Registrar encomenda' }).click();
@@ -113,6 +117,9 @@ try {
   const { data: [pkg] } = await svc.from('packages').select('id, storage_confirmed_at, label_sha256').eq('tenant_id', T);
   assert.ok(pkg.storage_confirmed_at, 'guarda confirmada gravada');
   assert.match(pkg.label_sha256, /^[0-9a-f]{64}$/);
+  const { data: gal } = await svc.from('package_attachments').select('position, object_path').eq('package_id', pkg.id).eq('kind', 'label_photo').order('position');
+  assert.deepEqual(gal.map((g) => g.position), [1, 2], 'galeria com 2 fotos em ordem');
+  assert.ok(gal.every((g, i) => g.object_path.startsWith(`${T}/packages/${pkg.id}/label-${i + 1}-`)));
   for (const r of m) {
     const { data } = await r.client.from('notifications').select('kind').eq('package_id', pkg.id);
     assert.deepEqual(data.map((x) => x.kind), ['package_received']);

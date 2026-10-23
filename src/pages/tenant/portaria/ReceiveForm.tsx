@@ -1,12 +1,13 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ScanText, X } from 'lucide-react';
+import { ScanText } from 'lucide-react';
 import { useTenant } from '../../../lib/tenant';
 import { api, rpc, newKey } from '../../../lib/api';
-import { blobToDataUrl, reencode, uploadPackageFile } from '../../../lib/files';
+import { blobToDataUrl } from '../../../lib/files';
+import { setCaptureBusy } from '../../../lib/capture';
 import { CARRIERS, unitName } from '../../../lib/format';
 import { loadAvailability, locationName, matchUnits, StorageLoc, UnitRow } from '../../../lib/packages';
 import { Alert, Button, Card, Field, Input, Select, toast } from '../../../components/ui';
-import { CameraCapture } from '../../../components/CameraCapture';
+import { GalleryPhoto, PhotoGallery, uploadGallery } from '../../../components/PhotoGallery';
 
 interface Match { status: 'matched' | 'unit_only' | 'conflict' | 'ambiguous' | 'name_only' | 'not_found'; unit_id: string | null; alerts: string[] }
 interface Ocr {
@@ -22,24 +23,31 @@ const MATCH_TEXT: Record<Match['status'], string> = {
   name_only: 'Unidade não lida: sugerida pelo nome. Confira a etiqueta.',
   not_found: 'Nenhum morador ativo corresponde à leitura. Escolha a unidade manualmente.',
 };
-const sha256 = async (b: Blob) =>
-  Array.from(new Uint8Array(await crypto.subtle.digest('SHA-256', await b.arrayBuffer())), (x) => x.toString(16).padStart(2, '0')).join('');
+
+interface BatchResult { key: string; ok: boolean; text: string }
 
 /**
- * Recebimento: foto (opcional) → OCR sugere → porteiro confirma unidade,
- * destinatário e rastreio → servidor grava encomenda + histórico + avisos numa
- * transação. Chave de idempotência evita duplicar em duplo clique/retry.
+ * Recebimento: fotos (opcionais, até 8; a 1ª é a etiqueta e alimenta o OCR) →
+ * OCR sugere → porteiro confirma unidade, destinatário e rastreio → servidor
+ * grava encomenda + histórico + avisos numa transação. Chave de idempotência
+ * por item evita duplicar em duplo clique/retry.
+ * Registro rápido (lote): mantém unidade/transportadora/local entre itens;
+ * destinatário obrigatório e guarda física confirmada em cada item; resultado
+ * individual listado. Usa a mesma RPC (receive_and_store).
  */
 export function ReceiveForm({ units, storage, onDone, preregistered }: {
   units: UnitRow[]; storage: StorageLoc[]; onDone: () => void;
   preregistered?: { id: string; tracking_code: string | null; carrier: string; unit_id: string | null } | null;
 }) {
   const t = useTenant();
-  const [photo, setPhoto] = useState<Blob | null>(null);
-  const [photoSha, setPhotoSha] = useState<string | null>(null);
+  const [photos, setPhotos] = useState<GalleryPhoto[]>([]);
   const [avail, setAvail] = useState<StorageLoc[] | null>(null);
   const [stored, setStored] = useState(false);
-  const [preview, setPreview] = useState<string | null>(null);
+  const [batch, setBatch] = useState(false);
+  const [results, setResults] = useState<BatchResult[]>([]);
+  const [saved, setSaved] = useState(false);
+  const photo = photos[0]?.blob || null;
+  const photoSha = photos[0]?.sha || null;
   const [ocr, setOcr] = useState<Ocr | null>(null);
   const [ocrBusy, setOcrBusy] = useState(false);
   const [ocrMsg, setOcrMsg] = useState<string | null>(null);
@@ -56,6 +64,14 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
   const savedPackage = useRef<any>(null);
   const submitting = useRef(false);
   const trackingRef = useRef<HTMLInputElement>(null);
+  const formRef = useRef<HTMLFormElement>(null);
+
+  useEffect(() => {
+    if (photos.length > 0) {
+      setCaptureBusy(true);
+      return () => setCaptureBusy(false);
+    }
+  }, [photos.length]);
 
   // Vagas reais calculadas no servidor; recarrega após cada registro.
   const refreshAvail = () => loadAvailability(t.tenant.id).then(setAvail).catch(() => setAvail(null));
@@ -69,20 +85,14 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
   const unit = units.find((u) => u.id === unitId);
   const ocrEnabled = !!t.overview?.entitlements?.feature_ocr;
 
-  const takePhoto = async (b: Blob) => {
-    try {
-      const jpg = await reencode(b, { max: 1600 });
-      setPhotoSha(await sha256(b));
-      setPhoto(jpg);
-      setPreview(URL.createObjectURL(jpg));
-      setOcr(null);
-      setOcrMsg(null);
-      // Leitura automática logo após a foto (plano com OCR); operador ainda confere tudo.
-      if (ocrEnabled) void runOcr(jpg);
-    } catch (e: any) {
-      toast.error(e.message);
-    }
-  };
+  // A primeira foto é a etiqueta: identifica a foto (dedupe no servidor) e alimenta o OCR.
+  const firstId = photos[0]?.id;
+  useEffect(() => {
+    setOcr(null); setOcrMsg(null);
+    // Leitura automática logo após a foto (plano com OCR); operador ainda confere tudo.
+    if (photos[0] && ocrEnabled && !saved) void runOcr(photos[0].blob);
+  }, [firstId]); // eslint-disable-line react-hooks/exhaustive-deps
+  const updatePhoto = (id: string, p: Partial<GalleryPhoto>) => setPhotos((all) => all.map((x) => (x.id === id ? { ...x, ...p } : x)));
 
   const runOcr = async (img: Blob | null = photo) => {
     if (!img) return;
@@ -113,10 +123,13 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
     e.preventDefault();
     if (submitting.current) return;
     if (!unitId) return setError('Selecione a unidade de destino.');
+    if (batch && !preregistered && recipient.trim().length < 2) return setError('No registro rápido, informe o destinatário de cada encomenda.');
     if (!preregistered && locs.length > 0 && (!loc || !stored)) return setError('Escolha o local e confirme que a encomenda foi guardada nele.');
     submitting.current = true;
     setBusy(true);
     setError(null);
+    const itemKey = key.current;
+    const where = unitName(unit?.block, unit?.label);
     try {
       const pkg = savedPackage.current || (preregistered
         ? await rpc('confirm_preregistered', { p_tenant: t.tenant.id, p_package: preregistered.id, p_unit: unitId, p_tracking: tracking || null, p_carrier: carrier, p_storage_location: loc || null })
@@ -125,25 +138,31 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
           p_recipient: recipient || null, p_notes: notes || null, p_storage_location: loc || null, p_label_sha256: photoSha,
         }));
       savedPackage.current = pkg;
-      if (photo) {
-        try {
-          const path = await uploadPackageFile(t.tenant.id, pkg.id, 'label_photo', photo);
-          await rpc('attach_package_file', { p_tenant: t.tenant.id, p_package: pkg.id, p_kind: 'label_photo', p_path: path });
-        } catch (err: any) {
-          setError(`Encomenda já registrada; foto pendente. Tente registrar novamente para reenviar somente a foto, sem duplicar a encomenda. ${err.message}`);
-          return;
-        }
+      setSaved(true);
+      // Fotos: cada uma falha/repete sozinha; a encomenda nunca é duplicada.
+      if (photos.length && !(await uploadGallery(t.tenant.id, pkg.id, photos, updatePhoto))) {
+        setError('Encomenda já registrada; alguma foto não foi enviada. Toque em “Registrar” (ou “Reenviar fotos com falha”) para reenviar só as fotos, sem duplicar a encomenda.');
+        if (batch) setResults((r) => [{ key: itemKey, ok: false, text: `${where}: registrada, foto pendente` }, ...r.filter((x) => x.key !== itemKey)]);
+        return;
       }
-      toast.success(`Encomenda registrada para ${unitName(unit?.block, unit?.label)}${chosen ? ` em ${locationName(chosen)}` : pkg.storage_code ? ` — guardar em ${pkg.storage_code}` : ''}. Moradores da unidade avisados.`);
+      const msg = `Encomenda registrada para ${where}${chosen ? ` em ${locationName(chosen)}` : pkg.storage_code ? ` — guardar em ${pkg.storage_code}` : ''}. Moradores da unidade avisados.`;
+      toast.success(msg);
+      if (batch) setResults((r) => [{ key: itemKey, ok: true, text: `${where} · ${recipient.trim()}${tracking ? ` · ${tracking}` : ''}${chosen ? ` · ${locationName(chosen)}` : ''}` }, ...r.filter((x) => x.key !== itemKey)]);
       key.current = newKey();
       savedPackage.current = null;
-      if (preview) URL.revokeObjectURL(preview);
-      setPhoto(null); setPhotoSha(null); setPreview(null); setOcr(null); setOcrMsg(null); setStored(false);
-      if (!preregistered) { setLoc(''); refreshAvail(); }
-      setUnitId(null); setUnitQuery(''); setTracking(''); setRecipient(''); setNotes('');
+      photos.forEach((p) => URL.revokeObjectURL(p.url));
+      setPhotos([]); setSaved(false); setOcr(null); setOcrMsg(null); setStored(false);
+      setTracking(''); setRecipient(''); setNotes('');
+      if (!preregistered) refreshAvail();
+      // Registro rápido mantém unidade, transportadora e local; a guarda é confirmada de novo a cada item.
+      if (!batch) {
+        if (!preregistered) setLoc('');
+        setUnitId(null); setUnitQuery('');
+      } else trackingRef.current?.focus();
       onDone();
     } catch (err: any) {
       setError(err.message);
+      if (batch && !savedPackage.current) setResults((r) => [{ key: itemKey, ok: false, text: `${where}: ${err.message}` }, ...r.filter((x) => x.key !== itemKey)]);
     } finally {
       submitting.current = false;
       setBusy(false);
@@ -151,15 +170,11 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
   };
 
   return (
-    <form onSubmit={submit} className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
+    <form ref={formRef} onSubmit={submit} className="grid gap-4 lg:grid-cols-[minmax(0,2fr)_minmax(0,3fr)] lg:items-start">
       <Card className="space-y-3" data-tour="receber-foto">
-        <p className="font-semibold">1. Foto da etiqueta <span className="text-muted font-normal">(opcional)</span></p>
-        {preview ? (
-          <div className="relative">
-            <img src={preview} alt="Foto da etiqueta" className="w-full rounded-xl max-h-72 object-contain bg-surface-2" />
-            <button type="button" onClick={() => { setPhoto(null); setPreview(null); setOcr(null); }} className="absolute top-2 right-2 p-2 rounded-full bg-surface" aria-label="Remover foto"><X className="w-4 h-4" /></button>
-          </div>
-        ) : <CameraCapture onCapture={takePhoto} label={ocrEnabled ? 'Escanear etiqueta (câmera)' : 'Fotografar etiqueta'} />}
+        <p className="font-semibold">1. Fotos <span className="text-muted font-normal">(opcional, até 8 — a primeira é a etiqueta)</span></p>
+        <PhotoGallery photos={photos} onChange={setPhotos} locked={saved || busy} label={ocrEnabled ? 'Escanear etiqueta (câmera)' : 'Fotografar etiqueta'}
+          onRetry={savedPackage.current ? () => formRef.current?.requestSubmit() : undefined} />
         {photo && ocrEnabled && (
           <Button type="button" variant="secondary" onClick={() => runOcr()} loading={ocrBusy}><ScanText className="w-4 h-4" /> {ocr ? 'Ler etiqueta de novo' : 'Ler etiqueta automaticamente'}</Button>
         )}
@@ -185,7 +200,16 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
       </Card>
 
       <Card className="space-y-4">
-        <p className="font-semibold">2. Dados da encomenda</p>
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold">2. Dados da encomenda</p>
+          {!preregistered && (
+            <label className="flex items-center gap-2 text-sm min-h-11">
+              <input type="checkbox" checked={batch} onChange={(e) => { setBatch(e.target.checked); setResults([]); }} />
+              Registro rápido (várias seguidas)
+            </label>
+          )}
+        </div>
+        {batch && <p className="text-xs text-muted">Unidade, transportadora e local ficam para o próximo item. Destinatário e confirmação da guarda são exigidos em cada encomenda.</p>}
         <div data-tour="receber-unidade"><Field label="Unidade de destino" hint={unit ? `Selecionada: ${unitName(unit.block, unit.label)}` : 'Digite bloco e unidade, ex.: "A 101" ou "casa 12".'}>
           <Input value={unitQuery} onChange={(e) => { setUnitQuery(e.target.value); setUnitId(null); }} placeholder="Buscar unidade" autoComplete="off" />
         </Field></div>
@@ -208,7 +232,7 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
         </div>
         {!preregistered && (
           <>
-            <Field label="Destinatário (como está na etiqueta)"><Input value={recipient} onChange={(e) => setRecipient(e.target.value)} maxLength={120} /></Field>
+            <Field label="Destinatário (como está na etiqueta)"><Input value={recipient} onChange={(e) => setRecipient(e.target.value)} maxLength={120} required={batch} /></Field>
             <Field label="Observações"><Input value={notes} onChange={(e) => setNotes(e.target.value)} maxLength={500} placeholder="Ex.: caixa grande, frágil" /></Field>
           </>
         )}
@@ -233,6 +257,14 @@ export function ReceiveForm({ units, storage, onDone, preregistered }: {
         )}
         {error && <Alert tone="danger">{error}</Alert>}
         <Button type="submit" loading={busy} className="w-full" data-tour="receber-salvar">{preregistered ? 'Confirmar recebimento' : 'Registrar encomenda'}</Button>
+        {batch && results.length > 0 && (
+          <div className="space-y-1">
+            <p className="text-sm font-medium">Nesta sequência: {results.filter((r) => r.ok).length} registrada(s){results.some((r) => !r.ok) ? `, ${results.filter((r) => !r.ok).length} com pendência` : ''}</p>
+            <ul className="text-sm divide-y divide-line" aria-label="Resultado do registro rápido">
+              {results.map((r) => <li key={r.key} className={`py-1 ${r.ok ? '' : 'text-danger'}`}>{r.ok ? '✓' : '!'} {r.text}</li>)}
+            </ul>
+          </div>
+        )}
       </Card>
     </form>
   );

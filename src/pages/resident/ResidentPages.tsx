@@ -5,6 +5,7 @@ import { useRealtime, useRefreshWhileVisible, useTenant } from '../../lib/tenant
 import { navigate, onLink, query } from '../../lib/router';
 import { dateTime, unitName } from '../../lib/format';
 import { Alert, Button, Field, Input, Modal, Select, Spinner } from '../../components/ui';
+import { PackagePhotos } from '../../components/PhotoGallery';
 import { Notif, useNotifications } from '../../components/NotificationBell';
 import { useResident } from './ResidentShell';
 import { ExceptionNote, HistoryItem, pkgTitle, QrSheet, ReceiptActions, ResidentPackage, StatusBadge, WAITING, WaitingCard } from './parts';
@@ -125,6 +126,7 @@ export function EncomendaPage() {
         {waiting && <Button onClick={() => setQr(true)} className="w-full sm:w-auto">Mostrar QR de retirada</Button>}
         <ExceptionNote status={p.status} />
         {p.status === 'RETIRADA' && <ReceiptActions p={p} />}
+        <PackagePhotos key={p.id} packageId={p.id} />
       </div>
       <section className="space-y-2">
         <h2 className="font-semibold">Linha do tempo</h2>

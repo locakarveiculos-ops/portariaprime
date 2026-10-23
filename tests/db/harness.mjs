@@ -10,11 +10,11 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
 export async function createDb({ seed = false } = {}) {
   const db = new PGlite();
-  await db.exec(readFileSync(join(root, 'tests/db/supabase-shim.sql'), 'utf8'));
+  await db.exec(readFileSync(join(root, 'tests/db/supabase-shim.sql'), 'utf8').replace(/\r\n/g, '\n'));
   const dir = join(root, 'supabase/migrations');
   for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
     try {
-      await db.exec(readFileSync(join(dir, f), 'utf8'));
+      await db.exec(readFileSync(join(dir, f), 'utf8').replace(/\r\n/g, '\n'));
     } catch (e) {
       throw new Error(`Migration ${f} falhou: ${e.message}`);
     }

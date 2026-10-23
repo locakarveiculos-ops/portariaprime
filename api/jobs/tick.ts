@@ -3,7 +3,8 @@
  * Job confiável (Vercel Cron ou agendador externo). Idempotente e seguro em paralelo:
  *  1. ciclo comercial (lembretes D-7/D-3/término, pedido pós-teste, renovação, past_due)
  *  2. reprocessa eventos de pagamento pendentes (com consulta ao provedor)
- *  3. envia a fila de notificações (outbox) com retry/backoff
+ *  3. enfileira lembretes de encomenda parada (enqueue_package_reminders)
+ *  4. gera PDFs de comprovante e envia a fila de notificações (outbox) com retry/backoff
  */
 import { handler, json, safeEqual, HttpError } from '../_lib/http.js';
 import { env, appUrl, optionalEnv } from '../_lib/env.js';
@@ -22,7 +23,7 @@ async function download(svc: any, bucket: string, path: string | null | undefine
 }
 
 /** Gera PDFs pendentes. Falha não afeta a retirada (já confirmada) e é reprocessada. */
-export async function processReceipts(svc: any) {
+export async function processReceipts(svc: any, base: string | null = null) {
   const { data: claimed, error } = await svc.rpc('claim_receipt_pdfs', { p_limit: 5 });
   if (error) throw new Error(error.message);
   const out = { ready: 0, failed: 0 };
@@ -37,7 +38,8 @@ export async function processReceipts(svc: any) {
         download(svc, 'tenant-private', data.snapshot?.handover_path),
       ]);
       const storage = [data.storage_rack, data.storage_shelf].filter(Boolean).join(' › ') || data.storage_code;
-      const bytes = await renderReceiptPdf({ ...data, storage }, { logo, signature, photo });
+      const verify_url = data.verify_code && base ? `${base}/validar` : null;
+      const bytes = await renderReceiptPdf({ ...data, storage, verify_url }, { logo, signature, photo });
       const path = `${data.tenant_id}/receipts/${data.package_id}/comprovante-${data.protocol}.pdf`;
       // upsert: retry após falha de rede reusa o caminho (o PDF só vale após complete_receipt_pdf).
       const up = await svc.storage.from('tenant-receipts').upload(path, bytes, { contentType: 'application/pdf', upsert: true });
@@ -81,7 +83,11 @@ async function run(request: Request) {
     }
   }
 
-  report.receipts = await processReceipts(svc);
+  // Lembretes de encomenda parada (regras por condomínio no banco); entram na mesma fila abaixo.
+  const { data: reminders, error: re } = await svc.rpc('enqueue_package_reminders', { p_limit: 200 });
+  report.reminders = re ? { error: re.message } : reminders;
+
+  report.receipts = await processReceipts(svc, base);
 
   const { data: jobs, error: je } = await svc.rpc('claim_notification_jobs', { p_limit: 50 });
   const pdfCache = new Map<string, Attachment | null>();

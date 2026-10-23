@@ -55,6 +55,18 @@ export function render(event: string, ctx: MessageCtx, payload: any, appUrl: str
         cta: ['Ver QR Code de retirada', link],
         intro: 'Uma encomenda chegou para a sua unidade e está guardada na portaria.',
       };
+    case 'package_reminder':
+      // Push curto e sem dado pessoal (aparece na tela bloqueada).
+      return {
+        subject: `Lembrete: encomenda aguardando retirada — ${ctx.tenant_name}`,
+        push: { title: 'Encomenda aguardando retirada', body: 'Toque para ver o QR Code de retirada.', url: link },
+        whatsapp:
+          `*${wa(ctx.tenant_name)}*\nLembrete: há uma encomenda aguardando retirada na portaria desde ${fmt(p.received_at, ctx.timezone)}.\n\n` +
+          `Abra o app para ver o QR Code de retirada:\n${link}`,
+        lines: [['Unidade', p.unit], ['Transportadora', p.carrier], ['Recebida em', fmt(p.received_at, ctx.timezone)]],
+        cta: ['Ver QR Code de retirada', link],
+        intro: 'Lembrete: uma encomenda da sua unidade continua aguardando retirada na portaria.',
+      };
     case 'package_picked_up':
       return {
         subject: `${ctx.tenant_name} — Comprovante de entrega — Unidade ${p.unit || ''}`,
