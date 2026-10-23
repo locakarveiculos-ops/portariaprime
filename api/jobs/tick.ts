@@ -112,6 +112,12 @@ async function run(request: Request) {
         pdf = pdfCache.get(path) || null;
         if (!pdf) throw new Error('Comprovante PDF indisponível');
       }
+      // Cópia do contrato: sempre o MESMO PDF gravado no aceite (bucket privado).
+      if (job.event === 'contract_copy') {
+        const content = await download(svc, 'tenant-contracts', ctx.contract?.pdf_path);
+        if (!content) throw new Error('PDF do contrato indisponível');
+        pdf = { filename: `contrato-portaria-prime-${String(ctx.contract?.document_version || '').replace(/[^A-Za-z0-9.-]/g, '')}.pdf`, content };
+      }
       if (job.channel === 'email') {
         res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined);
       } else if (job.channel === 'whatsapp' && job.event === 'portal_welcome') {

@@ -10,6 +10,7 @@ const routes = {
   '/api/billing/checkout': '../api/billing/[action].ts',
   '/api/billing/order': '../api/billing/[action].ts',
   '/api/billing/reconcile': '../api/billing/[action].ts',
+  ...Object.fromEntries(['contract_accept', 'contract_verify', 'contract_code', 'contract_pdf', 'contract_resend'].map(action => [`/api/billing/${action}`, '../api/billing/[action].ts'])),
   '/api/webhooks/infinitepay': '../api/webhooks/infinitepay.ts',
   '/api/jobs/tick': '../api/jobs/tick.ts',
   '/api/invitations/send': '../api/invitations/send.ts',
