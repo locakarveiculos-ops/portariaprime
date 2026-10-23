@@ -92,3 +92,15 @@ test('templates escapam HTML e removem formatação injetada no WhatsApp', () =>
   const withId = tpl.render('package_received', { ...ctx, package: { ...ctx.package, id: '11111111-2222-4333-8444-555555555555' } }, {}, 'https://app.test');
   assert.ok(withId.whatsapp.includes('https://app.test/c/a/encomenda?p=11111111-2222-4333-8444-555555555555'));
 });
+
+test('support_reply: só protocolo e link autenticado, sem conteúdo da conversa', () => {
+  const ctx = { tenant_name: 'Cond', tenant_slug: 'cond-a', timezone: 'America/Sao_Paulo',
+    support: { ticket_id: '11111111-2222-4333-8444-555555555555', protocol: 'SUP-2026-000001' } };
+  const m = tpl.render('support_reply', ctx, { ticket_id: 'x' }, 'https://app.test');
+  assert.equal(m.subject, 'Resposta do suporte — SUP-2026-000001');
+  assert.equal(m.push.url, 'https://app.test/c/cond-a/suporte?chamado=11111111-2222-4333-8444-555555555555');
+  assert.match(m.intro, /Nunca pedimos sua senha/);
+  const bad = tpl.render('support_reply', { ...ctx, support: { ticket_id: '"><x>', protocol: '<b>' } }, {}, 'https://app.test');
+  assert.equal(bad.push.url, 'https://app.test/c/cond-a/suporte');
+  assert.ok(!JSON.stringify(bad).includes('<b>'));
+});

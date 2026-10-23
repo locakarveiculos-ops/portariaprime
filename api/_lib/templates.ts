@@ -19,6 +19,7 @@ export interface MessageCtx {
     carrier?: string; tracking_code?: string | null; received_at?: string; picked_up_at?: string | null;
     picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string; pdf_path?: string | null;
   } | null;
+  support?: { ticket_id?: string; protocol?: string } | null;
 }
 
 const fmt = (iso: string | null | undefined, tz: string) =>
@@ -115,6 +116,18 @@ Equipe Portaria Prime`,
         intro: `Recebemos o pagamento de ${brl(payload.amount_cents)}. Assinatura válida até ${fmt(payload.period_end, ctx.timezone)}.`,
         lines: [], cta: ['Ver assinatura', billingLink],
       };
+    case 'support_reply': {
+      // Sem conteúdo da conversa: só protocolo e link autenticado para o chamado.
+      const protocol = /^SUP-\d{4}-\d{6,}$/.test(ctx.support?.protocol || '') ? ctx.support!.protocol! : '';
+      const ticket = /^[0-9a-f-]{36}$/i.test(ctx.support?.ticket_id || '') ? `?chamado=${ctx.support!.ticket_id}` : '';
+      const url = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/suporte${ticket}`;
+      return {
+        subject: `Resposta do suporte${protocol ? ` — ${protocol}` : ''}`,
+        push: { title: 'Resposta do suporte', body: `Seu chamado ${protocol} tem uma nova resposta.`.replace('  ', ' '), url },
+        intro: `A equipe da Portaria Prime respondeu ao seu chamado${protocol ? ` ${protocol}` : ''}. Abra o app para ler a resposta. Nunca pedimos sua senha.`,
+        lines: [['Protocolo', protocol]], cta: ['Ver chamado', url],
+      };
+    }
     default:
       throw new Error(`Evento sem template: ${event}`);
   }
