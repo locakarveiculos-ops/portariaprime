@@ -128,6 +128,19 @@ Equipe Portaria Prime`,
         lines: [['Protocolo', protocol]], cta: ['Ver chamado', url],
       };
     }
+    case 'quote_sent': {
+      // Token no fragmento (#): não vai para logs de servidor nem para o Referer.
+      const q = (ctx as any).quote || {};
+      const url = `${appUrl}/proposta#${encodeURIComponent(String(payload.token || ''))}`;
+      return {
+        subject: `Sua proposta Portaria Prime — ${payload.protocol}`,
+        intro: `Olá, ${q.contact_name || ''}. Preparamos a proposta para ${q.org_name || 'o seu condomínio'}: plano ${payload.plan_name}, `
+          + `${brl(payload.amount_cents)} por ciclo ${CYCLE[payload.cycle] || payload.cycle}, válida até ${fmt(payload.valid_until, ctx.timezone).split(',')[0]}. `
+          + 'Proposta sujeita às condições descritas no link.',
+        lines: [['Protocolo', payload.protocol], ['Solicitação', q.protocol]],
+        cta: ['Ver proposta', url],
+      };
+    }
     default:
       throw new Error(`Evento sem template: ${event}`);
   }

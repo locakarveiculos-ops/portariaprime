@@ -2,14 +2,16 @@
  * Rotas públicas (sem sessão), uma única função na Vercel:
  *   POST /api/contact  -> contato comercial (honeypot + limite por IP)
  *   POST /api/funnel   -> funil anônimo da landing
- * vercel.json reescreve /api/contact e /api/funnel para cá com ?a=.
+ *   POST /api/quote    -> "Tenho um orçamento para comparar" (multipart, anexo validado por bytes)
+ * vercel.json reescreve /api/contact, /api/funnel e /api/quote para cá com ?a=.
  * Novas ações públicas entram aqui (arquivos com "_" não viram rota).
  */
 import { handler, HttpError } from '../_lib/http.js';
 import { POST as contact } from './_contact.js';
 import { POST as funnel } from './_funnel.js';
+import { POST as quote } from './_quote.js';
 
-const ACTIONS: Record<string, (r: Request) => Promise<Response>> = { contact, funnel };
+const ACTIONS: Record<string, (r: Request) => Promise<Response>> = { contact, funnel, quote };
 
 export const POST = handler(async (request) => {
   const url = new URL(request.url);

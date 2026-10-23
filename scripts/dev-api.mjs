@@ -16,6 +16,8 @@ const routes = {
   '/api/ocr/analyze-label': '../api/ocr/analyze-label.ts',
   '/api/contact': '../api/public/[action].ts',
   '/api/funnel': '../api/public/[action].ts',
+  '/api/quote': '../api/public/[action].ts',
+  ...Object.fromEntries(['attachment', 'proposal_pdf', 'send_proposal'].map(action => [`/api/commercial/${action}`, '../api/commercial/[action].ts'])),
   '/api/platform/users': '../api/platform/users.ts',
   ...Object.fromEntries(['manifest', 'page', 'info'].map(action => [`/api/portal/${action}`, '../api/portal/[action].ts'])),
   ...Object.fromEntries(['download', 'preview'].map(action => [`/api/receipts/${action}`, '../api/receipts/[action].ts'])),
