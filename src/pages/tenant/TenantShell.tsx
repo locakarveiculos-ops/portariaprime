@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { BarChart3, Building2, ChevronsLeft, ChevronsRight, CircleUser, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Shield, Smartphone, Users, X } from 'lucide-react';
+import { LifeBuoy, BarChart3, Building2, ChevronsLeft, ChevronsRight, CircleUser, HelpCircle, LayoutDashboard, LogOut, Menu, Package, Settings, Shield, Smartphone, Users, X } from 'lucide-react';
 import { useSession } from '../../lib/session';
 import { useTenant } from '../../lib/tenant';
 import { navigate, onLink } from '../../lib/router';
@@ -14,7 +14,7 @@ interface NavItem { area: string; label: string; icon: React.ElementType; show: 
 
 const TITLES: Record<string, string> = {
   painel: 'Visão geral', portaria: 'Encomendas', 'totem-equipe': 'Totem da portaria', pessoas: 'Unidades e moradores', relatorios: 'Relatórios',
-  configuracoes: 'Configurações', assinatura: 'Plano e assinatura', ajuda: 'Ajuda', morador: 'Minhas encomendas', avisos: 'Notificações',
+  configuracoes: 'Configurações', assinatura: 'Plano e assinatura', suporte: 'Suporte', ajuda: 'Ajuda', morador: 'Minhas encomendas', avisos: 'Notificações',
   aplicativo: 'Meu aplicativo e notificações', comprovante: 'Comprovante',
 };
 
@@ -95,6 +95,7 @@ export function TenantShell({ area, children }: { area: string; children: React.
   ];
   const bottom: NavItem[] = [
     { area: 'configuracoes', label: 'Configurações', icon: Settings, show: t.can('settings') || t.can('billing') || t.can('team'), match: ['configuracoes', 'assinatura'] },
+    { area: 'suporte', label: 'Suporte', icon: LifeBuoy, show: t.isStaff },
     { area: 'ajuda', label: 'Ajuda', icon: HelpCircle, show: true },
   ];
   const name = t.branding?.display_name || t.tenant.name;

@@ -44,7 +44,8 @@ export default function HelpPage() {
   const runTour = (id: string) => { const tour = TOURS.find((x) => x.id === id); if (tour) start(tour, base, ctx!.user_id, t.tenant.id); };
   const resident = role === 'morador';
   // Morador: dúvidas vão à portaria/administração do condomínio (Minha conta › Ajuda e suporte).
-  const openContact = () => (resident ? navigate(`${base}/conta#ajuda`) : setContact(true));
+  // Equipe abre chamado com protocolo; morador fala com a portaria do condomínio.
+  const openContact = () => navigate(resident ? `${base}/conta#ajuda` : `${base}/suporte`);
   const support = contact && <Modal title="Falar com o suporte" onClose={() => setContact(false)}><ContactForm context={`ajuda:${t.tenant.slug}`} /></Modal>;
 
   if (article) return <>{<ArticleView a={article} onOpen={open} onTour={runTour} canTour={!!article.tour && tours.some((x) => x.id === article.tour)} onContact={openContact} resident={resident} />}{support}</>;

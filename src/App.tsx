@@ -47,6 +47,7 @@ const Contrato = lazy(() => legal().then(m => ({ default: m.ContratoPage })));
 const Termos = lazy(() => legal().then(m => ({ default: m.TermosPage })));
 const Privacidade = lazy(() => legal().then(m => ({ default: m.PrivacidadePage })));
 const Contratar = lazy(() => import('./pages/ContratarPage'));
+const Validar = lazy(() => import('./pages/ValidarPage'));
 const Portal = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.PortalPage })));
 const RequestAccess = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.RequestAccessPage })));
 
@@ -66,6 +67,7 @@ function Routes() {
   if (path === '/privacidade') return <Privacidade />;
   if (path === '/tutoriais' || /^\/tutoriais\/(sindico|portaria|morador)$/.test(path)) return <Tutorials profile={path.split('/')[2] || null} />;
   if (path === '/proposta') return <Proposal />;
+  if (path === '/validar') return <Validar />;
   if (configError) return <main className="max-w-lg mx-auto p-6"><PortariaPrimeLogo /><Alert tone="danger">{configError}</Alert></main>;
   // /totem: equipe logada vai ao totem da equipe (OCR, entrega); sem login segue o totem público pareado.
   if (route?.area === 'totem') {
