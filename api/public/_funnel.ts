@@ -4,8 +4,8 @@
  * Repetição do mesmo evento pelo mesmo visitante no mesmo dia é ignorada (unique).
  * Falha de gravação não quebra a página: responde 204 mesmo assim.
  */
-import { handler, readJson } from './_lib/http.js';
-import { serviceClient } from './_lib/supabase.js';
+import { handler, readJson } from '../_lib/http.js';
+import { serviceClient } from '../_lib/supabase.js';
 
 const EVENTS = new Set(['landing_view', 'pricing_view', 'cta_trial_click', 'signup_started', 'signup_completed', 'trial_started']);
 const tag = (v: unknown, re: RegExp) => (typeof v === 'string' && re.test(v) ? v : null);

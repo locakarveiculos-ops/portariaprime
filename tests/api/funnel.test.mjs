@@ -11,7 +11,7 @@ globalThis.fetch = async (url, init) => {
   if (String(url).startsWith('http://127.0.0.1:9/rest/v1/funnel_events')) { sent.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
   return realFetch(url, init);
 };
-const { POST } = await import('../../api/funnel.ts');
+const { POST } = await import('../../api/public/[action].ts');
 const req = (body) => new Request('http://x/api/funnel', { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify(body) });
 const visitor = '3f1b2c4d-1111-4222-8333-944455556666';
 

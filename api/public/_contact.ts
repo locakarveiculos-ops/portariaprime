@@ -3,8 +3,8 @@
  * Formulário comercial público. "website" é honeypot (bots preenchem).
  * Limite: 3 envios por IP a cada hora (hash do IP, sem guardar o IP).
  */
-import { handler, json, readJson, HttpError, sha256Hex } from './_lib/http.js';
-import { serviceClient } from './_lib/supabase.js';
+import { handler, json, readJson, HttpError, sha256Hex } from '../_lib/http.js';
+import { serviceClient } from '../_lib/supabase.js';
 
 export const POST = handler(async (request) => {
   const b = await readJson(request, 8192);

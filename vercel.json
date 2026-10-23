@@ -4,6 +4,8 @@
   "buildCommand": "npm run build",
   "outputDirectory": "dist",
   "rewrites": [
+    { "source": "/api/contact", "destination": "/api/public/contact?a=contact" },
+    { "source": "/api/funnel", "destination": "/api/public/funnel?a=funnel" },
     { "source": "/c/:slug/manifest.webmanifest", "destination": "/api/portal/manifest?a=manifest&slug=:slug" },
     { "source": "/c/:slug", "destination": "/api/portal/page?a=page&slug=:slug" },
     { "source": "/c/:slug/:path*", "destination": "/api/portal/page?a=page&slug=:slug" },
