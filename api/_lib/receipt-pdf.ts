@@ -5,7 +5,8 @@
  */
 import { PDFDocument, PDFFont, PDFImage, PDFPage, StandardFonts, rgb } from 'pdf-lib';
 
-export const RECEIPT_TEMPLATE_VERSION = 'pdf-1';
+// pdf-2: código de verificação + URL pública de validação (/validar). PDFs pdf-1 não são regenerados.
+export const RECEIPT_TEMPLATE_VERSION = 'pdf-2';
 
 export interface ReceiptLayout {
   template?: 'classico' | 'moderno' | 'compacto'; color_primary?: string; color_accent?: string;
@@ -17,6 +18,8 @@ export interface ReceiptLayout {
 export interface ReceiptData {
   protocol: string; package_id: string; issued_at: string; recipient_name?: string | null;
   storage?: string | null; layout: ReceiptLayout;
+  /** Código opaco do comprovante; `verify_url` = página pública /validar (montada pelo worker). */
+  verify_code?: string | null; verify_url?: string | null;
   snapshot: {
     tracking_code?: string | null; carrier?: string; unit_block?: string | null; unit_label?: string;
     received_at?: string; picked_up_at?: string; picked_up_by?: string; operator?: string;
@@ -194,6 +197,14 @@ export async function renderReceiptPdf(data: ReceiptData, assets: ReceiptAssets)
   }
   y -= boxH + 14;
   for (const ln of wrap('Assinatura desenhada na tela para registro operacional; não é assinatura digital certificada.', font, 8, W)) { ensure(10); text(ln, M, y, font, 8, muted); y -= 10; }
+
+  // Validação pública: só confirma existência, data da entrega e condomínio (sem dados pessoais).
+  if (data.verify_code) {
+    y -= 6; ensure(34);
+    text(safe(`Código de verificação: ${data.verify_code}`), M, y, bold, size, ink); y -= size + 4;
+    const how = data.verify_url ? `Confira a autenticidade em ${data.verify_url} informando o código acima.` : 'Confira a autenticidade na página /validar da Portaria Prime informando o código acima.';
+    for (const ln of wrap(how, font, 8, W)) { ensure(10); text(ln, M, y, font, 8, muted); y -= 10; }
+  }
 
   // Rodapé em todas as páginas (área reservada; não cobre conteúdo).
   const pages = pdf.getPages();

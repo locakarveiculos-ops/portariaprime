@@ -37,7 +37,7 @@ export const blobToDataUrl = (b: Blob) =>
 const rand = () => crypto.randomUUID().replace(/-/g, '').slice(0, 16);
 
 /** Envia prova (foto/assinatura) ao bucket privado. Falha = erro explícito, sem fallback. */
-export async function uploadPackageFile(tenantId: string, packageId: string, prefix: 'label_photo' | 'signature' | 'handover', blob: Blob) {
+export async function uploadPackageFile(tenantId: string, packageId: string, prefix: 'label_photo' | 'signature' | 'handover' | `label-${number}`, blob: Blob) {
   const ext = blob.type === 'image/png' ? 'png' : 'jpg';
   const path = `${tenantId}/packages/${packageId}/${prefix}-${rand()}.${ext}`;
   const { error } = await supabase.storage.from('tenant-private').upload(path, blob, { contentType: blob.type, upsert: false });

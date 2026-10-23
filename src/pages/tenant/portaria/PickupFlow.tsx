@@ -11,6 +11,7 @@ import { Alert, Button, Field, Input, Modal, Select, toast } from '../../../comp
 import { QrCodeScanner } from '../../../components/QrCodeScanner';
 import { SignaturePad } from '../../../components/SignaturePad';
 import { CameraCapture } from '../../../components/CameraCapture';
+import { PackagePhotos } from '../../../components/PhotoGallery';
 
 export type PickupPackage = PackageRow & {
   storage_rack?: string | null; storage_shelf?: string | null; concierge_name?: string | null;
@@ -73,8 +74,9 @@ export function PickupModal({ pkg, qr, onClose, onDone }: { pkg: PickupPackage; 
         pkg.storage_location_id
           ? supabase.from('storage_locations').select('code, rack, shelf, concierge_locations(name)').eq('id', pkg.storage_location_id).maybeSingle()
           : Promise.resolve({ data: null }),
+        // Galeria: a foto da posição 1 é a etiqueta.
         supabase.from('package_attachments').select('object_path').eq('package_id', pkg.id).eq('kind', 'label_photo')
-          .order('created_at', { ascending: false }).limit(1).maybeSingle(),
+          .order('position', { ascending: true, nullsFirst: false }).order('created_at').limit(1).maybeSingle(),
       ]);
       setInfo({ storage_code: loc?.code ?? pkg.storage_code, storage_rack: loc?.rack, storage_shelf: loc?.shelf,
         concierge_name: (loc as any)?.concierge_locations?.name, label_photo_path: att?.object_path });
@@ -139,6 +141,7 @@ export function PickupModal({ pkg, qr, onClose, onDone }: { pkg: PickupPackage; 
             {pkg.moved && <p className="text-xs text-muted">Local atualizado após o recebimento.</p>}
           </div>
         </div>
+        <PackagePhotos packageId={pkg.id} />
         {manual ? (
           <Alert tone="warning">Retirada sem QR Code: confira o documento de quem retira. A justificativa fica registrada na auditoria.</Alert>
         ) : <Alert tone="success">QR Code válido para esta encomenda. Ele só é usado ao confirmar.</Alert>}
