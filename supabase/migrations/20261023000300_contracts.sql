@@ -22,7 +22,7 @@ create table public.legal_entity (
   updated_by uuid,
   updated_at timestamptz not null default now()
 );
-insert into public.legal_entity (id) values (true);
+-- Sem linha inicial: ausência = todos os campos pendentes (e o restore de backup não colide).
 
 -- Campo -> marcador nos documentos ({{CAMPO}}).
 create or replace function app.legal_fields() returns text[]
@@ -32,8 +32,9 @@ $$;
 
 create or replace function app.legal_missing() returns text[]
 language sql stable security definer set search_path = '' as $$
-  select coalesce(array_agg(f order by f), '{}') from unnest(app.legal_fields()) f, public.legal_entity e
-  where e.id and nullif(btrim(coalesce(to_jsonb(e) ->> f, '')), '') is null
+  select coalesce(array_agg(f order by f), '{}') from unnest(app.legal_fields()) f
+  left join public.legal_entity e on e.id
+  where nullif(btrim(coalesce(to_jsonb(e) ->> f, '')), '') is null
 $$;
 
 -- Marcadores que impedem publicação: {{CAMPO}} e trechos ainda não decididos.
@@ -71,6 +72,7 @@ declare f text; v text;
 begin
   perform app.platform_require('legal_manage');
   if p is null or jsonb_typeof(p) <> 'object' then raise exception 'Dados inválidos.' using errcode = '22023'; end if;
+  insert into public.legal_entity (id) values (true) on conflict (id) do nothing;
   foreach f in array app.legal_fields() loop
     if p ? f then
       v := nullif(btrim(coalesce(p ->> f, '')), '');

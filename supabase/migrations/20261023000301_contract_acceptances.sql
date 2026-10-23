@@ -122,7 +122,8 @@ begin
   d := public.legal_document_current('contrato_saas');
   return jsonb_build_object('terms', app.contract_terms(p_tenant, p_plan_code, p_cycle, p_proposal),
     'document', d, 'contractor', jsonb_build_object('name', t.name, 'document', t.document),
-    'subscription', (select jsonb_build_object('status', s.status, 'trial_ends_at', s.trial_ends_at, 'current_period_end', s.current_period_end,
+    'subscription', (select jsonb_build_object('status', s.status, 'plan_code', (select code from public.plans where id = coalesce(s.next_plan_id, s.plan_id)),
+       'cycle', coalesce(s.next_cycle, s.cycle), 'trial_ends_at', s.trial_ends_at, 'current_period_end', s.current_period_end,
        'cancel_at_period_end', s.cancel_at_period_end) from public.subscriptions s where s.tenant_id = p_tenant),
     'active', (select jsonb_build_object('id', a.id, 'document_version', a.document_version, 'accepted_at', a.accepted_at)
        from public.contract_acceptances a where a.tenant_id = p_tenant and a.status = 'active'),

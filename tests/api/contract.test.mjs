@@ -81,6 +81,23 @@ test('PDF do contrato: arquivo real com texto longo e caractere fora da fonte', 
   assert.ok(bytes.length > 2000);
 });
 
+test('minutas: versão 0.1-rascunho, marcadores pendentes (não publicáveis) e nenhum CNPJ/dado da contratada inventado', async () => {
+  const { readFileSync } = await import('node:fs');
+  const { parseDraft, pendingMarks, headings, lineDiff } = await import('../../src/lib/legal-text.ts');
+  for (const f of ['contrato-saas', 'termos', 'privacidade', 'anexo-tratamento-dados']) {
+    const { meta, body } = parseDraft(readFileSync(`docs/legal/${f}.md`, 'utf8'));
+    assert.equal(meta.version, '0.1-rascunho', f);
+    assert.ok(meta.summary && pendingMarks(body).length > 0, `${f}: resumo e pendências`);
+    assert.doesNotMatch(body, /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/, `${f}: sem CNPJ literal`);
+    assert.ok(headings(body).length >= 3);
+  }
+  const contrato = readFileSync('docs/legal/contrato-saas.md', 'utf8');
+  for (const re of [/MP 2\.200-2\/2001, art\. 10, §2º/, /não é a API oficial da Meta/, /um mês de calendário/, /sem débito automático/i, /\{\{FORO\}\}/, /\{\{HORARIO_SUPORTE\}\}/])
+    assert.match(contrato, re);
+  assert.doesNotMatch(contrato, /garant\w+ (a )?validade jurídica/i);
+  assert.deepEqual(lineDiff('a\nb\nc', 'a\nx\nc').map(l => l.op + l.text), [' a', '-b', '+x', ' c']);
+});
+
 test('template contract_copy escapa dados e cita versão/hash', () => {
   const ctx = { tenant_name: '<b>Cond</b>', tenant_slug: 'cond-a', timezone: 'America/Sao_Paulo',
     contract: { document_version: '1.0', document_sha256: 'f'.repeat(64), accepted_at: '2026-10-23T12:00:00Z', plan_name: 'Profissional', cycle: 'monthly', amount_cents: 14900 } };
