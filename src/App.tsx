@@ -38,6 +38,15 @@ const Totem = lazy(() => import('./pages/TotemPage'));
 const Admin = lazy(() => import('./pages/AdminPage'));
 const Ajuda = lazy(() => import('./pages/HelpPage'));
 const Landing = lazy(() => import('./pages/LandingPage'));
+const Tutorials = lazy(() => import('./pages/TutorialsPage'));
+const Proposal = lazy(() => import('./pages/ProposalPage'));
+const Org = lazy(() => import('./pages/OrgPage'));
+const Support = lazy(() => import('./pages/tenant/SupportPage').then(m => ({ default: m.SupportPage })));
+const legal = () => import('./pages/LegalPages');
+const Contrato = lazy(() => legal().then(m => ({ default: m.ContratoPage })));
+const Termos = lazy(() => legal().then(m => ({ default: m.TermosPage })));
+const Privacidade = lazy(() => legal().then(m => ({ default: m.PrivacidadePage })));
+const Contratar = lazy(() => import('./pages/ContratarPage'));
 const Portal = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.PortalPage })));
 const RequestAccess = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.RequestAccessPage })));
 
@@ -52,7 +61,11 @@ function Routes() {
   const path = usePath();
   const { ctx, session, loading, error, refresh, signOut } = useSession();
   const route = matchTenant(path);
-  if (path === '/termos' || path === '/privacidade') return <LegalPage privacy={path === '/privacidade'} />;
+  if (path === '/contrato') return <Contrato />;
+  if (path === '/termos') return <Termos />;
+  if (path === '/privacidade') return <Privacidade />;
+  if (path === '/tutoriais' || /^\/tutoriais\/(sindico|portaria|morador)$/.test(path)) return <Tutorials profile={path.split('/')[2] || null} />;
+  if (path === '/proposta') return <Proposal />;
   if (configError) return <main className="max-w-lg mx-auto p-6"><PortariaPrimeLogo /><Alert tone="danger">{configError}</Alert></main>;
   // /totem: equipe logada vai ao totem da equipe (OCR, entrega); sem login segue o totem público pareado.
   if (route?.area === 'totem') {
@@ -68,6 +81,7 @@ function Routes() {
   if (path === '/recuperar-senha') return <RecoverPage />;
   if (path === '/nova-senha') return <NewPasswordPage />;
   if (path === '/convite') return <InvitePage />;
+  if (path === '/org/convite') return <Org />;
   // Portal do condomínio: página pública com a marca dele (sem sessão não há dados internos).
   // Sem sessão: link profundo do morador (aviso/e-mail/WhatsApp) vai ao login com a marca do portal e volta ao destino.
   if (route && !session) return route.area && RESIDENT_AREAS.has(route.area)
@@ -76,6 +90,8 @@ function Routes() {
   if (route?.area === 'solicitar') return <RequestAccess slug={route.slug} />;
   if (!session) return <Redirect to={`/entrar?next=${encodeURIComponent(location.pathname + location.search)}`} />;
   if (error || !ctx) return <main className="max-w-lg mx-auto p-6 space-y-4"><Alert tone="danger">{error || 'Não foi possível carregar seus vínculos.'}</Alert><Button onClick={refresh}>Tentar novamente</Button><Button variant="ghost" onClick={signOut}>Sair</Button></main>;
+  if (path === '/contratar') return <Contratar />;
+  if (path === '/org' || path.startsWith('/org/')) return <Org />;
   if (path === '/onboarding') return <Onboarding />;
   if (path === '/checkout/retorno') return <Retorno />;
   if (path === '/admin') return (ctx.platform_admin || ctx.platform_role) ? <Admin /> : <Alert tone="danger">Acesso restrito à administração da plataforma.</Alert>;
@@ -86,6 +102,7 @@ function Routes() {
       <a className="font-semibold underline" href={`/c/${t.slug}`} onClick={onLink}>{t.name}</a>
     </Card>)}
     <Button onClick={() => navigate('/onboarding')}>Cadastrar condomínio</Button>
+    <Button variant="secondary" onClick={() => navigate('/org')}>Administradoras</Button>
     {(ctx.platform_admin || ctx.platform_role) && <Button variant="secondary" onClick={() => navigate('/admin')}>Administrar plataforma</Button>}
     <Button variant="ghost" onClick={signOut}>Sair</Button>
   </main>;
@@ -111,6 +128,7 @@ function Routes() {
     const staff = admin || link.role === 'porteiro';
     const perm = (p: string) => admin && link.permissions.includes(p);
     let page: React.ReactNode = <Alert tone="danger">Área indisponível para seu vínculo.</Alert>;
+    if (route.area === 'suporte' && staff) page = <Support />;
     if (route.area === 'portaria' && staff) page = <Portaria />;
     if (route.area === 'totem-equipe' && staff) page = <Portaria totem />;
     if (route.area === 'painel' && admin) page = <Painel />;
@@ -126,18 +144,6 @@ function Routes() {
     return <TenantProvider key={link.tenant_id} link={link}><TourProvider><TenantShell area={route.area}><Suspense fallback={<Spinner />}>{page}</Suspense></TenantShell></TourProvider></TenantProvider>;
   }
   return <main className="p-6"><h1>Página não encontrada</h1><a href="/app" onClick={onLink}>Voltar ao sistema</a></main>;
-}
-
-function LegalPage({ privacy }: { privacy: boolean }) {
-  return <main className="max-w-2xl mx-auto px-4 py-10 space-y-4"><PortariaPrimeLogo />
-    <h1 className="text-2xl font-semibold">{privacy ? 'Política de privacidade' : 'Termos de uso'}</h1>
-    <Alert tone="warning">Minuta para revisão jurídica. Contato de privacidade, retenção e condições contratuais precisam ser aprovados antes da operação comercial.</Alert>
-    <p className="text-sm text-muted">Portaria Prime · CNPJ 59.760.458/0001-91. Pagamentos processados pela InfinitePay (CloudWalk).</p>
-    <p>{privacy ? 'O sistema trata identificação e contatos dos usuários, vínculos com unidades, registros de encomendas, fotos e assinaturas de retirada para operar a portaria. O acesso deve ser restrito às pessoas autorizadas pelo condomínio.' : 'O acesso depende de conta verificada e vínculo autorizado com o condomínio. A equipe deve conferir destinatário, unidade e identidade de quem retira. OCR é uma sugestão que exige revisão humana.'}</p>
-    <p>O teste dura um mês de calendário por condomínio. Ao final, a renovação exige pagamento por link, sem débito automático. Inadimplência não autoriza apagar histórico nem provas de retirada.</p>
-    <p>Assinatura desenhada na tela é registro operacional, não assinatura digital certificada. Canais externos e conectividade podem ficar indisponíveis.</p>
-    <a href="/" onClick={onLink} className="underline">Voltar</a>
-  </main>;
 }
 
 export default function App() {

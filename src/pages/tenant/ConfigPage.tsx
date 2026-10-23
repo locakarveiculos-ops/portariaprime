@@ -9,6 +9,7 @@ import { PortalCard } from './PortalCard';
 import { AssinaturaPage } from './AssinaturaPage';
 import { BrandingCard, ChannelsCard, NotificationHealthCard, StorageCard, TotemCard, WhatsAppCard } from './config/cards';
 import { TeamCard } from './config/TeamCard';
+import { OrgLinkCard } from './config/OrgLinkCard';
 import { SecurityCard } from './config/SecurityCard';
 import { CondoCard } from './config/CondoCard';
 
@@ -31,7 +32,7 @@ export const MODULES: Mod[] = [
   { id: 'operacao', title: 'Operação e armazenamento', desc: 'Portarias, estantes, prateleiras e capacidade.', keys: 'estante prateleira local guarda capacidade portaria armazenamento',
     allowed: settings, render: () => <StorageCard /> },
   { id: 'equipe', title: 'Equipe e permissões', desc: 'Porteiros, administradores, convites e revogações.', keys: 'equipe porteiro administrador sindico convite permissao revogar acesso',
-    allowed: (t) => t.can('team'), render: () => <TeamCard /> },
+    allowed: (t) => t.can('team') || settings(t), render: (t) => <>{t.can('team') && <TeamCard />}<OrgLinkCard /></> },
   { id: 'comunicacoes', title: 'Comunicações', desc: 'Canais de aviso, validade do QR e limite por unidade.', keys: 'notificacao aviso email whatsapp push canal qr validade moradores',
     allowed: settings, render: () => <ChannelsCard /> },
   { id: 'integracoes', title: 'Integrações e diagnóstico', desc: 'WhatsApp do condomínio, teste de envio, falhas e reenvio.', keys: 'whatsapp evolution conectar teste diagnostico falha reenviar fila',

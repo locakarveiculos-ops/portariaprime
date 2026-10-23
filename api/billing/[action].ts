@@ -7,13 +7,16 @@ import { handler, HttpError } from '../_lib/http.js';
 import { POST as checkout } from './_checkout.js';
 import { GET as order } from './_order.js';
 import { POST as reconcile } from './_reconcile.js';
+import { contractAction } from './_contract.js';
 
 const action = (r: Request) => new URL(r.url).pathname.split('/').pop();
+const CONTRACT = new Set(['contract_accept', 'contract_verify', 'contract_code', 'contract_pdf', 'contract_resend']);
 
 export const POST = handler(async (request) => {
   const a = action(request);
   if (a === 'checkout') return checkout(request);
   if (a === 'reconcile') return reconcile(request);
+  if (a && CONTRACT.has(a)) return contractAction(a, request);
   throw new HttpError(404, 'Ação desconhecida.');
 });
 export const GET = handler(async (request) => {

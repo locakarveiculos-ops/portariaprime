@@ -8,6 +8,12 @@ import ActionDialog from './admin/ActionDialog';
 import MfaSettings from './admin/MfaSettings';
 import OwnerTour from './admin/OwnerTour';
 import TenantDetailModal from './admin/TenantDetailModal';
+import SupportPanel from './admin/SupportPanel';
+import SupportSettings from './admin/SupportSettings';
+import OrganizationsPanel from './admin/OrganizationsPanel';
+import QuotesPanel from './admin/QuotesPanel';
+import CostsPanel from './admin/CostsPanel';
+import LegalPanel from './admin/LegalPanel';
 import { ACTION_LABELS, PlatformContext, Row, UUID, rowActions } from './admin/platform-model';
 
 const COLUMNS: Record<string, [string, string][]> = {
@@ -83,7 +89,7 @@ export default function AdminPage() {
   useEffect(() => {
     if (!context) return;
     let active = true; setResult(null); setOverview(null); setError('');
-    if (['help', 'settings'].includes(section)) { setLoading(false); return; }
+    if (['help', 'settings', 'support', 'organizations', 'quotes', 'costs', 'legal'].includes(section)) { setLoading(false); return; }
     if (!context.capabilities.includes(section === 'overview' ? 'overview' : listSection)) { setLoading(false); return; }
     setLoading(true);
     const request = section === 'overview'
@@ -112,7 +118,12 @@ export default function AdminPage() {
     {context.role === 'owner' && <OwnerTour key={context.user_id} userId={context.user_id} onNavigate={navigate} />}
     {notice && <Alert tone="success">{notice}</Alert>}
     <h2 className="text-xl font-semibold">{PLATFORM_SECTIONS.find(([key]) => key === section)?.[1]}</h2>
-    {section === 'help' ? <Card className="space-y-4"><Field label="Pesquisar ajuda"><Input type="search" value={helpQuery} onChange={e => setHelpQuery(e.target.value)} placeholder="Teste, senha, planos, auditoria…" /></Field><div aria-live="polite" className="space-y-3">{searchPlatformHelp(helpQuery).map(item => <article key={item.section} className="border-t border-line pt-3 space-y-1"><h3 className="font-semibold">{item.title}</h3><p className="text-sm text-muted">{item.text}</p>{visibleSections.some(([name]) => name === item.section) && item.section !== 'help' && <Button variant="ghost" onClick={() => navigate(item.section)}>Abrir área</Button>}</article>)}{searchPlatformHelp(helpQuery).length === 0 && <p>Nenhum tópico encontrado. Tente outro termo.</p>}</div></Card> : section === 'settings' ? <><MfaSettings /><Alert>Integrações, segredos e configurações de infraestrutura não são editáveis neste painel.</Alert></> : <>
+    {section === 'support' && can('support') ? <><SupportPanel context={context} />{can('support_manage') && <SupportSettings context={context} />}</>
+      : section === 'organizations' && can('organizations') ? <OrganizationsPanel context={context} />
+      : section === 'quotes' && can('quotes') ? <QuotesPanel capabilities={context.capabilities} />
+      : section === 'costs' && can('costs') ? <CostsPanel capabilities={context.capabilities} />
+      : section === 'legal' && can('legal') ? <LegalPanel canManage={can('legal_manage')} />
+      : section === 'help' ? <Card className="space-y-4"><Field label="Pesquisar ajuda"><Input type="search" value={helpQuery} onChange={e => setHelpQuery(e.target.value)} placeholder="Teste, senha, planos, auditoria…" /></Field><div aria-live="polite" className="space-y-3">{searchPlatformHelp(helpQuery).map(item => <article key={item.section} className="border-t border-line pt-3 space-y-1"><h3 className="font-semibold">{item.title}</h3><p className="text-sm text-muted">{item.text}</p>{visibleSections.some(([name]) => name === item.section) && item.section !== 'help' && <Button variant="ghost" onClick={() => navigate(item.section)}>Abrir área</Button>}</article>)}{searchPlatformHelp(helpQuery).length === 0 && <p>Nenhum tópico encontrado. Tente outro termo.</p>}</div></Card> : section === 'settings' ? <><MfaSettings /><Alert>Integrações, segredos e configurações de infraestrutura não são editáveis neste painel.</Alert></> : <>
       {section === 'reports' && <Card className="space-y-3"><p>Relatórios de metadados autorizados. CSV contém somente a página carregada, até 25 registros; não é exportação da base inteira.</p><Field label="Fonte do relatório"><Select value={source} onChange={e => { setSource(e.target.value); setPage(0); setResult(null); }}>{readable.map(name => <option key={name} value={name}>{name === 'incidents' ? 'Incidentes' : PLATFORM_SECTIONS.find(([key]) => key === name)?.[1] || name}</option>)}</Select></Field></Card>}
       {section === 'orders' && <div className="flex gap-2">{['orders', 'incidents'].filter(can).map(name => <Button key={name} variant={orderTab === name ? 'primary' : 'secondary'} onClick={() => { setOrderTab(name); setPage(0); setResult(null); }}>{name === 'orders' ? 'Pedidos' : 'Incidentes financeiros'}</Button>)}</div>}
       <Card data-tour="platform-filters"><form className="grid sm:grid-cols-2 lg:grid-cols-3 gap-3 items-end" onSubmit={e => {

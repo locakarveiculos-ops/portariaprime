@@ -28,6 +28,7 @@ export function OnboardingPage() {
   const [cycle, setCycle] = useState<'monthly' | 'quarterly' | 'yearly'>((query('ciclo') as any) || 'monthly');
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [terms, setTerms] = useState(false); // nunca pré-marcado
   // Mesmo request id em retries/duplo clique: o servidor devolve o mesmo condomínio.
   const [requestId] = useState(() => {
     try {
@@ -62,15 +63,18 @@ export function OnboardingPage() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!chosen || !price) return;
+    if (!chosen || !price || !terms) return;
     setBusy(true);
     setError(null);
     try {
-      const r = await rpc<{ slug: string }>('provision_tenant', {
+      const r = await rpc<{ slug: string; tenant_id: string }>('provision_tenant', {
         p_request_id: requestId, p_name: name.trim(), p_slug: slug, p_document: doc, p_timezone: tz,
         p_plan_code: chosen.code, p_cycle: cycle, p_contact_phone: phone || null,
       });
       try { sessionStorage.removeItem('pp_provision_req'); } catch { /* ok */ }
+      // Aceite dos termos do TESTE: grava a versão vigente (ou a minuta não vigente). Não é contrato de compra.
+      // Falha aqui não desfaz o condomínio já criado; fica registrado no console para suporte.
+      await rpc('record_trial_consent', { p_tenant: r.tenant_id }).catch((e) => console.warn('consentimento', e));
       track('trial_started', chosen.code);
       await refresh();
       navigate(`/c/${r.slug}/configuracoes?inicio=1`, true);
@@ -133,8 +137,12 @@ export function OnboardingPage() {
                 <ul className="pt-2 space-y-1">{featureList(chosen).map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-success shrink-0 mt-0.5" />{f}</li>)}</ul>
               </Card>
             )}
+            <label className="flex gap-3 items-start text-sm">
+              <input type="checkbox" className="mt-1 w-5 h-5" checked={terms} onChange={(e) => setTerms(e.target.checked)} required />
+              <span>Li e aceito os <a href="/termos" target="_blank" className="underline">Termos de uso</a> e a <a href="/privacidade" target="_blank" className="underline">Política de privacidade</a> para o período de teste. A contratação paga tem contrato próprio.</span>
+            </label>
             {error && <Alert tone="danger">{error}</Alert>}
-            <Button type="submit" loading={busy} className="w-full" disabled={!chosen || !price}>Ativar mês grátis</Button>
+            <Button type="submit" loading={busy} className="w-full" disabled={!chosen || !price || !terms}>Ativar mês grátis</Button>
           </div>
         </form>
       )}

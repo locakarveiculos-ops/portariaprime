@@ -5,6 +5,7 @@ import { useTenant } from '../../lib/tenant';
 import { loadCatalog, PlanRow } from '../../lib/catalog';
 import { brl, CYCLE_LABEL, CYCLE_MONTHS, dateTime } from '../../lib/format';
 import { Alert, Badge, Button, Card, Field, Select, Spinner, useAction } from '../../components/ui';
+import { ContractsCard } from './ContractsCard';
 
 const STATUS: Record<string, [string, 'success' | 'warning' | 'danger' | 'accent' | 'neutral']> = {
   trialing: ['Mês grátis', 'accent'], active: ['Ativa', 'success'], pending_payment: ['Aguardando pagamento', 'warning'],
@@ -82,6 +83,8 @@ export function AssinaturaPage({ embedded = false }: { embedded?: boolean } = {}
             : <Button variant="ghost" loading={busy} onClick={() => confirm('Cancelar a assinatura? O acesso continua até o fim do período já liberado.') && run(async () => { await rpc('cancel_subscription', { p_tenant: t.tenant.id }); await t.reload(); }, 'Cancelamento registrado.')}>Cancelar assinatura</Button>}
         </div>
       </Card>
+
+      <ContractsCard />
 
       <Card className="space-y-3" data-tour="assinatura-troca">
         <p className="font-semibold">Trocar de plano</p>

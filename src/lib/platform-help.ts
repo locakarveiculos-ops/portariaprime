@@ -2,6 +2,8 @@ export const PLATFORM_SECTIONS = [
   ['overview', 'Visão geral'], ['tenants', 'Condomínios'], ['trials', 'Testes grátis'],
   ['plans', 'Planos'], ['orders', 'Pedidos e incidentes'], ['users', 'Usuários'],
   ['team', 'Equipe global'], ['notifications', 'Notificações'], ['contacts', 'Contatos e suporte'],
+  ['support', 'Suporte'], ['organizations', 'Administradoras'], ['quotes', 'Orçamentos e propostas'],
+  ['costs', 'Custos e viabilidade'], ['legal', 'Jurídico e contratos'],
   ['reports', 'Relatórios'], ['audit', 'Auditoria'], ['settings', 'Configurações'], ['help', 'Ajuda'],
 ] as const;
 export type PlatformSection = typeof PLATFORM_SECTIONS[number][0];
@@ -15,6 +17,11 @@ export const PLATFORM_HELP: { section: PlatformSection; title: string; text: str
   { section: 'team', title: 'Equipe global', text: 'owner administra; support atende; finance acompanha financeiro; auditor consulta. O servidor determina permissões efetivas e protege o último proprietário. Nunca compartilhe contas.' },
   { section: 'notifications', title: 'Repetir aviso terminal', text: 'Somente falhas terminais elegíveis podem voltar à fila. Solicitação aceita não significa entrega. Não repita avisos em processamento.' },
   { section: 'contacts', title: 'Atender contatos e suporte', text: 'Acompanhe solicitações pelas situações de atendimento. O acesso global não concede acesso a fotos, assinaturas ou conteúdo de encomendas dos clientes.' },
+  { section: 'support', title: 'Chamados com protocolo', text: 'Assuma, responda e mude o status. Nota interna não aparece ao cliente. Nunca peça senha. Prazo de primeira resposta só aparece ao cliente depois de aprovado em Configurações do suporte.' },
+  { section: 'organizations', title: 'Administradoras e carteiras', text: 'Uma administradora só vê um condomínio depois que o síndico aprova o vínculo; a plataforma pode criar vínculo com justificativa auditada. A carteira mostra apenas agregados.' },
+  { section: 'quotes', title: 'Orçamentos e propostas', text: 'A sugestão de preço respeita o piso de custo e a margem; sem custos completos, pede revisão humana. Proposta enviada não muda; envio só por ação sua. Proposta em análise não é desconto aprovado.' },
+  { section: 'costs', title: 'Custos e viabilidade', text: 'Preencha cada custo com fonte. Custo ausente não é zero: a viabilidade fica como não validada e preços em rascunho não podem ser ativados.' },
+  { section: 'legal', title: 'Dados da contratada e documentos', text: 'Preencha os dados legais reais; documento só é publicado depois de aprovado, sem campos pendentes. Publicado é imutável; nova versão exige novo aceite quando houver mudança material.' },
   { section: 'reports', title: 'Filtrar e exportar', text: 'Aplique busca, situação, ID do condomínio e período UTC inclusivo. Cada página tem até 25 registros. CSV exporta somente a página carregada e autorizada. Proteja o arquivo.' },
   { section: 'audit', title: 'Auditoria de alterações', text: 'Consulte ator, ação, alvo e horário. Erros de permissão não são listas vazias. Não insira segredos nem dados de encomendas nas justificativas.' },
   { section: 'settings', title: 'Autenticação em dois fatores', text: 'Use o QR privado no aplicativo autenticador; confirme o código para ativar. Cancelar remove somente o cadastro pendente. Valide um fator existente para elevar a sessão.' },

@@ -20,6 +20,10 @@ export interface MessageCtx {
     picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string; pdf_path?: string | null;
   } | null;
   support?: { ticket_id?: string; protocol?: string } | null;
+  contract?: {
+    id?: string; document_version?: string; document_sha256?: string; accepted_at?: string; plan_name?: string; cycle?: string;
+    amount_cents?: number; representative_name?: string; pdf_path?: string | null; pdf_sha256?: string | null;
+  } | null;
 }
 
 const fmt = (iso: string | null | undefined, tz: string) =>
@@ -139,6 +143,19 @@ Equipe Portaria Prime`,
           + 'Proposta sujeita às condições descritas no link.',
         lines: [['Protocolo', payload.protocol], ['Solicitação', q.protocol]],
         cta: ['Ver proposta', url],
+      };
+    }
+    case 'contract_copy': {
+      const c = ctx.contract || {};
+      const when = fmt(c.accepted_at, ctx.timezone);
+      return {
+        subject: `Cópia do contrato aceito — Portaria Prime — ${ctx.tenant_name}`,
+        whatsapp: `*Portaria Prime*\nCópia do contrato aceito por ${wa(ctx.tenant_name)} em ${when} (versão ${wa(c.document_version)}).\nO PDF está disponível em Configurações › Plano e assinatura: ${billingLink}`,
+        intro: `Segue em anexo a cópia do contrato aceito eletronicamente para ${ctx.tenant_name}. O aceite não é pagamento: a cobrança segue por link a cada ciclo.`,
+        lines: [['Versão do contrato', c.document_version], ['Aceito em', when],
+          ['Plano', c.plan_name ? `${c.plan_name} · ${CYCLE[c.cycle || ''] || c.cycle || ''}` : null],
+          ['Valor por ciclo', c.amount_cents ? brl(c.amount_cents) : null], ['SHA-256 do documento', c.document_sha256]],
+        cta: ['Ver plano e assinatura', billingLink],
       };
     }
     default:
