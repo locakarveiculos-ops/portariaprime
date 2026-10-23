@@ -24,7 +24,9 @@ export const POST = handler(async (request) => {
   if (!isUuid(tenantId)) throw new HttpError(400, 'Condomínio inválido.');
   const { client, user } = await requireUser(request);
 
-  const { data: order, error } = await client.rpc('prepare_checkout', { p_tenant: tenantId });
+  // Clientes com proposta vinculada usam prepare_proposal_billing; clientes comuns
+  // preservam prepare_checkout idêntico (a RPC faz o chaveamento no servidor).
+  const { data: order, error } = await client.rpc('prepare_proposal_billing', { p_tenant: tenantId });
   if (error) rpcError(error);
 
   // Configuração ausente não deve consumir uma tentativa externa.

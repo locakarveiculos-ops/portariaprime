@@ -187,5 +187,128 @@ test('nenhum acesso direto por anon/authenticated; limite por IP; retenção do 
     const list = await db.rpc(owner, 'quote_list', {});
     assert.equal(list.total, 3);
     assert.doesNotMatch(JSON.stringify(list), /bia@x\.invalid|ip_hash/);
+
+    // quote_sent: autorização sem tenant (destinatário prospect resolvido por quote_requests).
+    const [job] = await db.sql("insert into notification_jobs(tenant_id,event,channel,recipient,ref_id) values(null,'quote_sent','email','bia@x.invalid',$1) returning id", [`${q.id}:test`]);
+    assert.equal((await db.service('select public.notification_is_authorized($1) r', [job.id]))[0].r, true);
+    // Destinatário diferente não é autorizado (não é o e-mail da solicitação).
+    await db.sql("insert into notification_jobs(tenant_id,event,channel,recipient,ref_id) values(null,'quote_sent','email','outra@x.invalid',$1)", [`${q.id}:test2`]);
+    const fakes = await db.sql("select id from notification_jobs where recipient = 'outra@x.invalid'");
+    assert.equal(fakes.length, 0, 'descartado pelo trigger guard');
+  } finally { await db.raw.close(); }
+});
+
+test('ponte proposta -> contrato verificado -> billing: snapshot idêntico, preserva teste e assinatura', async () => {
+  const { db, owner, sindico, cost, submit } = await setup();
+  try {
+    for (const [k, v] of Object.entries(COSTS)) await cost(k, v);
+    // Condomínio existente com assinatura em teste.
+    const T = (await db.rpc(sindico, 'provision_tenant', { p_request_id: crypto.randomUUID(), p_name: 'Cond Ponte', p_slug: 'cond-ponte',
+      p_document: '11444777000161', p_timezone: 'America/Sao_Paulo', p_plan_code: 'prime', p_cycle: 'monthly' })).tenant_id;
+    const baseSub = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
+    assert.equal(baseSub.status, 'trialing');
+
+    // Orçamento e proposta aceita de R$ 130,00 no Profissional.
+    const q = await submit({ contact_name: 'Gestor', email: 'sindico@com.invalid', org_kind: 'condominio',
+      org_name: 'Cond Ponte', units: 300, concierges: 2, budget_cents: 14000, budget_cycle: 'monthly' });
+    const draft = await db.rpc(owner, 'quote_action', { p_action: 'proposal_draft', p_quote: q.id, p_reason: 'Proposta negociada',
+      p_data: JSON.stringify({ plan: 'profissional', cycle: 'monthly', amount_cents: 13000, valid_days: 30, conditions: 'Condição especial 12 meses.' }) });
+    await db.rpc(owner, 'quote_proposal_send', { p_proposal: draft.data.proposal_id, p_reason: 'Envio autorizado' });
+    const [{ payload: pJob }] = await db.sql("select payload from notification_jobs where event='quote_sent'");
+    const token = pJob.token;
+    await db.rpc(null, 'proposal_accept', { p_token: token });
+
+    // Publicação legal necessária para aceite do contrato SaaS.
+    const legalDoc = { razao_social: 'Portaria Prime Testes Ltda', cnpj: '11222333000181', endereco: 'Rua Central, 1',
+      email_contato: 'contato@prime.invalid', canal_privacidade: 'dpo@prime.invalid', encarregado: 'DPO Teste',
+      foro: 'São Paulo', representante: 'Diretor Teste', horario_suporte: '9h às 18h', disponibilidade: '99%' };
+    await db.rpc(owner, 'platform_legal_entity_set', { p: JSON.stringify(legalDoc) });
+    const d = await db.rpc(owner, 'platform_legal_doc_save', { p_id: null, p_kind: 'contrato_saas', p_version: '1.0',
+      p_content: '# Contrato SaaS\nPartes: {{RAZAO_SOCIAL}} / {{CNPJ}}.\nForo: {{FORO}}.', p_summary: null, p_change_note: null, p_material: true });
+    for (const to of ['review', 'approved', 'published']) await db.rpc(owner, 'platform_legal_doc_transition', { p_id: d.id, p_to: to, p_note: null });
+    const pub = await db.rpc(null, 'legal_document_current', { p_kind: 'contrato_saas' });
+
+    const quote = await db.rpc(sindico, 'contract_quote', { p_tenant: T, p_plan_code: null, p_cycle: null, p_proposal: token });
+    assert.equal(quote.terms.amount_cents, 13000);
+    assert.equal(quote.terms.source, 'proposal');
+
+    const accept = (actor, extra = {}) => db.service(
+      `select public.contract_accept($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17) as r`,
+      [actor, T, pub.sha256, true, null, null, token, 'Cond Ponte', '11444777000161',
+       'Gestor', '11122233344', 'sindico@com.invalid', '11999998888', 'Síndico', 'Eleito em assembleia',
+       extra.ip || '203.0.113.1', extra.ua || 'NodeTest']
+    ).then((rows) => rows[0].r);
+
+    const a = await accept(sindico);
+    assert.equal(a.status, 'pending_verification');
+
+    // Aceite pendente de verificação NÃO vincula cobrança nem cria pedido.
+    await assert.rejects(db.rpc(sindico, 'prepare_proposal_billing', { p_tenant: T }), /mês grátis vai até/);
+    assert.equal((await db.sql('select count(*)::int n from billing_orders where tenant_id = $1', [T]))[0].n, 0);
+    assert.equal((await db.sql('select count(*)::int n from app.proposal_billing_terms'))[0].n, 0, 'sem vínculo antes da verificação');
+
+    // Verificação do e-mail do representante.
+    await db.service('select public.contract_set_code($1,$2,$3)', [sindico, a.id, '654321']);
+    await db.service('select public.contract_verify($1,$2,$3)', [sindico, a.id, '654321']);
+    const [{ status: cStatus }] = await db.sql('select status from contract_acceptances where id = $1', [a.id]);
+    assert.equal(cStatus, 'active');
+
+    // Durante o mês grátis: prepare_proposal_billing respeita a regra da Portaria Prime.
+    await assert.rejects(db.rpc(sindico, 'prepare_proposal_billing', { p_tenant: T }), /mês grátis vai até/);
+    assert.equal((await db.sql('select count(*)::int n from billing_orders where tenant_id = $1', [T]))[0].n, 0);
+    // Assinatura continua trialing sem alteração.
+    const subDuringTrial = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
+    assert.equal(subDuringTrial.status, 'trialing');
+    assert.equal(subDuringTrial.price_cents_snapshot, 34900);
+
+    // Fim do mês grátis: agora a cobrança é permitida com o snapshot da proposta.
+    db.setNow('2026-11-25T12:00:00Z');
+    const order = await db.rpc(sindico, 'prepare_proposal_billing', { p_tenant: T });
+    assert.equal(order.amount_cents, 13000);
+    assert.equal(order.description.includes('Profissional'), true);
+
+    const [dbOrder] = await db.sql('select * from billing_orders where id = $1', [order.order_id]);
+    assert.equal(dbOrder.amount_cents, 13000);
+    assert.equal(dbOrder.snapshot.amount_cents, 13000);
+    assert.equal(dbOrder.snapshot.plan_code, 'profissional');
+    assert.equal(dbOrder.snapshot.limits.max_units, 400);
+    assert.match(dbOrder.snapshot.content_sha256, /^[0-9a-f]{64}$/);
+    // Divergência (valor, snapshot ou proposta de outro contrato) é rejeitada por qualquer caminho.
+    await assert.rejects(db.service('update billing_orders set amount_cents = 1000 where id = $1', [order.order_id]), /Divergência/);
+    await assert.rejects(db.service("update billing_orders set snapshot = snapshot || '{\"limits\":{\"max_units\":9999}}'::jsonb where id = $1", [order.order_id]), /Divergência/);
+    // Repetir o checkout devolve o mesmo pedido (idempotente), sem duplicar.
+    assert.equal((await db.rpc(sindico, 'prepare_proposal_billing', { p_tenant: T })).order_id, order.order_id);
+    assert.equal((await db.sql('select count(*)::int n from billing_orders where tenant_id = $1', [T]))[0].n, 1);
+    // Cliente sem proposta mantém o prepare_checkout original (catálogo).
+    const other = await db.createUser('plain@com.invalid');
+    const O = (await db.rpc(other, 'provision_tenant', { p_request_id: crypto.randomUUID(), p_name: 'Plain', p_slug: 'plain-cond',
+      p_document: '11222333000181', p_timezone: 'America/Sao_Paulo', p_plan_code: 'essencial', p_cycle: 'monthly' })).tenant_id;
+    await assert.rejects(db.rpc(other, 'prepare_proposal_billing', { p_tenant: O }), /mês grátis vai até/);
+    await assert.rejects(db.rpc(other, 'prepare_proposal_billing', { p_tenant: T }), /faturamento/, 'sem permissão no outro condomínio');
+    // Preço gerado para a proposta é privado (active = false no catálogo público).
+    const [privPrice] = await db.sql('select * from plan_prices where id = $1', [dbOrder.price_id]);
+    assert.equal(privPrice.active, false);
+
+    // O serviço ainda NÃO mudou antes do pagamento verificado.
+    const subBeforePay = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
+    assert.equal(subBeforePay.status, 'pending_payment');
+    assert.equal(subBeforePay.price_cents_snapshot, 34900, 'ainda snapshot antigo');
+
+    // Pagamento verificado aplica a proposta, congela limites e preserva período anterior.
+    const paid = await db.service(
+      'select public.apply_verified_payment($1,$2,$3,$4,$5,$6,$7,$8) as r',
+      [order.order_nsu, 'trans-ponte-1', 'slug-ponte', 13000, 13000, 1, 'pix', 'https://receipt.invalid']
+    ).then((rows) => rows[0].r);
+    assert.equal(paid.result, 'activated');
+
+    const subAfterPay = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
+    assert.equal(subAfterPay.status, 'active');
+    assert.equal(subAfterPay.price_cents_snapshot, 13000);
+    assert.equal(subAfterPay.previous_price_cents, null, 'teste gratuito não é período pago anterior');
+    assert.equal(subAfterPay.trial_ends_at.toISOString(), baseSub.trial_ends_at.toISOString(), 'mês grátis preservado');
+
+    // Limites refletem a proposta através de app.entitlements.
+    const [ent] = await db.sql('select * from app.entitlements($1)', [T]);
+    assert.equal(ent.max_units, 400);
   } finally { await db.raw.close(); }
 });

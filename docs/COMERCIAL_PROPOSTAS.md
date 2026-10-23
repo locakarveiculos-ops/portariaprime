@@ -103,6 +103,24 @@ conditions, org_name, org_kind, units, condos_count, content_sha256`.
 Erros: `P0002` token inválido/inexistente; `P0001` proposta vencida (enviada e `valid_until` ≤ agora) ou retirada.
 Proposta aceita continua válida após o vencimento. Use sempre `amount_cents`/`limits` daqui, nunca do navegador.
 
+## Ponte proposta → contrato → cobrança (`20261023000600_proposal_billing.sql`)
+
+- `/api/billing/checkout` chama `public.prepare_proposal_billing(p_tenant)` (só `p_tenant`; nada de preço/plano/token
+  do navegador). Sem contrato ativo de proposta, delega a `prepare_checkout` sem alteração (clientes de catálogo
+  mantêm o mesmo contrato da API).
+- Com contrato `active` (e-mail do representante verificado) de origem `proposal`: confere que plano, ciclo,
+  valor, limites e validade do contrato são **idênticos** à proposta aceita e que o hash do conteúdo confere.
+  Qualquer divergência bloqueia a cobrança (`P0001`). Aceite pendente de verificação não vincula nada.
+- Primeiro checkout cria um preço **privado** (`plan_prices.active=false`, invisível no catálogo) e grava o vínculo
+  imutável em `app.proposal_billing_terms` (contrato, proposta, preço, limites, hash). Uma proposta vincula a um único
+  contrato/condomínio.
+- O mês grátis e as demais regras de `prepare_checkout` (cancelada, janela de renovação) continuam valendo.
+- O aceite e o pedido **não** mudam a assinatura: plano, preço e limites só mudam em `apply_verified_payment`
+  (pagamento confirmado no provedor). A partir daí `app.entitlements` usa os limites congelados da proposta
+  pelo preço efetivo; período anterior pago continua com os limites anteriores.
+- Trigger `guard_proposal_order` em `billing_orders`: pedido com preço de proposta precisa ter valor, ciclo, plano,
+  limites, proposta, contrato e hash iguais ao vínculo, em qualquer caminho de escrita.
+
 ## Retenção do anexo
 
 `attachment_delete_after` = envio + 180 dias. Limpeza (não agendada ainda), chamável pelo worker com service role:
