@@ -50,7 +50,8 @@ declare src text;
 begin
   select pg_get_functiondef('app.notification_allowed(public.notification_jobs)'::regprocedure) into src;
   if src !~ 'notification_allowed_ext' then
-    src := regexp_replace(src, '\n  return false;\nend', E'\n  if j.event in (''package_reminder'',''quote_sent'',''contract_copy'',''support_reply'') then return app.notification_allowed_ext(j); end if;\n  return false;\nend');
+    -- Tolerante a CRLF (checkout com autocrlf) e a variação de espaços.
+    src := regexp_replace(src, '\r?\n\s*return false;\s*\r?\nend',E'\n  if j.event in (''package_reminder'',''quote_sent'',''contract_copy'',''support_reply'') then return app.notification_allowed_ext(j); end if;\n  return false;\nend');
     if src !~ 'notification_allowed_ext' then raise exception 'Não foi possível encadear notification_allowed.'; end if;
     execute src;
   end if;
