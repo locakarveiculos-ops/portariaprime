@@ -97,12 +97,12 @@ export function RequestAccessPage({ slug }: { slug: string }) {
   useEffect(() => { if (session) void load(); }, [session, slug]); // eslint-disable-line react-hooks/exhaustive-deps
   useEffect(() => {
     // Aprovado: entra no condomínio.
-    if (req?.status === 'approved') { void refresh().then(() => navigate(`/c/${slug}/morador`, true)); }
+    if (req?.status === 'approved') { void refresh().then(() => navigate(`/c/${slug}/inicio`, true)); }
   }, [req?.status]); // eslint-disable-line react-hooks/exhaustive-deps
   if (portal === undefined || loading || (session && req === undefined)) return <Spinner />;
   if (!portal || portal.status !== 'active') return <PortalNotFound error={perr} />;
   if (!session) { navigate(`/entrar?next=${encodeURIComponent(`/c/${slug}/solicitar`)}&portal=${slug}`, true); return <Spinner />; }
-  if (ctx?.tenants.some((t) => t.slug === slug && t.role === 'morador')) { navigate(`/c/${slug}/morador`, true); return <Spinner />; }
+  if (ctx?.tenants.some((t) => t.slug === slug && t.role === 'morador')) { navigate(`/c/${slug}/inicio`, true); return <Spinner />; }
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,15 +114,20 @@ export function RequestAccessPage({ slug }: { slug: string }) {
   };
   return (
     <PortalShell portal={portal}>
-      <h2 className="text-xl font-semibold">Cadastro de morador</h2>
+      <h2 className="text-xl font-semibold">{req?.status === 'pending' ? 'Cadastro aguardando aprovação' : 'Cadastro de morador'}</h2>
       {req?.status === 'pending' ? (
-        <div className="mt-4 space-y-3">
-          <Alert tone="info">Seu cadastro está aguardando aprovação da administração. Unidade informada: <strong>{req.unit_text}</strong>.</Alert>
-          <p className="text-sm text-muted">Você será avisado por e-mail. Enquanto isso, nenhuma informação do condomínio é exibida.</p>
+        <div className="mt-4 space-y-3 max-w-md">
+          <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm rounded-xl bg-surface-2 p-3">
+            <dt className="text-muted">Unidade informada</dt><dd className="font-medium">{req.unit_text}</dd>
+            <dt className="text-muted">Enviado em</dt><dd>{new Date(req.created_at).toLocaleDateString('pt-BR')}</dd>
+          </dl>
+          <p className="text-sm"><strong>Próximo passo:</strong> a administração confere seus dados. Você recebe um e-mail com a decisão. Enquanto isso, nenhuma informação do condomínio é exibida.</p>
+          <p className="text-sm text-muted">Demorou? Fale com a portaria ou a administração do condomínio.</p>
           <Button variant="secondary" onClick={load}>Verificar novamente</Button>
         </div>
       ) : (
         <form onSubmit={submit} className="mt-4 space-y-4 max-w-md">
+          {req?.status === 'revoked' && <Alert tone="warning">Seu acesso a este condomínio foi encerrado pela administração (por exemplo, mudança de unidade). Se ainda mora aqui, envie um novo pedido.</Alert>}
           {req?.status === 'rejected' && <Alert tone="warning">Sua solicitação anterior não foi aprovada{req.reason ? `: ${req.reason}` : ''}. Revise os dados ou fale com a administração.</Alert>}
           <p className="text-sm text-muted">Conectado como <strong>{ctx?.email}</strong>. A administração confere os dados antes de liberar o acesso.</p>
           <Field label="Nome completo"><Input required minLength={2} maxLength={120} autoComplete="name" value={f.full_name} onChange={(e) => setF({ ...f, full_name: e.target.value })} /></Field>

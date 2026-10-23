@@ -87,5 +87,8 @@ test('templates escapam HTML e removem formatação injetada no WhatsApp', () =>
   assert.ok(!html.includes('<script>'));
   assert.ok(html.includes('&lt;script&gt;'));
   assert.ok(!m.whatsapp.includes('*Correios*'));
-  assert.ok(m.whatsapp.includes('https://app.test/c/a/morador'));
+  assert.ok(m.whatsapp.includes('https://app.test/c/a/inicio'));
+  // Com a encomenda identificada, o link abre o detalhe atual (QR se aguardando, comprovante se retirada).
+  const withId = tpl.render('package_received', { ...ctx, package: { ...ctx.package, id: '11111111-2222-4333-8444-555555555555' } }, {}, 'https://app.test');
+  assert.ok(withId.whatsapp.includes('https://app.test/c/a/encomenda?p=11111111-2222-4333-8444-555555555555'));
 });

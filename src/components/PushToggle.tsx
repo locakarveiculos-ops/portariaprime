@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import { Bell, BellOff } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { useTenant } from '../lib/tenant';
@@ -14,22 +14,24 @@ function b64ToBytes(b64: string) {
 }
 
 /**
- * Web Push real: inscrição no PushManager com VAPID e registro no servidor.
- * Só mostra "ativado" com inscrição existente neste dispositivo.
+ * Estado real deste dispositivo para este condomínio:
+ * `on` só com permissão concedida E inscrição registrada no servidor para o usuário.
  */
-export function PushToggle() {
+export type PushState = 'checking' | 'unsupported' | 'unconfigured' | 'denied' | 'off' | 'on';
+
+export function usePushDevice() {
   const t = useTenant();
   const { ctx } = useSession();
   const userId = ctx?.user_id;
-  const [verificationError, setVerificationError] = useState('');
   const supported = typeof window !== 'undefined' && 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   const [sub, setSub] = useState<PushSubscription | null | undefined>(undefined);
+  const [perm, setPerm] = useState(() => (supported ? Notification.permission : 'default'));
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
 
   useEffect(() => {
     let active = true;
-    setSub(undefined);
-    setVerificationError('');
+    setSub(undefined); setError('');
     if (!supported || !userId) { setSub(null); return; }
     (async () => {
       try {
@@ -37,64 +39,63 @@ export function PushToggle() {
         const current = await registration?.pushManager.getSubscription();
         const registered = current && await hasPushRegistration(supabase, t.tenant.id, userId, current.endpoint);
         if (active) setSub(registered ? current : null);
-      } catch (error: any) {
-        if (active) { setVerificationError(error.message); setSub(null); }
+      } catch (e: any) {
+        if (active) { setError(e.message); setSub(null); }
       }
     })();
-    return () => { active = false; };
+    const onFocus = () => setPerm(Notification.permission);
+    if (supported) addEventListener('focus', onFocus);
+    return () => { active = false; if (supported) removeEventListener('focus', onFocus); };
   }, [supported, userId, t.tenant.id]);
 
-  if (!supported) return <Alert tone="info">Este navegador não recebe notificações push. Os avisos aparecem em “Avisos” e por e-mail. No iPhone, instale o app na tela de início (iOS 16.4+).</Alert>;
-  if (!VAPID) return null; // push não configurado neste ambiente
-  if (sub === undefined) return null;
-
-  const enable = async () => {
-    setBusy(true);
+  const enable = useCallback(async () => {
+    setBusy(true); setError('');
     try {
-      if (Notification.permission === 'denied') throw new Error('Notificações bloqueadas neste navegador. Libere em Configurações do site e tente de novo.');
-      const perm = await Notification.requestPermission();
-      if (perm !== 'granted') throw new Error('Permissão de notificação negada. Você pode ativá-la nas configurações do navegador.');
+      if (!VAPID || !userId) throw new Error('Notificações não estão disponíveis neste ambiente.');
+      if (Notification.permission === 'denied') throw new Error('As notificações estão bloqueadas neste navegador.');
+      const p = await Notification.requestPermission();
+      setPerm(p);
+      if (p !== 'granted') throw new Error('Você não permitiu as notificações. Pode mudar isso depois nas configurações do navegador.');
       const reg = await navigator.serviceWorker.getRegistration();
-      if (!reg?.active) throw new Error('Aplicativo ainda não está pronto para notificações. Recarregue e tente novamente.');
+      if (!reg?.active) throw new Error('O aplicativo ainda está carregando. Recarregue a página e tente de novo.');
       const s = await reg.pushManager.getSubscription() || await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: b64ToBytes(VAPID) });
       const j = s.toJSON();
-      if (!userId) throw new Error('Sessão inválida.');
-      const { error } = await supabase.rpc('register_push_subscription', {
+      const { error: e } = await supabase.rpc('register_push_subscription', {
         p_tenant: t.tenant.id, p_endpoint: j.endpoint, p_p256dh: j.keys!.p256dh, p_auth: j.keys!.auth,
         p_user_agent: navigator.userAgent.slice(0, 200),
       });
-      if (error || !await hasPushRegistration(supabase, t.tenant.id, userId, s.endpoint)) {
-        throw new Error('Não foi possível registrar este dispositivo.');
-      }
-      setVerificationError('');
+      if (e || !await hasPushRegistration(supabase, t.tenant.id, userId, s.endpoint)) throw new Error('Não foi possível registrar este dispositivo. Tente novamente.');
       setSub(s);
       toast.success('Notificações ativadas neste dispositivo.');
+      return true;
     } catch (e: any) {
-      toast.error(e.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+      setError(e.message);
+      return false;
+    } finally { setBusy(false); }
+  }, [t.tenant.id, userId]);
 
-  const disable = async () => {
+  const disable = useCallback(async () => {
     setBusy(true);
     try {
-      if (sub && userId) {
-        await removePushRegistration(supabase, t.tenant.id, userId, sub.endpoint);
-        // A RLS não enxerga vínculos de outro usuário neste navegador.
-        // Remove só o vínculo atual, sem cancelar a inscrição compartilhada do PushManager.
-      }
+      // Remove só o vínculo deste usuário; a inscrição do navegador pode servir a outra conta.
+      if (sub && userId) await removePushRegistration(supabase, t.tenant.id, userId, sub.endpoint);
       setSub(null);
-    } catch (error: any) {
-      toast.error(error.message);
-    } finally {
-      setBusy(false);
-    }
-  };
+    } catch (e: any) { setError(e.message); } finally { setBusy(false); }
+  }, [sub, userId, t.tenant.id]);
 
+  const state: PushState = !supported ? 'unsupported' : !VAPID ? 'unconfigured' : sub === undefined ? 'checking'
+    : sub ? 'on' : perm === 'denied' ? 'denied' : 'off';
+  return { state, busy, error, enable, disable, permission: perm };
+}
+
+/** Botão compacto (área da equipe). */
+export function PushToggle() {
+  const { state, busy, error, enable, disable } = usePushDevice();
+  if (state === 'unsupported') return <Alert tone="info">Este navegador não recebe notificações push. Os avisos aparecem no sino e por e-mail. No iPhone, instale o app na tela de início (iOS 16.4+).</Alert>;
+  if (state === 'unconfigured' || state === 'checking') return null;
   return <div className="space-y-2">
-    {verificationError && <Alert tone="warning">{verificationError}</Alert>}
-    {sub ? (
+    {error && <Alert tone="warning">{error}</Alert>}
+    {state === 'on' ? (
       <Button variant="ghost" onClick={disable} loading={busy}><BellOff className="w-4 h-4" /> Desativar avisos deste condomínio neste dispositivo</Button>
     ) : (
       <Button variant="secondary" onClick={enable} loading={busy}><Bell className="w-4 h-4" /> Ativar avisos deste condomínio neste dispositivo</Button>

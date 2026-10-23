@@ -3,7 +3,7 @@ import { Bell, CheckCheck } from 'lucide-react';
 import { supabase } from '../lib/supabase';
 import { rpc } from '../lib/api';
 import { navigate, onLink } from '../lib/router';
-import { useRealtime, useTenant } from '../lib/tenant';
+import { useRealtime, useRefreshWhileVisible, useTenant } from '../lib/tenant';
 import { dateTime } from '../lib/format';
 import { Button, Spinner } from './ui';
 
@@ -15,7 +15,7 @@ export function notifTarget(base: string, n: Notif) {
   if (n.kind === 'ops_alert') return `${base}/configuracoes?m=integracoes`;
   if (n.kind === 'trial_reminder') return `${base}/configuracoes?m=plano`;
   if (n.kind === 'package_picked_up' && n.package_id) return `${base}/comprovante?p=${n.package_id}`;
-  if (n.kind === 'package_received') return `${base}/morador`;
+  if (n.kind === 'package_received' && n.package_id) return `${base}/encomenda?p=${n.package_id}`;
   return `${base}/avisos`;
 }
 
@@ -30,7 +30,7 @@ export function useNotifications(onlyUnread = false) {
   }, [t.tenant.id, onlyUnread]);
   useEffect(() => { void load(); }, [load]);
   useRealtime('notifications', t.tenant.id, load);
-  useEffect(() => { const f = () => document.visibilityState === 'visible' && void load(); document.addEventListener('visibilitychange', f); return () => document.removeEventListener('visibilitychange', f); }, [load]);
+  useRefreshWhileVisible(load, 60000);
   const markRead = async (id?: string) => {
     let q = supabase.from('notifications').update({ read_at: new Date().toISOString() }).eq('tenant_id', t.tenant.id).is('read_at', null);
     if (id) q = q.eq('id', id);

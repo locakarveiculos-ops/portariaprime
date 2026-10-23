@@ -14,13 +14,20 @@ const SignupPage = lazy(() => auth().then(m => ({ default: m.SignupPage })));
 const RecoverPage = lazy(() => auth().then(m => ({ default: m.RecoverPage })));
 const NewPasswordPage = lazy(() => auth().then(m => ({ default: m.NewPasswordPage })));
 const InvitePage = lazy(() => auth().then(m => ({ default: m.InvitePage })));
+const resident = () => import('./pages/resident/ResidentPages');
+const ResidentShell = lazy(() => import('./pages/resident/ResidentShell').then(m => ({ default: m.ResidentShell })));
+const RInicio = lazy(() => resident().then(m => ({ default: m.InicioPage })));
+const RHistorico = lazy(() => resident().then(m => ({ default: m.HistoricoPage })));
+const RNotificacoes = lazy(() => resident().then(m => ({ default: m.NotificacoesPage })));
+const REncomenda = lazy(() => resident().then(m => ({ default: m.EncomendaPage })));
+const RComprovante = lazy(() => resident().then(m => ({ default: m.ComprovanteRedirect })));
+const RConta = lazy(() => import('./pages/resident/ContaPage').then(m => ({ default: m.ContaPage })));
 const TenantShell = lazy(() => import('./pages/tenant/TenantShell').then(m => ({ default: m.TenantShell })));
 
 const Onboarding = lazy(() => import('./pages/Onboarding').then(m => ({ default: m.OnboardingPage })));
 const Portaria = lazy(() => import('./pages/tenant/portaria/PortariaPage').then(m => ({ default: m.PortariaPage })));
 const AppInfo = lazy(() => import('./pages/tenant/AppPage').then(m => ({ default: m.AppPage })));
 const Comprovante = lazy(() => import('./pages/tenant/Receipt').then(m => ({ default: m.ReceiptPage })));
-const Morador = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.MoradorPage })));
 const Avisos = lazy(() => import('./pages/tenant/MoradorPage').then(m => ({ default: m.AvisosPage })));
 const Painel = lazy(() => import('./pages/tenant/PainelPage').then(m => ({ default: m.PainelPage })));
 const Relatorios = lazy(() => import('./pages/tenant/PainelPage').then(m => ({ default: m.RelatoriosPage })));
@@ -33,6 +40,8 @@ const Ajuda = lazy(() => import('./pages/HelpPage'));
 const Landing = lazy(() => import('./pages/LandingPage'));
 const Portal = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.PortalPage })));
 const RequestAccess = lazy(() => import('./pages/PortalPage').then(m => ({ default: m.RequestAccessPage })));
+
+const RESIDENT_AREAS = new Set(['inicio', 'historico', 'notificacoes', 'conta', 'encomenda', 'comprovante', 'morador', 'avisos']);
 
 function Redirect({ to }: { to: string }) {
   useEffect(() => { navigate(to, true); }, [to]);
@@ -60,7 +69,10 @@ function Routes() {
   if (path === '/nova-senha') return <NewPasswordPage />;
   if (path === '/convite') return <InvitePage />;
   // Portal do condomínio: página pública com a marca dele (sem sessão não há dados internos).
-  if (route && !session) return route.area ? <Redirect to={`/c/${route.slug}`} /> : <Portal slug={route.slug} />;
+  // Sem sessão: link profundo do morador (aviso/e-mail/WhatsApp) vai ao login com a marca do portal e volta ao destino.
+  if (route && !session) return route.area && RESIDENT_AREAS.has(route.area)
+    ? <Redirect to={`/entrar?next=${encodeURIComponent(location.pathname + location.search)}&portal=${route.slug}`} />
+    : route.area ? <Redirect to={`/c/${route.slug}`} /> : <Portal slug={route.slug} />;
   if (route?.area === 'solicitar') return <RequestAccess slug={route.slug} />;
   if (!session) return <Redirect to={`/entrar?next=${encodeURIComponent(location.pathname + location.search)}`} />;
   if (error || !ctx) return <main className="max-w-lg mx-auto p-6 space-y-4"><Alert tone="danger">{error || 'Não foi possível carregar seus vínculos.'}</Alert><Button onClick={refresh}>Tentar novamente</Button><Button variant="ghost" onClick={signOut}>Sair</Button></main>;
@@ -81,8 +93,20 @@ function Routes() {
     const links = ctx.tenants.filter(t => t.slug === route.slug && t.tenant_status === 'active');
     const link = links.find(t => t.role === 'admin') || links.find(t => t.role === 'porteiro') || links[0];
     // Logado sem vínculo aqui: portal (pedir cadastro), nunca dados deste condomínio.
-    if (!link) return <Portal slug={route.slug} />;
-    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'morador' : link.role === 'admin' ? 'painel' : 'portaria'}`} />;
+    // Áreas do morador sem vínculo ativo: situação do cadastro (pendente, recusado, encerrado) ou pedido.
+    if (!link) return RESIDENT_AREAS.has(route.area || '') ? <RequestAccess slug={route.slug} /> : <Portal slug={route.slug} />;
+    if (!route.area) return <Redirect to={`/c/${route.slug}/${link.role === 'morador' ? 'inicio' : link.role === 'admin' ? 'painel' : 'portaria'}`} />;
+    // App do morador: navegação própria; rotas antigas (inclusive links de avisos já enviados) redirecionam.
+    if (link.role === 'morador') {
+      const old: Record<string, string> = { morador: 'inicio', avisos: 'notificacoes', aplicativo: 'conta#notificacoes', painel: 'inicio', portaria: 'inicio' };
+      if (old[route.area]) return <Redirect to={`/c/${route.slug}/${old[route.area]}`} />;
+      const pages: Record<string, React.ReactNode> = {
+        inicio: <RInicio />, historico: <RHistorico />, notificacoes: <RNotificacoes />, conta: <RConta />,
+        encomenda: <REncomenda />, comprovante: <RComprovante />, ajuda: <Ajuda />,
+      };
+      const rpage = pages[route.area] || <Alert tone="warning">Esta área não faz parte do app do morador. <a className="underline" href={`/c/${route.slug}/inicio`} onClick={onLink}>Ir para o início</a></Alert>;
+      return <TenantProvider key={link.tenant_id} link={link}><TourProvider><Suspense fallback={<Spinner />}><ResidentShell area={route.area}><Suspense fallback={<Spinner />}>{rpage}</Suspense></ResidentShell></Suspense></TourProvider></TenantProvider>;
+    }
     const admin = link.role === 'admin';
     const staff = admin || link.role === 'porteiro';
     const perm = (p: string) => admin && link.permissions.includes(p);
@@ -95,7 +119,6 @@ function Routes() {
     // Cada módulo valida a própria permissão (settings/team/billing).
     if (route.area === 'configuracoes' && (perm('settings') || perm('team') || perm('billing'))) page = <Config section={query('m')} />;
     if (route.area === 'assinatura') return <Redirect to={`/c/${route.slug}/configuracoes?m=plano`} />;
-    if (route.area === 'morador' && links.some(t => t.role === 'morador')) page = <Morador />;
     if (route.area === 'avisos') page = <Avisos />;
     if (route.area === 'aplicativo') page = <AppInfo />;
     if (route.area === 'ajuda') page = <Ajuda />;

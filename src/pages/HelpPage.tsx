@@ -15,7 +15,7 @@ import { ContactForm } from '../components/ContactForm';
 const RECOMMENDED: Record<string, string[]> = {
   admin: ['primeiros-passos', 'moradores-e-convites', 'receber-encomenda', 'relatorios'],
   porteiro: ['receber-encomenda', 'entregar-encomenda', 'excecoes', 'camera'],
-  morador: ['morador-retirar', 'notificacoes', 'comprovantes', 'seguranca-acessos'],
+  morador: ['morador-chegou', 'morador-retirar', 'morador-qr-venceu', 'morador-comprovante'],
 };
 
 export default function HelpPage() {
@@ -42,9 +42,12 @@ export default function HelpPage() {
   const article = mine.find((a) => a.slug === slug);
   const open = (s: string | null) => navigate(`${base}/ajuda${s ? `?artigo=${s}` : ''}`);
   const runTour = (id: string) => { const tour = TOURS.find((x) => x.id === id); if (tour) start(tour, base, ctx!.user_id, t.tenant.id); };
+  const resident = role === 'morador';
+  // Morador: dúvidas vão à portaria/administração do condomínio (Minha conta › Ajuda e suporte).
+  const openContact = () => (resident ? navigate(`${base}/conta#ajuda`) : setContact(true));
   const support = contact && <Modal title="Falar com o suporte" onClose={() => setContact(false)}><ContactForm context={`ajuda:${t.tenant.slug}`} /></Modal>;
 
-  if (article) return <>{<ArticleView a={article} onOpen={open} onTour={runTour} canTour={!!article.tour && tours.some((x) => x.id === article.tour)} onContact={() => setContact(true)} />}{support}</>;
+  if (article) return <>{<ArticleView a={article} onOpen={open} onTour={runTour} canTour={!!article.tour && tours.some((x) => x.id === article.tour)} onContact={openContact} resident={resident} />}{support}</>;
 
   const link = (a: Article) => (
     <a href={`${base}/ajuda?artigo=${a.slug}`} onClick={(e) => { e.preventDefault(); open(a.slug); }} className="block rounded-xl border border-line bg-surface p-3 hover:bg-surface-2 min-h-11">
@@ -56,18 +59,18 @@ export default function HelpPage() {
     <section className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h1 className="text-2xl font-semibold">Central de ajuda</h1><p className="text-muted text-sm mt-1">Passo a passo de cada tarefa, com tutorial dentro da tela real.</p></div>
-        <Button variant="secondary" onClick={() => setContact(true)}><LifeBuoy className="w-4 h-4" /> Falar com o suporte</Button>
+        <Button variant="secondary" onClick={openContact}><LifeBuoy className="w-4 h-4" /> {resident ? 'Contato da portaria' : 'Falar com o suporte'}</Button>
       </div>
       <div className="relative">
         <Search className="w-5 h-5 text-muted absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" aria-hidden />
-        <Input aria-label="Pesquisar na ajuda" className="pl-10 h-12 text-base" placeholder="Pesquise: pacote, apartamento, QR, pagamento…" value={q} onChange={(e) => setQ(e.target.value)} />
+        <Input aria-label="Pesquisar na ajuda" className="pl-10 h-12 text-base" placeholder={resident ? 'Pesquise: QR, comprovante, notificação…' : 'Pesquise: pacote, apartamento, QR, pagamento…'} value={q} onChange={(e) => setQ(e.target.value)} />
       </div>
 
       {q ? (
         <div className="space-y-2">
           <p className="text-sm text-muted" role="status">{found.length} resultado(s) para “{q}”.</p>
           {found.length === 0
-            ? <Alert>Nada encontrado. Tente outra palavra, como “encomenda”, “unidade” ou “retirada”, ou toque em “Falar com o suporte”.</Alert>
+            ? <Alert>Nada encontrado. Tente outra palavra, como “encomenda”, “unidade” ou “retirada”, ou toque em “{resident ? 'Contato da portaria' : 'Falar com o suporte'}”.</Alert>
             : <ul className="grid sm:grid-cols-2 gap-2">{found.map((a) => <li key={a.slug}>{link(a)}</li>)}</ul>}
         </div>
       ) : (
@@ -127,7 +130,7 @@ export default function HelpPage() {
             </Card>
           )}
 
-          <InstallCard />
+          {!resident && <InstallCard />}
         </>
       )}
       {support}
@@ -135,7 +138,7 @@ export default function HelpPage() {
   );
 }
 
-function ArticleView({ a, onOpen, onTour, canTour, onContact }: { a: Article; onOpen: (s: string | null) => void; onTour: (id: string) => void; canTour: boolean; onContact: () => void }) {
+function ArticleView({ a, onOpen, onTour, canTour, onContact, resident }: { a: Article; onOpen: (s: string | null) => void; onTour: (id: string) => void; canTour: boolean; onContact: () => void; resident: boolean }) {
   const shot = a.screen ? SCREENS[a.screen] : null;
   const [copied, setCopied] = useState(false);
   const related = a.next.map((s) => ARTICLES.find((x) => x.slug === s)).filter(Boolean) as Article[];
@@ -148,19 +151,19 @@ function ArticleView({ a, onOpen, onTour, canTour, onContact }: { a: Article; on
         <Button variant="ghost" onClick={async () => { try { await navigator.clipboard.writeText(location.href); setCopied(true); } catch { /* sem clipboard */ } }}><Link2 className="w-4 h-4" />{copied ? 'Link copiado' : 'Copiar link'}</Button>
       </div>
       <Card className="space-y-4 text-sm leading-relaxed">
-        <p><strong>Para quem:</strong> {a.forWho}</p>
+        {!resident && <p><strong>Para quem:</strong> {a.forWho}</p>}
         <p><strong>Quando usar:</strong> {a.when}</p>
         {a.before.length > 0 && <div><p className="font-semibold">Antes de começar</p><ul className="list-disc pl-5">{a.before.map((b) => <li key={b}>{b}</li>)}</ul></div>}
         <div><p className="font-semibold">Passo a passo</p><ol className="list-decimal pl-5 space-y-1">{a.steps.map((s) => <li key={s}>{s}</li>)}</ol></div>
         {shot && <figure><img src={shot.file} alt={`${shot.title}: ${shot.caption}`} width={shot.width} height={shot.height} loading="lazy" className="w-full h-auto rounded-xl border border-line" /><figcaption className="text-xs text-muted mt-1">Tela com dados de demonstração; o menu pode ter mudado de lugar.</figcaption></figure>}
         <p><strong>Resultado esperado:</strong> {a.result}</p>
-        <p><strong>Como confirmar que salvou:</strong> {a.confirm}</p>
+        <p><strong>{resident ? 'Como confirmar:' : 'Como confirmar que salvou:'}</strong> {a.confirm}</p>
         {a.problems.length > 0 && <div><p className="font-semibold">Problemas comuns</p><dl className="space-y-2">{a.problems.map(([p, s]) => <div key={p}><dt className="font-medium">{p}</dt><dd className="text-muted">{s}</dd></div>)}</dl></div>}
       </Card>
       {related.length > 0 && <div><p className="font-semibold mb-2">Próximos passos</p><ul className="space-y-1">{related.map((r) => <li key={r.slug}><button className="underline text-secondary min-h-11 text-left" onClick={() => onOpen(r.slug)}>{r.title}</button></li>)}</ul></div>}
       <div className="flex flex-wrap items-center justify-between gap-2">
         <p className="text-xs text-muted">Revisado em 22/10/2026 · versão 2.</p>
-        <Button variant="ghost" onClick={onContact}><LifeBuoy className="w-4 h-4" /> Não resolveu? Falar com o suporte</Button>
+        <Button variant="ghost" onClick={onContact}><LifeBuoy className="w-4 h-4" /> Não resolveu? {resident ? 'Contato da portaria' : 'Falar com o suporte'}</Button>
       </div>
     </article>
   );

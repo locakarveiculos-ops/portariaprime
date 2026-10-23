@@ -75,3 +75,13 @@ export function useRealtime(table: 'packages' | 'notifications', tenantId: strin
     return () => { supabase.removeChannel(ch); };
   }, [table, tenantId, onChange]);
 }
+
+/** Fallback do tempo real: recarrega ao voltar ao app e periodicamente enquanto a tela está visível. */
+export function useRefreshWhileVisible(onRefresh: () => void, ms = 30000) {
+  useEffect(() => {
+    const vis = () => document.visibilityState === 'visible' && onRefresh();
+    const id = setInterval(() => document.visibilityState === 'visible' && onRefresh(), ms);
+    document.addEventListener('visibilitychange', vis); addEventListener('online', vis);
+    return () => { clearInterval(id); document.removeEventListener('visibilitychange', vis); removeEventListener('online', vis); };
+  }, [onRefresh, ms]);
+}

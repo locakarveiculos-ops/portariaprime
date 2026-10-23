@@ -101,26 +101,29 @@ try {
   assert.equal((await svc.from('billing_orders').select('id').eq('tenant_id', tenantId)).data.length, 0, 'nenhuma cobrança no início');
 
   step('personaliza a marca');
+  await s.goto(`${APP}/c/${slug}/configuracoes?m=identidade`);
   await s.getByLabel('Nome exibido').fill('Jornada E2E');
   await s.getByRole('button', { name: 'Salvar' }).first().click();
   await s.getByText('Marca salva.').waitFor();
   await shot(s, 'personalizacao');
 
   step('cadastra local de guarda');
-  await s.getByLabel('Código').fill('Estante A');
+  await s.goto(`${APP}/c/${slug}/configuracoes?m=operacao`);
+  await s.getByLabel('Código curto').fill('A-1');
   await s.getByLabel('Capacidade').fill('10');
   await s.getByRole('button', { name: 'Adicionar' }).click();
   await s.getByText('Local adicionado.').waitFor();
 
   step('cadastra unidade e convida porteiro e morador');
-  await s.goto(`${APP}/c/${slug}/pessoas`);
+  await s.goto(`${APP}/c/${slug}/pessoas?aba=unidades`);
+  await s.getByRole('button', { name: 'Nova unidade' }).click();
   await s.getByLabel('Bloco/Torre (opcional)').fill('A');
   await s.getByLabel('Unidade', { exact: true }).fill('101');
-  await s.getByRole('button', { name: 'Adicionar' }).click();
+  await s.getByRole('button', { name: 'Adicionar unidade' }).click();
   await s.getByText('Unidade cadastrada.').waitFor();
 
-  const invite = async (button, email) => {
-    await s.getByRole('button', { name: button }).first().click();
+  const invite = async (open, email) => {
+    await open();
     await s.getByLabel('E-mail da pessoa').fill(email);
     await s.getByRole('button', { name: 'Enviar convite' }).click();
     // Sem Resend configurado o sistema entrega o link para envio manual (não finge envio).
@@ -130,8 +133,13 @@ try {
     await s.getByRole('button', { name: 'Fechar' }).click();
     return link;
   };
-  const porteiroLink = await invite('Convidar equipe', porteiro.email);
-  const moradorLink = await invite('Convidar morador', morador.email);
+  await s.goto(`${APP}/c/${slug}/configuracoes?m=equipe`);
+  const porteiroLink = await invite(() => s.getByRole('button', { name: 'Convidar equipe' }).first().click(), porteiro.email);
+  await s.goto(`${APP}/c/${slug}/pessoas?aba=unidades`);
+  const moradorLink = await invite(async () => {
+    await s.getByRole('button', { name: /Ações de Bloco A · 101/ }).click();
+    await s.getByRole('menuitem', { name: 'Convidar morador (opcional)' }).click();
+  }, morador.email);
   assert.match(porteiroLink, /\/convite#[0-9a-f]{64}$/);
 
   step('porteiro e morador aceitam os convites');
@@ -147,12 +155,15 @@ try {
   await p.getByLabel(/Rastreio/).fill(`${run}BR`);
   await p.getByLabel(/Destinatário/).fill('Pessoa morador');
   await p.getByRole('button', { name: 'Registrar encomenda' }).click();
-  await p.getByText(/Encomenda registrada para/).waitFor();
+  // Com local de guarda cadastrado, a portaria confirma a guarda física antes de registrar.
+  await p.getByText(/Guardei fisicamente em/).click();
+  await p.getByRole('button', { name: 'Registrar encomenda' }).click();
+  await p.getByText(/Moradores da unidade avisados/).waitFor();
   await shot(p, 'recebimento');
 
   step('morador vê a encomenda e gera o QR');
-  await m.goto(`${APP}/c/${slug}/morador`);
-  await m.getByText('Para retirar (1)').waitFor();
+  await m.goto(`${APP}/c/${slug}/inicio`);
+  await m.getByRole('heading', { name: 'Você tem 1 encomenda para retirar' }).waitFor();
   await shot(m, 'morador');
   const { data: pkg } = await svc.from('packages').select('id').eq('tenant_id', tenantId).single();
   await m.getByRole('button', { name: 'Mostrar QR de retirada' }).click();
@@ -169,6 +180,10 @@ try {
   await p.mouse.move(box.x + 160, box.y + 90, { steps: 8 });
   await p.mouse.move(box.x + 260, box.y + 50, { steps: 8 });
   await p.mouse.up();
+  // Foto do item é prova obrigatória da entrega.
+  const png = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==', 'base64');
+  await p.getByRole('dialog').locator('input[type=file]').setInputFiles({ name: 'item.png', mimeType: 'image/png', buffer: png });
+  await p.getByAltText('Foto do item entregue').waitFor();
   await p.getByRole('button', { name: 'Confirmar entrega' }).click();
   await p.getByRole('dialog', { name: 'Comprovante de retirada' }).waitFor();
   await p.getByText('Retirada por').waitFor();
@@ -181,11 +196,13 @@ try {
   await p.reload();
   await p.getByRole('tab', { name: 'Buscar' }).waitFor();
   await s.goto(`${APP}/c/${slug}/painel`);
-  await s.getByText('Retiradas no período').waitFor();
+  await s.getByText('Aguardando retirada agora').waitFor();
+  await s.goto(`${APP}/c/${slug}/relatorios`);
+  await s.getByRole('cell', { name: 'Retirada', exact: true }).first().waitFor();
   await shot(s, 'painel');
 
   step('assinatura mostra mês grátis com término e bloqueia cobrança antecipada');
-  await s.goto(`${APP}/c/${slug}/assinatura`);
+  await s.goto(`${APP}/c/${slug}/configuracoes?m=plano`);
   await s.getByText(/Mês grátis de/).waitFor();
   await shot(s, 'assinatura');
   assert.equal(await s.getByRole('button', { name: /Pagar assinatura/ }).count(), 0, 'sem botão de pagar durante o teste');

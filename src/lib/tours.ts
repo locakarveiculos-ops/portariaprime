@@ -113,13 +113,12 @@ export const TOURS: Tour[] = [
     ],
   },
   {
-    id: 'morador', title: 'Minhas encomendas e QR', roles: ['morador'], article: 'morador-retirar',
-    goal: 'Saber o que chegou e retirar na portaria.',
+    id: 'morador', title: 'Conhecer o app', roles: ['morador'], article: 'morador-chegou',
+    goal: 'Encontrar encomendas, o QR, o histórico e as notificações.',
     steps: [
-      { area: 'morador', target: 'morador-aguardando', title: 'Para retirar', body: 'Aqui aparecem as encomendas que chegaram para a sua unidade.' },
-      { area: 'morador', target: 'morador-qr', title: 'QR de retirada', body: 'Mostre este QR na portaria. Vale uma vez e expira; não envie em grupos.' },
-      { area: 'morador', target: 'morador-historico', title: 'Histórico e comprovante', body: 'Depois da retirada, o comprovante fica aqui.' },
-      { area: 'morador', target: 'push-toggle', title: 'Avisos no celular', body: 'Ative as notificações neste aparelho. Depende do navegador e da permissão.' },
+      { area: 'inicio', target: 'morador-aguardando', title: 'O que chegou', body: 'Aqui aparece quantas encomendas aguardam retirada. Quando houver, cada uma tem o botão do QR.' },
+      { area: 'inicio', target: 'morador-historico', title: 'Recentes', body: 'As últimas retiradas ficam aqui. O histórico completo tem busca e comprovantes.' },
+      { area: 'conta', target: 'morador-avisos', title: 'Notificações', body: 'Ative os avisos neste aparelho para saber quando chegar algo.' },
     ],
   },
 ];

@@ -12,13 +12,79 @@ export interface Article {
   problems: [string, string][]; next: string[]; keywords?: string;
 }
 
-export const CATEGORIES = ['Primeiros passos', 'Síndico', 'Equipe e portaria', 'Morador', 'Totem', 'Encomendas e retiradas',
+export const CATEGORIES = ['Minhas encomendas', 'Acesso e cadastro', 'Primeiros passos', 'Síndico', 'Equipe e portaria', 'Morador', 'Totem', 'Encomendas e retiradas',
   'Notificações e aplicativo', 'Personalização', 'Plano, teste e cobrança', 'Segurança e permissões', 'Solução de problemas', 'Suporte'];
 
 const ALL: Role[] = ['admin', 'porteiro', 'morador'];
 const STAFF: Role[] = ['admin', 'porteiro'];
 
 export const ARTICLES: Article[] = [
+  // ---- Morador (conteúdo próprio, curto; sem temas de equipe ou cobrança) ----
+  {
+    slug: 'morador-chegou', title: 'Como saber se chegou encomenda', category: 'Minhas encomendas', roles: ['morador'], areas: ['inicio'], tour: 'morador', keywords: 'chegou encomenda pacote aviso inicio',
+    forWho: 'Morador.', when: 'Para ver o que está na portaria.',
+    before: [],
+    steps: ['Abra o Início.', 'O topo mostra quantas encomendas aguardam retirada.', 'Cada cartão traz transportadora, número (#) e quando chegou.'],
+    result: 'Você vê tudo o que aguarda retirada, das mais antigas para as mais novas.', confirm: '“Nenhuma encomenda aguardando retirada” significa que não há nada pendente.',
+    problems: [['Aparece erro ao carregar', 'Isso não significa que não há encomendas. Toque em “Tentar novamente” ou confira a conexão.']],
+    next: ['morador-retirar', 'morador-notificacoes'],
+  },
+  {
+    slug: 'morador-retirar', title: 'Como apresentar o QR na portaria', category: 'Minhas encomendas', roles: ['morador'], areas: ['encomenda'], tour: 'morador', keywords: 'qr codigo retirar retirada portaria',
+    forWho: 'Morador.', when: 'Na hora de buscar a encomenda.',
+    before: [],
+    steps: ['No Início, toque em “Mostrar QR de retirada” na encomenda certa.', 'Confira a unidade e o número da encomenda no topo da tela.', 'Mostre o código à portaria. A equipe confirma a entrega com sua assinatura.'],
+    result: 'A encomenda passa para o Histórico, com o comprovante.', confirm: 'O cartão some do Início e aparece “Retirada” no Histórico.',
+    problems: [['Estou sem celular ou sem internet', 'A portaria pode localizar a encomenda pela sua unidade e conferir sua identidade.']],
+    next: ['morador-qr-venceu', 'morador-comprovante'],
+  },
+  {
+    slug: 'morador-qr-venceu', title: 'O QR venceu', category: 'Minhas encomendas', roles: ['morador'], areas: [], keywords: 'qr venceu expirou vencido invalido codigo',
+    forWho: 'Morador.', when: 'Quando a tela mostra “Este código venceu” ou a portaria não aceita o código.',
+    before: [],
+    steps: ['Toque em “Gerar novo código”. O código anterior deixa de valer.', 'Se a tela disser que a encomenda não está mais aguardando, ela pode ter sido retirada por outra pessoa da unidade: confira o Histórico.'],
+    result: 'Um código novo, válido para uma única retirada.', confirm: 'A tela mostra a nova validade.', problems: [], next: ['morador-outra-pessoa'],
+  },
+  {
+    slug: 'morador-comprovante', title: 'Onde consultar o comprovante', category: 'Minhas encomendas', roles: ['morador'], areas: ['historico'], keywords: 'comprovante pdf recibo protocolo baixar',
+    forWho: 'Morador.', when: 'Depois de uma retirada.',
+    before: [],
+    steps: ['Abra Histórico e toque na encomenda.', 'Toque em “Ver comprovante” para abrir o PDF.', 'Se aparecer “em processamento”, volte em instantes.'],
+    result: 'PDF com protocolo, quem retirou, data, assinatura e foto do item.', confirm: 'O protocolo começa com PP-.',
+    problems: [['Não aparece comprovante', 'Ele só fica disponível para quem já estava cadastrado na unidade no dia da retirada.'], ['O PDF não abriu', 'Use o link “Baixar o PDF” que aparece logo abaixo.']],
+    next: ['morador-outra-pessoa'],
+  },
+  {
+    slug: 'morador-outra-pessoa', title: 'Outra pessoa da unidade retirou', category: 'Minhas encomendas', roles: ['morador'], areas: [], keywords: 'outra pessoa retirou familiar quem retirou',
+    forWho: 'Morador.', when: 'Uma encomenda sumiu do Início.',
+    before: [],
+    steps: ['Abra Histórico e toque na encomenda.', 'Veja “Retirada por” e a data.', 'Abra o comprovante para ver assinatura e foto do item.'],
+    result: 'Você confirma quem retirou e quando.', confirm: 'A situação aparece como “Retirada”.', problems: [['Não reconheço a retirada', 'Fale com a portaria ou a administração informando o protocolo.']], next: [],
+  },
+  {
+    slug: 'morador-notificacoes', title: 'Ativar notificações e instalar o app', category: 'Notificações e aplicativo', roles: ['morador'], areas: ['notificacoes', 'conta'], tour: 'morador', keywords: 'notificacao aviso push instalar app iphone android whatsapp email',
+    forWho: 'Morador.', when: 'Para ser avisado quando chegar algo.',
+    before: [],
+    steps: ['Abra Minha conta › Notificações.', 'Toque em “Ativar notificações neste dispositivo” e permita.', 'Para instalar, siga as instruções em “Instalar aplicativo”. No iPhone: Safari › Compartilhar › Adicionar à Tela de Início.'],
+    result: 'Os avisos chegam no aparelho. Eles também ficam em Notificações, dentro do app.', confirm: 'Aparece “Notificações ativadas”.',
+    problems: [['Notificações bloqueadas', 'Libere nas configurações do site no navegador (ícone de cadeado) e volte ao app.'], ['iPhone não recebe', 'Só funciona com o app instalado na Tela de Início (iOS 16.4 ou mais novo).']],
+    next: [],
+  },
+  {
+    slug: 'morador-cadastro', title: 'Cadastro aguardando aprovação', category: 'Acesso e cadastro', roles: ['morador'], areas: [], keywords: 'cadastro aprovacao pendente aguardando acesso',
+    forWho: 'Morador.', when: 'Logo depois de pedir acesso.',
+    before: [],
+    steps: ['A administração confere seus dados e a unidade.', 'Você recebe um e-mail com a decisão.', 'Depois de aprovado, suas encomendas aparecem no Início.'],
+    result: 'Acesso liberado só para a sua unidade.', confirm: 'O Início mostra sua unidade no topo.', problems: [['Demorou muito', 'Fale com a portaria ou a administração do condomínio.']], next: [],
+  },
+  {
+    slug: 'morador-dados', title: 'Dados incorretos ou problema de acesso', category: 'Acesso e cadastro', roles: ['morador'], areas: [], keywords: 'unidade errada dados incorretos senha acesso portaria contato',
+    forWho: 'Morador.', when: 'Unidade errada, nome errado ou acesso encerrado.',
+    before: [],
+    steps: ['Nome e contatos: Minha conta › Meu perfil.', 'Unidade errada ou mudança: peça à administração; a troca passa por aprovação.', 'Esqueceu a senha: na tela de entrada, use “Esqueci minha senha”.'],
+    result: 'Seus dados corrigidos.', confirm: 'Minha conta mostra os dados novos.', problems: [['Contato da portaria', 'Quando cadastrado pelo condomínio, aparece em Minha conta › Ajuda e suporte.']], next: [],
+  },
+
   {
     slug: 'primeiros-passos', title: 'Deixar o condomínio pronto para usar', category: 'Primeiros passos', roles: ['admin'], areas: ['configuracoes', 'painel'], tour: 'inicio-sindico', screen: 'painel',
     forWho: 'Síndico ou administrador que acabou de cadastrar o condomínio.', when: 'Logo depois de ativar o mês grátis.',
@@ -74,7 +140,7 @@ export const ARTICLES: Article[] = [
     next: ['comprovantes'],
   },
   {
-    slug: 'comprovantes', title: 'Abrir e imprimir comprovantes', category: 'Encomendas e retiradas', roles: ALL, areas: ['portaria', 'morador'], keywords: 'recibo protocolo pdf imprimir',
+    slug: 'comprovantes', title: 'Abrir e imprimir comprovantes', category: 'Encomendas e retiradas', roles: STAFF, areas: ['portaria', 'morador'], keywords: 'recibo protocolo pdf imprimir',
     forWho: 'Todos.', when: 'Para conferir uma retirada.',
     before: ['Encomenda retirada.'],
     steps: ['Equipe: em Encomendas, use a busca, procure a encomenda e toque em Comprovante.', 'Morador: em Minhas encomendas › Histórico, toque em Comprovante, ou abra o link recebido por e-mail/WhatsApp/push (exige login).', 'Toque em “Baixar PDF / imprimir” e escolha “Salvar como PDF”.'],
@@ -128,16 +194,7 @@ export const ARTICLES: Article[] = [
     next: ['receber-encomenda'],
   },
   {
-    slug: 'morador-retirar', title: 'Morador: ver encomendas e retirar', category: 'Morador', roles: ['morador'], areas: ['morador', 'avisos'], tour: 'morador', screen: 'morador', keywords: 'qr retirar minhas encomendas',
-    forWho: 'Morador com convite aceito.', when: 'Quando chegar um aviso.',
-    before: ['Convite aceito.'],
-    steps: ['Abra Minhas encomendas.', 'Em “Para retirar”, toque em “Mostrar QR de retirada”.', 'Mostre o QR na portaria.', 'Depois, o comprovante fica no Histórico.'],
-    result: 'A encomenda sai de “Para retirar” e vai para o Histórico.', confirm: 'Aparece “Retirada” com o botão Comprovante.',
-    problems: [['QR expirou', 'Toque em “Gerar novo QR”.'], ['Não vejo encomendas', 'Confirme com o síndico se você está vinculado à unidade certa.']],
-    next: ['notificacoes'],
-  },
-  {
-    slug: 'notificacoes', title: 'Avisos no celular e instalar o aplicativo', category: 'Notificações e aplicativo', roles: ALL, areas: ['aplicativo', 'morador', 'avisos', 'ajuda'], keywords: 'push notificação aviso sino instalar app pwa iphone android',
+    slug: 'notificacoes', title: 'Avisos no celular e instalar o aplicativo', category: 'Notificações e aplicativo', roles: STAFF, areas: ['aplicativo', 'morador', 'avisos', 'ajuda'], keywords: 'push notificação aviso sino instalar app pwa iphone android',
     forWho: 'Todos.', when: 'Para receber avisos no aparelho.',
     before: ['Navegador compatível com notificações.'],
     steps: ['Abra o menu da sua conta (seu nome, no topo) › Meu aplicativo e notificações.', 'Ative “Avisos neste aparelho” e permita as notificações.', 'Para instalar: no Android/Chrome use “Instalar aplicativo”; no iPhone use Compartilhar › Adicionar à Tela de Início.', 'Os avisos dentro do sistema ficam no sino, no topo da tela.'],
@@ -155,7 +212,7 @@ export const ARTICLES: Article[] = [
     next: [],
   },
   {
-    slug: 'seguranca-acessos', title: 'Quem vê o quê: segurança e permissões', category: 'Segurança e permissões', roles: ALL, areas: ['ajuda'], keywords: 'privacidade lgpd acesso dados segurança',
+    slug: 'seguranca-acessos', title: 'Quem vê o quê: segurança e permissões', category: 'Segurança e permissões', roles: STAFF, areas: ['ajuda'], keywords: 'privacidade lgpd acesso dados segurança',
     forWho: 'Todos.', when: 'Para entender os acessos.',
     before: [],
     steps: ['Cada condomínio só vê os próprios dados.', 'Morador vê só a própria unidade; porteiro opera a portaria; administrador vê só o que as permissões dele permitem.', 'Fotos e assinaturas abrem por links temporários, só para quem tem acesso.', 'Acesso revogado vale na próxima ação, mesmo com o app aberto.'],
@@ -171,7 +228,7 @@ export const ARTICLES: Article[] = [
     result: 'O trabalho continua sem câmera.', confirm: 'A encomenda é registrada normalmente.', problems: [], next: ['receber-encomenda'],
   },
   {
-    slug: 'sem-internet', title: 'A internet caiu', category: 'Solução de problemas', roles: ALL, areas: ['portaria', 'morador'], keywords: 'offline internet conexão caiu',
+    slug: 'sem-internet', title: 'A internet caiu', category: 'Solução de problemas', roles: STAFF, areas: ['portaria', 'morador'], keywords: 'offline internet conexão caiu',
     forWho: 'Todos.', when: 'Sem conexão.',
     before: [],
     steps: ['Não considere recebimentos, retiradas ou pagamentos feitos sem a confirmação do servidor.', 'Anote em papel o que for urgente.', 'Quando a conexão voltar, registre e confira as mensagens de confirmação.'],
@@ -185,7 +242,7 @@ export const ARTICLES: Article[] = [
     result: 'A encomenda continua registrada mesmo se o aviso falhar.', confirm: 'O contador de falhas diminui.', problems: [], next: [],
   },
   {
-    slug: 'suporte', title: 'Falar com o suporte', category: 'Suporte', roles: ALL, areas: ['ajuda'], keywords: 'contato ajuda atendimento suporte',
+    slug: 'suporte', title: 'Falar com o suporte', category: 'Suporte', roles: STAFF, areas: ['ajuda'], keywords: 'contato ajuda atendimento suporte',
     forWho: 'Todos.', when: 'Quando a ajuda não resolver.',
     before: [],
     steps: ['Na Central de ajuda, toque em “Falar com o suporte” e preencha o formulário.', 'Descreva a tela, o que tentou fazer e a mensagem de erro. Não envie senhas.'],

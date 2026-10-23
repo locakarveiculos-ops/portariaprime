@@ -172,9 +172,10 @@ try {
   await mp.getByLabel('E-mail', { exact: true }).fill(m[2].email);
   await mp.getByLabel('Senha', { exact: true }).fill(m[2].password);
   await mp.getByRole('button', { name: 'Entrar' }).click();
-  await mp.waitForURL(/comprovante/);
+  // Link antigo de comprovante abre o detalhe atual da encomenda no app do morador.
+  await mp.waitForURL(/encomenda\?p=/);
   await mp.getByText(rc.protocol).waitFor();
-  await mp.getByAltText('Foto do item entregue').waitFor();
+  await mp.getByText('Retirada por').waitFor();
   await mp.screenshot({ path: `${evidence}/totem-comprovante-morador.png`, fullPage: true });
   assert.deepEqual(errors, [], 'sem erros de página');
   console.log(`OK — totem ponta a ponta (${run}). Fixtures preservadas para diagnóstico.`);

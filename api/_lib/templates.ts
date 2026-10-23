@@ -28,9 +28,11 @@ const CYCLE: Record<string, string> = { monthly: 'mensal', quarterly: 'trimestra
 
 export function render(event: string, ctx: MessageCtx, payload: any, appUrl: string) {
   const p = ctx.package || {};
-  const link = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/morador`;
+  const home = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/inicio`;
+  // Chegada abre o detalhe atual da encomenda (se já foi retirada, mostra o comprovante, nunca QR inválido).
+  const link = p.id ? `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/encomenda?p=${encodeURIComponent(p.id)}` : home;
   // Link estável: abre após login, só para quem tem vínculo com a unidade (nada público).
-  const receiptLink = p.id ? `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/comprovante?p=${encodeURIComponent(p.id)}` : link;
+  const receiptLink = p.id ? `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/comprovante?p=${encodeURIComponent(p.id)}` : home;
   const billingLink = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}/assinatura`;
   switch (event) {
     case 'package_received':

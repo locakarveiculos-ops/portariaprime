@@ -92,7 +92,6 @@ export function TenantShell({ area, children }: { area: string; children: React.
     { area: 'portaria', label: 'Encomendas', icon: Package, show: t.isStaff, match: ['portaria', 'totem-equipe'] },
     { area: 'pessoas', label: 'Unidades e moradores', icon: Users, show: t.can('approve') || admin },
     { area: 'relatorios', label: 'Relatórios', icon: BarChart3, show: admin },
-    { area: 'morador', label: 'Minhas encomendas', icon: Package, show: role === 'morador', match: ['morador', 'comprovante'] },
   ];
   const bottom: NavItem[] = [
     { area: 'configuracoes', label: 'Configurações', icon: Settings, show: t.can('settings') || t.can('billing') || t.can('team'), match: ['configuracoes', 'assinatura'] },
