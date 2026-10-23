@@ -30,6 +30,13 @@ export async function loadCatalog(): Promise<PlanRow[]> {
   }));
 }
 
+/** Campanha pública de cobertura de orçamento (só existe quando ativada pelo Admin Master, com critérios). */
+export async function loadQuotePolicy(): Promise<{ campaign_active: boolean; discount_pct: number | null; criteria_text: string | null }> {
+  const { data, error } = await supabase.rpc('quote_policy_public');
+  if (error || !data) return { campaign_active: false, discount_pct: null, criteria_text: null };
+  return data;
+}
+
 export function featureList(p: PlanRow): string[] {
   const e = p.ent;
   if (!e) return [];

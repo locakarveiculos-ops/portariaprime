@@ -6,6 +6,7 @@
   "rewrites": [
     { "source": "/api/contact", "destination": "/api/public/contact?a=contact" },
     { "source": "/api/funnel", "destination": "/api/public/funnel?a=funnel" },
+    { "source": "/api/quote", "destination": "/api/public/quote?a=quote" },
     { "source": "/c/:slug/manifest.webmanifest", "destination": "/api/portal/manifest?a=manifest&slug=:slug" },
     { "source": "/c/:slug", "destination": "/api/portal/page?a=page&slug=:slug" },
     { "source": "/c/:slug/:path*", "destination": "/api/portal/page?a=page&slug=:slug" },
@@ -21,7 +22,7 @@
         { "key": "X-Frame-Options", "value": "DENY" }
       ]
     },
-    { "source": "/(c|app|admin|onboarding|convite|entrar|cadastro|recuperar-senha|nova-senha|checkout)(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
+    { "source": "/(c|app|admin|onboarding|convite|entrar|cadastro|recuperar-senha|nova-senha|checkout|proposta|contratar)(.*)", "headers": [{ "key": "X-Robots-Tag", "value": "noindex, nofollow" }] },
     { "source": "/screens/(.*)", "headers": [{ "key": "Cache-Control", "value": "public, max-age=86400" }] },
     { "source": "/sw.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
     { "source": "/api/(.*)", "headers": [{ "key": "Cache-Control", "value": "no-store" }] }
