@@ -282,12 +282,12 @@ test('cancelamento no teste: não gera pedido e reativação mantém a data orig
   await db.rpc(u, 'reactivate_subscription', { p_tenant: t });
   const [after] = await db.sql(`select trial_ends_at, cancel_at_period_end, price_cents_snapshot from public.subscriptions where tenant_id = $1`, [t]);
   assert.equal(String(after.trial_ends_at), String(before.trial_ends_at));
-  assert.equal(after.price_cents_snapshot, 99000);
+  assert.equal(after.price_cents_snapshot, 100900); // anual com 15% (20261023000700)
   // Troca de plano no teste mantém vencimento.
   await db.rpc(u, 'change_plan', { p_tenant: t, p_plan_code: 'prime', p_cycle: 'quarterly' });
   const [ch] = await db.sql(`select trial_ends_at, price_cents_snapshot from public.subscriptions where tenant_id = $1`, [t]);
   assert.equal(String(ch.trial_ends_at), String(before.trial_ends_at));
-  assert.equal(ch.price_cents_snapshot, 89900);
+  assert.equal(ch.price_cents_snapshot, 99400); // Prime trimestral com 5%
   await db.rpc(u, 'cancel_subscription', { p_tenant: t });
   db.setNow('2026-06-11T12:00:00Z');
   await db.service(`select public.billing_tick()`);

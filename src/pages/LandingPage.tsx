@@ -81,7 +81,7 @@ export default function LandingPage() {
   };
   const selectable = (plans || []).filter((p) => p.published && !p.is_custom && p.prices.length);
   const custom = (plans || []).find((p) => p.is_custom);
-  const nav: [string, string][] = [['#como-funciona', 'Como funciona'], ['#demonstracao', 'Demonstração'], ['/tutoriais', 'Tutoriais'], ['#planos', 'Planos']];
+  const nav: [string, string][] = [['#como-funciona', 'Como funciona'], ['#demonstracao', 'Demonstração'], ['/tutoriais', 'Tutoriais'], ['/planos', 'Planos e contrato']];
   const navLink = ([h, l]: [string, string], extra = '') => h.startsWith('/')
     ? <a key={h} href={h} onClick={(e) => { onLink(e); setMenu(false); }} className={extra}>{l}</a>
     : <a key={h} href={h} onClick={() => setMenu(false)} className={extra}>{l}</a>;
@@ -237,7 +237,8 @@ export default function LandingPage() {
             <h2 id="planos-h" className="text-3xl font-semibold">Planos</h2>
             <p className="text-muted mt-2">Todo condomínio novo começa com um mês de calendário grátis, sem cartão. Depois, o pagamento é por link a cada ciclo (Pix ou cartão), sem débito automático.</p>
             <div className="mt-6 inline-grid grid-cols-3 gap-1 rounded-xl bg-surface-2 p-1" role="radiogroup" aria-label="Ciclo de pagamento">
-              {(['monthly', 'quarterly', 'yearly'] as const).map((c) => <button key={c} role="radio" aria-checked={cycle === c} onClick={() => setCycle(c)} className={`min-h-11 px-4 rounded-lg text-sm font-medium ${cycle === c ? 'bg-surface shadow text-text' : 'text-muted'}`}>{CYCLE_LABEL[c]}</button>)}
+              {(['monthly', 'quarterly', 'yearly'] as const).map((c) => <button key={c} role="radio" aria-checked={cycle === c} onClick={() => setCycle(c)} className={`min-h-11 px-4 rounded-lg text-sm font-medium ${cycle === c ? 'bg-surface shadow text-text' : 'text-muted'}`}>{CYCLE_LABEL[c]}{(() => { const ref = selectable[0]; const m = ref?.prices.find((x) => x.cycle === 'monthly')?.amount_cents; const t = ref?.prices.find((x) => x.cycle === c)?.amount_cents;
+                const pct = c !== 'monthly' && m && t ? Math.round((1 - t / (m * CYCLE_MONTHS[c])) * 100) : 0; return pct > 0 && <span className="ml-1 text-success text-xs font-semibold">−{pct}%</span>; })()}</button>)}
             </div>
             {catalogError ? <p className="mt-6 text-sm">Não foi possível carregar os planos agora. Recarregue a página ou fale com a gente pelo formulário abaixo.</p>
               : !plans ? <p className="mt-6 text-sm text-muted" role="status">Carregando planos…</p>
@@ -251,10 +252,12 @@ export default function LandingPage() {
                       <h3 className="text-xl font-semibold">{p.name}</h3>
                       {p.description && <p className="text-sm text-muted mt-1">{p.description}</p>}
                       {pr ? <p className="mt-4"><span className="text-3xl font-semibold">{brl(pr.amount_cents)}</span> <span className="text-sm text-muted">{cycle === 'monthly' ? 'por mês' : `cobrado a cada ciclo ${CYCLE_LABEL[cycle].toLowerCase()}`}</span></p> : <p className="mt-4 text-sm text-muted">Ciclo indisponível neste plano.</p>}
-                      {pr && cycle !== 'monthly' && <p className="text-xs text-muted">equivale a {brl(Math.round(pr.amount_cents / CYCLE_MONTHS[cycle]))}/mês; o valor total é cobrado de uma vez no início do ciclo</p>}
+                      {pr && cycle !== 'monthly' && (() => { const m = p.prices.find((x) => x.cycle === 'monthly')?.amount_cents; const pct = m ? Math.round((1 - pr.amount_cents / (m * CYCLE_MONTHS[cycle])) * 100) : 0;
+                        return <p className="text-xs text-muted">equivale a {brl(Math.round(pr.amount_cents / CYCLE_MONTHS[cycle]))}/mês{pct > 0 && <strong className="text-success"> · {pct}% de desconto</strong>}; o valor total é cobrado de uma vez no início do ciclo</p>; })()}
                       <p className="text-xs text-muted mt-1">Valor após o mês grátis.</p>
                       <ul className="mt-4 space-y-2 text-sm flex-1">{featureList(p).map((x) => <li key={x} className="flex gap-2"><Check className="w-4 h-4 mt-0.5 text-success shrink-0" aria-hidden />{x}</li>)}</ul>
                       <Button className="mt-6 w-full" onClick={() => trial(p.code)} disabled={!pr}>Testar grátis por 1 mês</Button>
+                      <a href={`/planos?plano=${p.code}&ciclo=${cycle}`} onClick={onLink} className="mt-2 text-center text-sm font-semibold underline min-h-11 inline-flex items-center justify-center">Ver contrato e contratar</a>
                     </Card>
                   );
                 })}

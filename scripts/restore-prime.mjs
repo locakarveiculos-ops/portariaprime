@@ -30,7 +30,8 @@ export async function restoreInto(db, bundle) {
   await db.raw.exec('set session_replication_role = replica');
   try {
     // Tabelas semeadas por migration (catálogo e configuração comercial) são substituídas pelo backup.
-    const seeded = ['plan_price_drafts', 'commercial_costs', 'commercial_scenarios', 'quote_policy', 'plan_entitlements', 'plan_prices', 'plans', 'profiles'];
+    // audit_logs: migrations também auditam (ex.: desconto por ciclo); o histórico real vem do backup.
+    const seeded = ['plan_price_drafts', 'commercial_costs', 'commercial_scenarios', 'quote_policy', 'audit_logs', 'plan_entitlements', 'plan_prices', 'plans', 'profiles'];
     for (const t of seeded) if (t in bundle.tables || ['plan_entitlements', 'plan_prices', 'plans', 'profiles'].includes(t)) await db.raw.exec(`delete from public.${t}`);
     const tables = [...ORDER.filter((t) => t in bundle.tables), ...Object.keys(bundle.tables).filter((t) => !ORDER.includes(t))];
     for (const t of tables) {

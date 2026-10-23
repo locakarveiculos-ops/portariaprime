@@ -3,6 +3,7 @@ Allow: /$
 Allow: /termos
 Allow: /privacidade
 Allow: /contrato
+Allow: /planos
 Allow: /tutoriais
 Allow: /screens/
 Allow: /brand/

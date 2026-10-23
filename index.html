@@ -21,7 +21,7 @@
     <link rel="apple-touch-icon" href="/apple-touch-icon-180x180.png" />
     <script>
       // Áreas privadas fora do índice (o servidor também envia X-Robots-Tag).
-      if (!/^\/(|termos|privacidade|contrato|tutoriais(\/(sindico|portaria|morador))?)$/.test(location.pathname)) {
+      if (!/^\/(|termos|privacidade|contrato|planos|tutoriais(\/(sindico|portaria|morador))?)$/.test(location.pathname)) {
         var m = document.createElement('meta'); m.name = 'robots'; m.content = 'noindex,nofollow'; document.head.appendChild(m);
       }
       // Landing: baixa a imagem principal em paralelo ao JavaScript (LCP).

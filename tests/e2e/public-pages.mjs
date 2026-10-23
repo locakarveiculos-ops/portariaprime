@@ -67,6 +67,24 @@ try {
   assert.equal(await robots(), 'noindex,nofollow');
   await page.getByText(/não encontrada|inválid|vencid|indisponível/i).first().waitFor();
 
+  step('/planos: ciclos com desconto, contrato preenchido ao vivo e pedido com preço do servidor');
+  await page.goto(`${APP}/planos?plano=profissional&ciclo=yearly`);
+  assert.equal(await robots(), null, '/planos indexável');
+  await page.getByRole('radio', { name: /Anual.*−15%/ }).waitFor();
+  await page.getByRole('radio', { name: /Trimestral.*−5%/ }).waitFor();
+  await page.getByText(/economia de R\$/).first().waitFor();
+  await page.getByLabel('Nome do condomínio').fill('Residencial Teste E2E');
+  await page.getByLabel('Nome completo do representante').fill('Pessoa Teste E2E');
+  await page.getByLabel('E-mail').fill(`planos-${Date.now()}@example.invalid`);
+  const box = page.getByLabel('Contrato preenchido');
+  await box.getByText(/Residencial Teste E2E, representado por Pessoa Teste E2E/).waitFor();
+  await box.getByText(/Plano escolhido nesta contratação:/).waitFor();
+  assert.equal(await page.getByRole('button', { name: 'Enviar pedido de contratação' }).isDisabled(), true, 'sem concordância não envia');
+  await page.getByText(/Li o contrato acima e concordo/).click();
+  await page.getByRole('button', { name: 'Enviar pedido de contratação' }).click();
+  await page.getByText(/Pedido PC-\d{8}-[0-9A-F]{6} recebido/).waitFor();
+  await page.getByRole('button', { name: 'Ativar o mês grátis com este plano' }).waitFor();
+
   step('rota privada sem sessão exige login (contratar, org)');
   for (const path of ['/contratar', '/org']) {
     await page.goto(`${APP}${path}`);
@@ -76,7 +94,7 @@ try {
   step('larguras 320–1920 sem rolagem horizontal');
   for (const [w, h] of [[320, 640], [360, 740], [390, 844], [430, 932], [768, 1024], [820, 1180], [1024, 768], [1280, 800], [1440, 900], [1920, 1080], [844, 390]]) {
     await page.setViewportSize({ width: w, height: h });
-    for (const path of ['/', '/tutoriais', '/tutoriais/portaria', '/contrato', '/validar']) {
+    for (const path of ['/', '/planos', '/tutoriais', '/tutoriais/portaria', '/contrato', '/validar']) {
       await page.goto(`${APP}${path}`);
       await page.locator('h1').first().waitFor();
       await page.waitForTimeout(100);

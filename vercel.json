@@ -7,6 +7,7 @@
     { "source": "/api/contact", "destination": "/api/public/contact?a=contact" },
     { "source": "/api/funnel", "destination": "/api/public/funnel?a=funnel" },
     { "source": "/api/quote", "destination": "/api/public/quote?a=quote" },
+    { "source": "/api/plan-request", "destination": "/api/public/plan-request?a=plan-request" },
     { "source": "/c/:slug/manifest.webmanifest", "destination": "/api/portal/manifest?a=manifest&slug=:slug" },
     { "source": "/c/:slug", "destination": "/api/portal/page?a=page&slug=:slug" },
     { "source": "/c/:slug/:path*", "destination": "/api/portal/page?a=page&slug=:slug" },

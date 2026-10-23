@@ -3,6 +3,7 @@
  *   POST /api/contact  -> contato comercial (honeypot + limite por IP)
  *   POST /api/funnel   -> funil anônimo da landing
  *   POST /api/quote    -> "Tenho um orçamento para comparar" (multipart, anexo validado por bytes)
+ *   POST /api/plan-request -> pedido de contratação da página /planos (não é aceite contratual)
  * vercel.json reescreve /api/contact, /api/funnel e /api/quote para cá com ?a=.
  * Novas ações públicas entram aqui (arquivos com "_" não viram rota).
  */
@@ -10,8 +11,9 @@ import { handler, HttpError } from '../_lib/http.js';
 import { POST as contact } from './_contact.js';
 import { POST as funnel } from './_funnel.js';
 import { POST as quote } from './_quote.js';
+import { POST as planRequest } from './_plan_request.js';
 
-const ACTIONS: Record<string, (r: Request) => Promise<Response>> = { contact, funnel, quote };
+const ACTIONS: Record<string, (r: Request) => Promise<Response>> = { contact, funnel, quote, 'plan-request': planRequest };
 
 export const POST = handler(async (request) => {
   const url = new URL(request.url);
