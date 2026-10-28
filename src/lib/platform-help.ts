@@ -2,12 +2,13 @@ export const PLATFORM_SECTIONS = [
   ['overview', 'Visão geral'], ['tenants', 'Condomínios'], ['trials', 'Testes grátis'],
   ['plans', 'Planos'], ['orders', 'Pedidos e incidentes'], ['users', 'Usuários'],
   ['team', 'Equipe global'], ['notifications', 'Notificações'], ['contacts', 'Contatos e suporte'],
-  ['support', 'Suporte'], ['organizations', 'Administradoras'], ['quotes', 'Orçamentos e propostas'],
+  ['support', 'Suporte'], ['organizations', 'Administradoras'], ['devices', 'Dispositivos'], ['quotes', 'Orçamentos e propostas'],
   ['costs', 'Custos e viabilidade'], ['legal', 'Jurídico e contratos'],
   ['reports', 'Relatórios'], ['audit', 'Auditoria'], ['settings', 'Configurações'], ['help', 'Ajuda'],
 ] as const;
 export type PlatformSection = typeof PLATFORM_SECTIONS[number][0];
 export const PLATFORM_HELP: { section: PlatformSection; title: string; text: string }[] = [
+  { section: 'devices', title: 'Dispositivos gerenciados (quiosque Android)', text: 'Leitura de suporte: estado, versão do agente e restrições não aplicadas por condomínio. Abrir um condomínio é auditado. Comandos ficam com o síndico. Publicar versão do agente exige APK HTTPS assinado com a chave definitiva e o checksum do script android/scripts/signature-checksum.sh.' },
   { section: 'overview', title: 'Visão geral e funil', text: 'Indicadores vêm do servidor. O período filtra eventos datados; totais de situação atual não são histórico. O funil conta visitantes anônimos únicos, não vendas.' },
   { section: 'tenants', title: 'Suspender ou reativar condomínio', text: 'Confira ID, nome e situação. Alterar acesso não confirma pagamento nem estende assinatura. Justifique a mudança; o servidor valida a permissão.' },
   { section: 'trials', title: 'Estender teste e reativar expirado', text: 'Informe data e hora final absoluta no horário local do navegador. Reativar teste expirado exige escolha explícita e não equivale a assinatura paga.' },

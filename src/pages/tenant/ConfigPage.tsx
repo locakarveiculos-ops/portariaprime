@@ -13,6 +13,7 @@ import { OrgLinkCard } from './config/OrgLinkCard';
 import { RemindersCard } from './config/RemindersCard';
 import { SecurityCard } from './config/SecurityCard';
 import { CondoCard } from './config/CondoCard';
+import { DevicesCard } from './config/DevicesCard';
 
 type T = ReturnType<typeof useTenant>;
 interface Mod { id: string; title: string; desc: string; keys: string; allowed: (t: T) => boolean; render: (t: T) => React.ReactNode }
@@ -42,6 +43,8 @@ export const MODULES: Mod[] = [
     allowed: settings, render: () => <ReceiptLayoutCard /> },
   { id: 'totens', title: 'Totens e dispositivos', desc: 'Pareamento, estado e revogação dos totens.', keys: 'totem tablet parear dispositivo revogar',
     allowed: (t) => settings(t) && !!t.overview?.entitlements?.feature_totem, render: () => <TotemCard /> },
+  { id: 'dispositivos', title: 'Dispositivos e quiosque', desc: 'Tablets do condomínio em modo quiosque (Android gerenciado), políticas e manutenção.', keys: 'dispositivo quiosque kiosk tablet android mdm gerenciar politica manutencao wifi device owner',
+    allowed: settings, render: () => <DevicesCard /> },
   { id: 'plano', title: 'Plano e assinatura', desc: 'Mês grátis, plano, limites e pagamentos.', keys: 'assinatura plano pagamento cobranca teste gratis fatura pix cartao',
     allowed: (t) => t.can('billing'), render: () => <AssinaturaPage embedded /> },
   { id: 'seguranca', title: 'Segurança e auditoria', desc: 'Histórico de ações e sessão deste aparelho.', keys: 'seguranca auditoria historico sessao sair log',

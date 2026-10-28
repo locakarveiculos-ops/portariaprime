@@ -11,6 +11,7 @@ import TenantDetailModal from './admin/TenantDetailModal';
 import SupportPanel from './admin/SupportPanel';
 import SupportSettings from './admin/SupportSettings';
 import OrganizationsPanel from './admin/OrganizationsPanel';
+import DevicesPanel from './admin/DevicesPanel';
 import QuotesPanel from './admin/QuotesPanel';
 import CostsPanel from './admin/CostsPanel';
 import LegalPanel from './admin/LegalPanel';
@@ -120,6 +121,7 @@ export default function AdminPage() {
     <h2 className="text-xl font-semibold">{PLATFORM_SECTIONS.find(([key]) => key === section)?.[1]}</h2>
     {section === 'support' && can('support') ? <><SupportPanel context={context} />{can('support_manage') && <SupportSettings context={context} />}</>
       : section === 'organizations' && can('organizations') ? <OrganizationsPanel context={context} />
+      : section === 'devices' && can('devices') ? <DevicesPanel context={context} />
       : section === 'quotes' && can('quotes') ? <QuotesPanel capabilities={context.capabilities} />
       : section === 'costs' && can('costs') ? <CostsPanel capabilities={context.capabilities} />
       : section === 'legal' && can('legal') ? <LegalPanel canManage={can('legal_manage')} />

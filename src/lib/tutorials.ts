@@ -129,6 +129,37 @@ export const TUTORIALS: Tutorial[] = [
     result: 'Contrato aceito guardado com versão e PDF; pagamento confirmado só após retorno do provedor.',
     errors: [['Paguei e aparece pendente', 'A confirmação vem do provedor e pode levar alguns minutos.']],
   },
+  {
+    slug: 'quiosque-preparar-inscrever', profile: 'sindico', title: 'Tablet da portaria em modo quiosque (preparar e inscrever)', keywords: 'quiosque kiosk tablet android dispositivo gerenciar device owner qr provisionamento',
+    goal: 'Deixar um tablet do condomínio preso à portaria do Portaria Prime, voltando sozinho após reiniciar.',
+    before: ['Tablet ou celular Android 8.0 ou superior, de propriedade do condomínio (nunca aparelho pessoal).',
+      'Aparelho restaurado de fábrica: o processo apaga tudo. Faça backup e remova contas pessoais antes.',
+      'Instalar o app (PWA) e gerenciar o aparelho são etapas diferentes: aqui é o gerenciamento.'],
+    steps: [
+      { title: 'Cadastre o aparelho', text: 'Em Configurações → Dispositivos e quiosque, toque em “Adicionar dispositivo”, dê um nome (ex.: Tablet Guarita) e escolha a finalidade.' },
+      { title: 'Gere o QR', text: 'Abra “Detalhes” → “Gerar QR de provisionamento”. O sistema pode pedir sua senha de novo. O código vale até 1 hora e só uma vez.' },
+      { title: 'Leia o QR no tablet', text: 'Na tela de boas-vindas do Android, toque 6 vezes no mesmo ponto, conecte ao Wi-Fi e leia o QR. O Android baixa o Portaria Prime Kiosk e conclui sozinho.' },
+      { title: 'Confira no painel', text: 'O aparelho aparece como “Device Owner · conforme” e “Ativo”. Gere e imprima os códigos de recuperação e guarde fora da portaria.' },
+    ],
+    result: 'Tablet abre direto a portaria do condomínio; Início, Recentes e Configurações ficam bloqueados.', next: 'quiosque-manutencao',
+    errors: [['Aparelho já gerenciado por outra empresa', 'Não continue: peça a liberação a quem gerencia o aparelho.'],
+      ['Aparece “Não gerenciado”', 'O app foi instalado sem o QR da configuração inicial. Restaure de fábrica e use o QR.'],
+      ['Sem QR, aviso de versão não publicada', 'A versão do aplicativo ainda não foi publicada pela plataforma. Fale com o suporte.']],
+  },
+  {
+    slug: 'quiosque-manutencao', profile: 'sindico', title: 'Manutenção, recuperação e remoção do quiosque', keywords: 'quiosque manutencao desbloquear wifi recuperar codigo remover desativar',
+    goal: 'Liberar o tablet por tempo limitado para ajustes e, se preciso, retirar o gerenciamento com segurança.',
+    before: ['Aparelho ativo em Dispositivos e quiosque.'],
+    steps: [
+      { title: 'Manutenção pelo painel', text: 'Em Detalhes, toque em “Abrir manutenção”, informe o motivo e a duração. O tablet sai do quiosque e volta sozinho no prazo, ao reiniciar ou quando você encerrar.' },
+      { title: 'Sem internet no tablet', text: 'No tablet, toque em “Manutenção” e digite um código de recuperação impresso. Cada código vale uma vez; erros seguidos bloqueiam por 15 minutos.' },
+      { title: 'Trocar o Wi-Fi', text: 'Use “Trocar Wi-Fi”: o tablet testa a nova rede antes de apagar a anterior e volta para a antiga se falhar.' },
+      { title: 'Remover o gerenciamento', text: 'Use “Desativar gerenciamento”. O aparelho fica “desativação pendente” até confirmar. Se foi perdido ou restaurado à mão, registre como foi liberado.' },
+    ],
+    result: 'Cada ação fica registrada com data e confirmação do aparelho. “Solicitado” não significa “executado”.',
+    errors: [['Pedido expirou', 'O tablet estava sem internet por mais de 10 minutos. Use um código de recuperação no próprio aparelho.'],
+      ['Alguns modelos pedem restauração de fábrica para voltar ao uso comum', 'É limitação do Android do fabricante; faça backup antes.']],
+  },
   // ------------------------------------------------------------------ Portaria
   {
     slug: 'portaria-entrar', profile: 'portaria', title: 'Entrar e escolher o modo', keywords: 'login entrar totem',
@@ -176,6 +207,20 @@ export const TUTORIALS: Tutorial[] = [
     ],
     result: 'Histórico completo de cada encomenda.',
     errors: [['Internet caiu', 'Nada é considerado feito sem confirmação do servidor. Anote e registre quando voltar.'], ['Canal de aviso falhou', 'A encomenda continua registrada; o sistema tenta de novo e avisa a administração.']],
+  },
+  {
+    slug: 'quiosque-operar', profile: 'portaria', title: 'Usar o tablet em modo quiosque e trocar de turno', keywords: 'quiosque tablet turno trocar sair login manutencao',
+    goal: 'Operar a portaria no tablet do condomínio sem sair do aplicativo.',
+    before: ['Tablet já configurado pelo síndico (Dispositivos e quiosque).'],
+    steps: [
+      { title: 'Entre com a sua conta', text: 'O tablet abre a portaria do condomínio. Entre com o seu e-mail e senha: o aparelho não tem senha compartilhada e não dá acesso de síndico.' },
+      { title: 'Troca de turno', text: 'Ao terminar, use “Sair” no menu da conta. A tela de login volta dentro do quiosque para o próximo porteiro entrar com a conta dele.' },
+      { title: 'Câmera, QR e comprovante', text: 'Foto da etiqueta, leitura do QR e PDF do comprovante funcionam dentro do app. Links externos são bloqueados de propósito.' },
+      { title: 'Precisa de ajuste no tablet?', text: 'Peça ao síndico a manutenção. O botão “Manutenção” no tablet só funciona com código de recuperação do síndico.' },
+    ],
+    result: 'Operação contínua, com cada ação registrada no nome de quem estava logado.',
+    errors: [['Aviso “Sem contato com o servidor”', 'Sem internet nada é confirmado. Anote e registre quando a conexão voltar.'],
+      ['Câmera não abre', 'Confira se outro app não está usando a câmera e reabra a tela; se persistir, avise o síndico.']],
   },
   // ------------------------------------------------------------------ Morador
   {

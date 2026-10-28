@@ -6,6 +6,7 @@
  *   POST /api/totem/context      header X-Device-Secret  -> unidades (bloco/unidade apenas)
  *   POST /api/totem/receive      header X-Device-Secret  -> recebimento direto + local + avisos
  *   POST /api/totem/preregister  header X-Device-Secret  -> legado, somente clientes antigos
+ *   POST /api/totem/kiosk-*      agente Android gerenciado (ver _kiosk.ts)
  *
  * O dispositivo guarda só a própria credencial (hash no banco, revogável pelo síndico).
  * Nenhum token de usuário, lista de moradores, telefone ou histórico é exposto.
@@ -15,6 +16,7 @@ import { serviceClient, rpcError } from '../_lib/supabase.js';
 import { GoogleGenAI } from '@google/genai';
 import { env } from '../_lib/env.js';
 import { normalizeLabel, readLabel } from '../ocr/analyze-label.js';
+import { kiosk } from './_kiosk.js';
 
 const attempts = new Map<string, { n: number; at: number }>();
 function limit(key: string, max: number) {
@@ -33,6 +35,7 @@ async function secretHash(request: Request) {
 export const POST = handler(async (request) => {
   const action = new URL(request.url).pathname.split('/').pop();
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'local';
+  if (action?.startsWith('kiosk-')) return kiosk(action, request, ip);
   const svc = serviceClient();
 
   if (action === 'pair') {

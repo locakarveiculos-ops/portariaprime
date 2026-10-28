@@ -2,3 +2,5 @@
 *.mjs text eol=lf
 *.ts text eol=lf
 *.tsx text eol=lf
+android/gradlew text eol=lf
+*.bat text eol=crlf

@@ -1,0 +1,5 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Portaria Prime Kiosk</string>
+    <string name="admin_description">Gerencia este aparelho institucional do condomínio em modo quiosque para a operação da portaria. Não acessa mensagens, microfone, localização ou câmera remotamente.</string>
+</resources>
