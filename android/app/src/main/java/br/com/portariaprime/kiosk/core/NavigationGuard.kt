@@ -5,19 +5,30 @@ import java.net.URI
 /**
  * Decide o que a WebView pode abrir. Origens fixas no APK (build), nunca vindas do painel:
  * o síndico não consegue apontar o quiosque para um site externo.
+ * Vale também para navegação interna do SPA (pushState), checada em doUpdateVisitedHistory.
+ * `labLoopback`: só em build debug de laboratório aceita http://127.0.0.1 (adb reverse); release exige HTTPS.
  */
-class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>) {
-    private val app = origin(appOrigin) ?: error("APP_ORIGIN inválida")
+class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>, private val labLoopback: Boolean = false) {
+    private val app = origin(appOrigin, labLoopback) ?: error("APP_ORIGIN inválida")
 
     enum class Decision { ALLOW, PDF_VIEWER, BLOCK }
 
-    /** Navegação de página (top-level). Só a origem do app; PDF assinado do Storage vai ao visualizador interno. */
-    fun navigation(url: String): Decision {
+    /**
+     * Página (top-level ou pushState). Só a origem do app; dentro de /c/ apenas o condomínio inscrito
+     * e áreas de operação (nunca /admin, /org, /contratar, outro condomínio). PDF assinado vai ao visualizador interno.
+     */
+    fun navigation(url: String, slug: String? = null): Decision {
         val u = parse(url) ?: return Decision.BLOCK
         val o = "${u.scheme}://${u.authority}"
-        if (o == app && path(u).startsWith("/c/")) return Decision.ALLOW
-        if (o == app && (path(u) in setOf("/entrar", "/recuperar-senha", "/nova-senha", "/app", "/") || path(u).startsWith("/ajuda"))) return Decision.ALLOW
-        if (o in extraOrigins && path(u).startsWith("/storage/v1/object/sign/") && path(u).lowercase().endsWith(".pdf")) return Decision.PDF_VIEWER
+        val p = path(u)
+        if (o == app) {
+            if (p in setOf("/entrar", "/recuperar-senha", "/nova-senha", "/app")) return Decision.ALLOW
+            val m = Regex("^/c/([a-z0-9][a-z0-9-]{1,46}[a-z0-9])(/([a-z-]+))?/?$").find(p) ?: return Decision.BLOCK
+            if (slug != null && m.groupValues[1] != slug) return Decision.BLOCK
+            val area = m.groupValues[3]
+            return if (area.isEmpty() || area in AREAS) Decision.ALLOW else Decision.BLOCK
+        }
+        if (o in extraOrigins && p.startsWith("/storage/v1/object/sign/") && p.lowercase().endsWith(".pdf")) return Decision.PDF_VIEWER
         return Decision.BLOCK
     }
 
@@ -32,20 +43,27 @@ class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>) 
     fun mayUseCamera(origin: String) = origin.trimEnd('/') == app
 
     fun startUrl(slug: String, path: String): String {
-        require(Regex("^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$").matches(slug)) { "slug inválido" }
+        require(SLUG.matches(slug)) { "slug inválido" }
         require(path in setOf("portaria", "totem-equipe", "painel"))
         return "$app/c/$slug/$path"
     }
 
     private fun parse(url: String): URI? = try {
-        URI(url).takeIf { it.scheme == "https" && it.rawUserInfo == null && !it.host.isNullOrEmpty() }
+        URI(url).takeIf { ok(it, labLoopback) && it.rawUserInfo == null }
     } catch (_: Exception) { null }
 
     private fun path(u: URI) = u.rawPath ?: "/"
 
     companion object {
-        fun origin(s: String): String? = try {
-            URI(s).takeIf { it.scheme == "https" && !it.host.isNullOrEmpty() }?.let { "${it.scheme}://${it.authority}" }
+        private val SLUG = Regex("^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$")
+        /** Áreas de operação/gestão local; configurações e assinatura continuam exigindo permissão no servidor. */
+        val AREAS = setOf("portaria", "totem-equipe", "painel", "relatorios", "pessoas", "configuracoes", "avisos", "ajuda", "comprovante", "suporte", "aplicativo")
+
+        private fun ok(u: URI, lab: Boolean) = !u.host.isNullOrEmpty() &&
+            (u.scheme == "https" || (lab && u.scheme == "http" && u.host == "127.0.0.1"))
+
+        fun origin(s: String, lab: Boolean = false): String? = try {
+            URI(s).takeIf { ok(it, lab) }?.let { "${it.scheme}://${it.authority}" }
         } catch (_: Exception) { null }
     }
 }

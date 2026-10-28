@@ -59,7 +59,9 @@ class PolicyEnforcer(private val ctx: Context) {
         }
         // Restrições: durante manutenção são suspensas (gerenciamento continua).
         for ((key, r) in restrictionMap) step(key) {
-            if (!maintenance && key in p.restrictions) dpm.addUserRestriction(admin, r) else dpm.clearUserRestriction(admin, r)
+            // Build de laboratório nunca desliga o ADB (senão o próprio teste perde o acesso).
+            val wanted = !maintenance && key in p.restrictions && !(key == "no_debugging" && br.com.portariaprime.kiosk.BuildConfig.LAB_LOOPBACK)
+            if (wanted) dpm.addUserRestriction(admin, r) else dpm.clearUserRestriction(admin, r)
         }
         step("no_screen_capture") { dpm.setScreenCaptureDisabled(admin, !maintenance && "no_screen_capture" in p.restrictions) }
         step("status_bar") { dpm.setStatusBarDisabled(admin, !maintenance && p.statusBarDisabled) }

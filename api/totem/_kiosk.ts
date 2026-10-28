@@ -96,7 +96,9 @@ export async function kiosk(action: string, request: Request, ip: string): Promi
     limit(`ksync:${device}`, 30);
     const { data, error } = await svc.rpc('mdm_agent_sync', { p_device: device, p_counter: counter, p_report: body.report ?? {} });
     if (error) rpcError(error);
-    return json(data);
+    // Nonce de turno (só após sync assinado aceito): a página registra início/fim de turno com ele.
+    const nonce = await svc.rpc('mdm_shift_nonce', { p_device: device });
+    return json({ ...data, shift_nonce: nonce.error ? null : nonce.data });
   }
 
   if (action === 'kiosk-ack') {

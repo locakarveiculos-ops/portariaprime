@@ -174,8 +174,12 @@ class KioskActivity : Activity() {
     @SuppressLint("SetJavaScriptEnabled")
     private fun webView(): WebView {
         web?.let { (it.parent as? ViewGroup)?.removeView(it); return it }
-        val origins = setOfNotNull(NavigationGuard.origin(BuildConfig.SUPABASE_ORIGIN))
-        val g = NavigationGuard(BuildConfig.APP_ORIGIN, origins).also { guard = it }
+        val lab = BuildConfig.LAB_LOOPBACK
+        val origins = setOfNotNull(NavigationGuard.origin(BuildConfig.SUPABASE_ORIGIN, lab))
+        val g = NavigationGuard(BuildConfig.APP_ORIGIN, origins, lab).also { guard = it }
+        val slug = agent.store.tenantSlug
+        // DevTools da WebView só no build de laboratório (testes automatizados); nunca em release.
+        WebView.setWebContentsDebuggingEnabled(BuildConfig.LAB_LOOPBACK)
         val w = WebView(this)
         with(w.settings) {
             javaScriptEnabled = true
@@ -196,14 +200,38 @@ class KioskActivity : Activity() {
         w.webViewClient = object : WebViewClient() {
             override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                 val url = request.url.toString()
-                return when (g.navigation(url)) {
+                return when (g.navigation(url, slug)) {
                     NavigationGuard.Decision.ALLOW -> false
                     NavigationGuard.Decision.PDF_VIEWER -> { openPdf(url); true }
-                    NavigationGuard.Decision.BLOCK -> { Toast.makeText(this@KioskActivity, "Link externo bloqueado no quiosque.", Toast.LENGTH_SHORT).show(); true }
+                    NavigationGuard.Decision.BLOCK -> {
+                        Toast.makeText(this@KioskActivity, "Link externo bloqueado no quiosque.", Toast.LENGTH_SHORT).show()
+                        // Navegação do quadro principal cancelada pode deixar a página descarregada (tela branca):
+                        // se o app web não estiver montado, volta ao início do condomínio.
+                        if (request.isForMainFrame) ui.postDelayed({
+                            view.evaluateJavascript("(document.getElementById('root')||{}).childElementCount||0") { n ->
+                                if (n == "0" || n == "null") view.loadUrl(if (slug != null) startUrl(g, slug) else BuildConfig.APP_ORIGIN + "/entrar")
+                            }
+                        }, 1500)
+                        true
+                    }
                 }
             }
             override fun shouldInterceptRequest(view: WebView, request: WebResourceRequest): WebResourceResponse? =
                 if (g.resource(request.url.toString())) null else WebResourceResponse("text/plain", "utf-8", 403, "Bloqueado", emptyMap(), null)
+            // SPA: pushState/replaceState não passam por shouldOverrideUrlLoading. Rota fora da lista volta ao início.
+            override fun doUpdateVisitedHistory(view: WebView, url: String, isReload: Boolean) {
+                // Páginas internas (tela offline em about:blank/data:, erro do Chromium) não são navegação do usuário.
+                if (!url.startsWith("http")) return
+                if (g.navigation(url, slug) != NavigationGuard.Decision.ALLOW) {
+                    val now = SystemClock.elapsedRealtime()
+                    if (now - lastBlockedEvent > 60_000) {   // sem inundar a auditoria
+                        lastBlockedEvent = now
+                        agent.event("policy.failed", JSONObject().put("detail", "rota bloqueada: ${Uri.parse(url).path?.take(60)}"))
+                    }
+                    Toast.makeText(this@KioskActivity, "Área indisponível no quiosque.", Toast.LENGTH_SHORT).show()
+                    view.loadUrl(if (slug != null) startUrl(g, slug) else BuildConfig.APP_ORIGIN + "/entrar")
+                }
+            }
             // Erro SSL nunca é ignorado.
             override fun onReceivedSslError(view: WebView, handler: SslErrorHandler, error: android.net.http.SslError) { handler.cancel(); showOffline() }
             override fun onReceivedError(view: WebView, request: WebResourceRequest, error: WebResourceError) { if (request.isForMainFrame) showOffline() }
@@ -230,20 +258,26 @@ class KioskActivity : Activity() {
         }
         w.setDownloadListener { url, _, _, mime, _ ->
             if (mime == "application/pdf" || url.lowercase().contains(".pdf")) {
-                if (g.navigation(url) == NavigationGuard.Decision.PDF_VIEWER || g.resource(url)) openPdf(url)
+                if (g.navigation(url, slug) == NavigationGuard.Decision.PDF_VIEWER || g.resource(url)) openPdf(url)
             } else Toast.makeText(this, "Download bloqueado no quiosque.", Toast.LENGTH_SHORT).show()
         }
-        val slug = agent.store.tenantSlug
-        w.loadUrl(if (slug != null) g.startUrl(slug, agent.store.policy().startPath) else BuildConfig.APP_ORIGIN + "/entrar")
+        w.loadUrl(if (slug != null) startUrl(g, slug) else BuildConfig.APP_ORIGIN + "/entrar")
         web = w
         return w
     }
 
+    private fun startUrl(g: NavigationGuard, slug: String) =
+        g.startUrl(slug, agent.store.policy().startPath) + (agent.store.shiftNonce?.let { "#ppk=$it" } ?: "")
+
+    private var lastBlockedEvent = 0L
+    private var offlineRetry = false
     private fun showOffline() {
+        if (offlineRetry) return   // uma nova tentativa por vez (sem laço)
+        offlineRetry = true
         web?.loadDataWithBaseURL(null, "<html><body style='font-family:sans-serif;padding:24px;background:#101F30;color:#fff'>" +
             "<h2>Sem conexão com o Portaria Prime</h2><p>O quiosque continua protegido. Recebimentos e entregas só são confirmados com conexão — nenhum comprovante é gerado offline.</p>" +
             "<p>Tentando de novo automaticamente…</p></body></html>", "text/html", "utf-8", null)
-        ui.postDelayed({ val s = agent.store.tenantSlug; if (s != null && mode == "web") web?.loadUrl(guard!!.startUrl(s, agent.store.policy().startPath)) }, 20_000)
+        ui.postDelayed({ offlineRetry = false; val s = agent.store.tenantSlug; if (s != null && mode == "web") web?.loadUrl(startUrl(guard!!, s)) }, 20_000)
     }
 
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
@@ -262,7 +296,8 @@ class KioskActivity : Activity() {
         io.execute {
             try {
                 val f = File(cacheDir, "comprovante.pdf")
-                val c = URL(url).openConnection() as javax.net.ssl.HttpsURLConnection
+                val c = URL(url).openConnection() as java.net.HttpURLConnection
+                if (c !is javax.net.ssl.HttpsURLConnection && !BuildConfig.LAB_LOOPBACK) throw IllegalStateException("somente HTTPS")
                 c.connectTimeout = 15_000; c.readTimeout = 30_000
                 c.inputStream.use { inp -> f.outputStream().use { out -> inp.copyTo(out, 64 * 1024) } }
                 if (f.length() > 20L * 1024 * 1024) throw IllegalStateException("PDF grande demais")

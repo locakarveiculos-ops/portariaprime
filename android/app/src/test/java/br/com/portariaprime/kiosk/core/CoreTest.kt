@@ -77,4 +77,19 @@ class CoreTest {
         assertEquals(30, Backoff.nextDelaySeconds(300, 1))
         assertTrue(Backoff.nextDelaySeconds(300, 20) <= 1800)
     }
+
+    @Test fun soOCondominioInscritoEAreasDeOperacao() {
+        val g = NavigationGuard("https://portariaprime.vercel.app", emptySet())
+        val ok = NavigationGuard.Decision.ALLOW; val no = NavigationGuard.Decision.BLOCK
+        assertEquals(ok, g.navigation("https://portariaprime.vercel.app/c/cond-a/portaria", "cond-a"))
+        assertEquals(ok, g.navigation("https://portariaprime.vercel.app/c/cond-a/configuracoes?m=dispositivos", "cond-a"))
+        assertEquals("outro condomínio", no, g.navigation("https://portariaprime.vercel.app/c/cond-b/portaria", "cond-a"))
+        for (p in listOf("/admin", "/org", "/contratar", "/onboarding", "/planos", "/c/cond-a/../cond-b/portaria", "/c/cond-a/inexistente", "/checkout/retorno"))
+            assertEquals(p, no, g.navigation("https://portariaprime.vercel.app$p", "cond-a"))
+        // Loopback http só em laboratório.
+        assertEquals(no, g.navigation("http://127.0.0.1:3017/c/cond-a/portaria", "cond-a"))
+        val lab = NavigationGuard("http://127.0.0.1:3017", emptySet(), labLoopback = true)
+        assertEquals(ok, lab.navigation("http://127.0.0.1:3017/c/cond-a/portaria", "cond-a"))
+        assertEquals(no, lab.navigation("http://10.0.2.2:3017/c/cond-a/portaria", "cond-a"))
+    }
 }

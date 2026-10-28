@@ -63,6 +63,11 @@ class Store(ctx: Context) {
         get() = p.getString("applied_version", null)
         set(v) { p.edit().putString("applied_version", v).commit() }
 
+    /** Nonce de turno (só identifica o aparelho para auditoria de turno; não concede acesso). */
+    var shiftNonce: String?
+        get() = p.getString("shift_nonce", null)
+        set(v) { p.edit().putString("shift_nonce", v).apply() }
+
     var appsMeta: JSONArray
         get() = JSONArray(p.getString("apps_meta", "[]"))
         set(v) { p.edit().putString("apps_meta", v.toString()).apply() }

@@ -66,8 +66,8 @@ class Agent private constructor(private val ctx: Context) {
 
     @Synchronized fun sync() {
         if (store.deviceId == null || store.revoked) return
-        flushEvents()
         try {
+            flushEvents()   // dentro do try: sem rede não pode abortar antes do reagendamento
             val r = api.signed("/api/totem/kiosk-sync", JSONObject().put("report", report()))
             store.failures = 0; store.lastSyncOkWall = System.currentTimeMillis(); store.lastError = null
             r.optJSONObject("device")?.let { d -> store.tenantSlug = d.optString("tenant_slug", store.tenantSlug); store.deviceName = d.optString("name") }
@@ -80,6 +80,7 @@ class Agent private constructor(private val ctx: Context) {
                     store.appliedVersion = if ("lock_task" in failed) null else parsed.versionId
                 } catch (e: Exception) { store.lastError = "Política recusada pelo aparelho: ${e.message}"; event("policy.failed", JSONObject().put("detail", e.message)) }
             }
+            r.optString("shift_nonce").takeIf { Regex("^[0-9a-f]{64}$").matches(it) }?.let { store.shiftNonce = it }
             r.optJSONObject("recovery")?.let { rec -> store.saveRecovery(rec.getInt("version"), rec.getJSONArray("codes")) }
             r.optJSONArray("used_recovery")?.let { a -> for (i in 0 until a.length()) store.markRecoveryUsed(a.getInt(i)) }
             val cmds = r.optJSONArray("commands") ?: JSONArray()
@@ -174,7 +175,7 @@ class Agent private constructor(private val ctx: Context) {
         val was = store.maintenance()?.active == true
         store.saveMaintenance(null)
         enforcer.apply(store.policy(), false)
-        if (was) event("maintenance.end", JSONObject().put("reason", reason))
+        if (was) { event("maintenance.end", JSONObject().put("reason", reason)); syncAsync() }
         ctx.startActivity(Intent(ctx, KioskActivity::class.java).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_REORDER_TO_FRONT))
         listener?.invoke()
     }
@@ -182,7 +183,10 @@ class Agent private constructor(private val ctx: Context) {
     private fun alarm(inMs: Long) {
         val am = ctx.getSystemService(AlarmManager::class.java)
         val pi = PendingIntent.getBroadcast(ctx, 7, Intent(ctx, MaintenanceAlarmReceiver::class.java), PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT)
-        am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, SystemClock.elapsedRealtime() + inMs, pi)
+        val at = SystemClock.elapsedRealtime() + inMs
+        // Exato quando permitido (Android 12+ exige a permissão SCHEDULE_EXACT_ALARM); senão inexato (atraso de alguns minutos).
+        if (Build.VERSION.SDK_INT < 31 || am.canScheduleExactAlarms()) am.setExactAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi)
+        else am.setAndAllowWhileIdle(AlarmManager.ELAPSED_REALTIME_WAKEUP, at, pi)
     }
 
     // ---- Wi-Fi em duas etapas ---------------------------------------------------------------------
@@ -239,6 +243,7 @@ class Agent private constructor(private val ctx: Context) {
                 sent++
             }
         } catch (e: Api.HttpException) { if (e.status in 400..499 && e.status != 401 && e.status != 429) sent++ }  // descarta inválido
+        catch (_: java.io.IOException) { /* sem rede: mantém na fila e tenta no próximo sync */ }
         finally { store.dropEvents(sent) }
     }
 

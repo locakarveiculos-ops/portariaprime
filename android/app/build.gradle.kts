@@ -39,15 +39,24 @@ android {
 
     buildTypes {
         release {
+            buildConfigField("boolean", "LAB_LOOPBACK", "false")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
         debug {
-            applicationIdSuffix = ""   // mesmo pacote: DPC de laboratório
+            // Laboratório: com -PppLab=true aponta para a stack local por adb reverse (http://127.0.0.1).
+            // Release nunca aceita cleartext nem loopback.
+            val lab = project.findProperty("ppLab") == "true"
+            buildConfigField("boolean", "LAB_LOOPBACK", lab.toString())
+            if (lab) {
+                buildConfigField("String", "APP_ORIGIN", "\"http://127.0.0.1:3017\"")
+                buildConfigField("String", "SUPABASE_ORIGIN", "\"http://127.0.0.1:54321\"")
+                resValue("bool", "lab_cleartext", "true")
+            }
         }
     }
-    buildFeatures { buildConfig = true }
+    buildFeatures { buildConfig = true; resValues = true }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17

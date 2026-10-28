@@ -31,7 +31,7 @@ class BootReceiver : BroadcastReceiver() {
         val agent = Agent.get(context)
         agent.applyLocal()
         agent.event(if (intent.action == Intent.ACTION_MY_PACKAGE_REPLACED) "agent.restart" else "boot", JSONObject().put("detail", intent.action?.substringAfterLast('.')))
-        agent.schedule()
+        agent.syncAsync()   // relata o estado real logo após o boot (sem esperar o intervalo)
     }
 }
 

@@ -259,3 +259,27 @@ test('Admin Master: suporte vê a frota (leitura auditada), financeiro não; pub
   // Suporte não tem RPC de comando: só o síndico do condomínio comanda aparelhos.
   await rejects(asFresh(support, 'mdm_command_create', { p_device: dev2, p_action: 'reboot', p_params: '{}', p_idempotency_key: uuid(), p_secret: null }), /Sem permissão/);
 });
+
+test('troca de turno: nonce do aparelho + operador do mesmo condomínio; outros não registram', async () => {
+  const d = (await db.rpc(admin, 'mdm_device_create', { p_tenant: T, p_name: 'Turno', p_purpose: 'portaria', p_concierge: null })).device_id;
+  await enroll(d);
+  const nonce = await svc('mdm_shift_nonce', { p_device: d });
+  assert.match(nonce, /^[0-9a-f]{64}$/);
+  await rejects(db.rpc(port, 'mdm_shift_nonce', { p_device: d }), /permission denied/);
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.start' }), true);
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.start' }), true, 'recarregar não duplica');
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.end' }), true);
+  assert.equal(await db.rpc(admin2, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.start' }), false, 'outro condomínio');
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: 'f'.repeat(64), p_event: 'shift.start' }), false, 'nonce inválido');
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'exec' }), false);
+  const rows = await db.sql(`select event, actor_id, tenant_id, data->>'role' r from mdm_audit_events where device_id = $1 and event like 'shift.%' order by id`, [d]);
+  assert.deepEqual(rows.map((r) => [r.event, r.actor_id, r.tenant_id, r.r]), [['shift.start', port, T, 'porteiro'], ['shift.end', port, T, 'porteiro']]);
+  // Rotação: após 24 h novo nonce; o anterior ainda vale mais 24 h; depois expira.
+  db.setNow('2026-10-29T12:30:00Z');
+  const n2 = await svc('mdm_shift_nonce', { p_device: d });
+  assert.notEqual(n2, nonce);
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.start' }), true);
+  db.setNow('2026-10-30T13:00:00Z');
+  assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.end' }), false, 'anterior expirado');
+  db.setNow(NOW);
+});

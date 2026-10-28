@@ -3,6 +3,9 @@ import type { Session } from '@supabase/supabase-js';
 import { supabase, configError } from './supabase';
 import { friendly, rpc } from './api';
 import { applyTheme } from './theme';
+import { captureKioskNonce, isKiosk, kioskShift } from './kiosk-shift';
+
+captureKioskNonce();
 
 export interface TenantLink {
   tenant_id: string;
@@ -58,6 +61,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
       if (platformError && platformError.code !== 'PGRST202') throw new Error(friendly(platformError));
       if (current !== generation.current) return;
       setCtx({ ...context, platform_role: platform?.role ?? null });
+      void kioskShift('shift.start');
       setError(null);
     } catch (e: any) {
       if (current === generation.current) setError(e.message);
@@ -83,6 +87,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
 
   const signOut = useCallback(async () => {
     // Encerra canais realtime e limpa tema/dados do condomínio anterior.
+    await kioskShift('shift.end');   // antes de encerrar a sessão (precisa do JWT do operador)
     await supabase.removeAllChannels();
     try {
       const sub = await (await navigator.serviceWorker?.getRegistration())?.pushManager?.getSubscription();
@@ -91,7 +96,7 @@ export function SessionProvider({ children }: { children: React.ReactNode }) {
     // Sai só deste aparelho; o padrão (global) derrubava a sessão de todos os outros.
     await supabase.auth.signOut({ scope: 'local' });
     applyTheme(null);
-    try { sessionStorage.clear(); } catch { /* sem storage */ }
+    try { const k = isKiosk() ? sessionStorage.getItem('pp_kiosk_shift') : null; sessionStorage.clear(); if (k) sessionStorage.setItem('pp_kiosk_shift', k); } catch { /* sem storage */ }
     setCtx(null);
   }, []);
 

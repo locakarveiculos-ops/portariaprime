@@ -31,7 +31,7 @@ class Api(private val base: String, private val store: Store) {
 
     private fun post(path: String, body: String, headers: Map<String, String>): JSONObject {
         val c = URL(base + path).openConnection() as HttpURLConnection
-        require(c is HttpsURLConnection) { "somente HTTPS" }
+        require(c is HttpsURLConnection || BuildConfig.LAB_LOOPBACK) { "somente HTTPS" }
         c.requestMethod = "POST"
         c.connectTimeout = 15_000; c.readTimeout = 20_000
         c.instanceFollowRedirects = false

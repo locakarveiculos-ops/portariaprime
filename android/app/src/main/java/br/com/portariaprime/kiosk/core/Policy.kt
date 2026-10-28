@@ -35,9 +35,13 @@ data class Policy(
         private val KEYS = setOf("mode", "start_path", "apps", "lock_task_features", "status_bar_disabled", "restrictions", "keep_screen_on",
             "stay_on_plugged", "orientation", "brightness", "system_update", "maintenance_max_minutes", "sync_interval_seconds")
 
-        /** Política embutida usada antes da primeira sincronização: Single-App, nada liberado. */
+        /**
+         * Política embutida antes da primeira sincronização: Single-App, nada liberado.
+         * Sem "no_debugging" aqui: desligar ADB só por decisão explícita da política do servidor
+         * (evita prender um aparelho de laboratório que ainda não falou com o backend).
+         */
         fun fallback() = Policy("", "single_app", "portaria", emptyList(), setOf("global_actions"), true,
-            setOf("no_add_user", "no_debugging", "no_factory_reset", "no_modify_accounts", "no_safe_boot", "no_unknown_sources"),
+            setOf("no_add_user", "no_factory_reset", "no_modify_accounts", "no_safe_boot", "no_unknown_sources"),
             true, false, "auto", null, null, 30, 300)
 
         fun parse(versionId: String, c: JSONObject): Policy {
