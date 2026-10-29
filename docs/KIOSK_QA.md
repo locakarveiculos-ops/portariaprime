@@ -246,3 +246,31 @@ Restrições efetivas após a desativação e após a remoção por cabo (`dumps
 - A release 1.0.1 **não** foi instalada no emulador: o emulador usa a variante lab (assinatura debug), e as duas não se atualizam uma sobre a outra. O código Android é o mesmo nas duas; difere só o `testOnly`, o nome, a faixa e o ADB.
 - Atualizar um aparelho já provisionado com a 1.0.0 para a 1.0.1 (mesma chave) não foi testado em aparelho físico.
 - **Homologação física: não executada.**
+
+## 12. Terceira rodada (29/10/2026): versão 1.0.2 e domínio oficial
+
+Somente **emulador** (Android 14) e testes automatizados. Nenhum aparelho físico.
+
+### 12.1 Achado e correção no app
+- **Código válido recusado ("Código inválido").** O teclado do Android aplicava sugestões/autocorreção no campo de código e alterava o texto antes da validação; um código certo virava tentativa errada e, repetido, levava ao bloqueio de 15 min. Correção: campos de código de inscrição e de recuperação sem sugestões (`TYPE_TEXT_FLAG_NO_SUGGESTIONS` + `VISIBLE_PASSWORD`).
+- Investigação: os hashes PBKDF2 gravados no aparelho conferem 5/5 com os códigos gerados no painel (verificado fora do app); o defeito era só a entrada de texto.
+- Roteiros de emulador: passam a conferir o texto do campo antes de enviar (`typeChecked`), a limpar o campo com um único evento e a gravar dumps de UI em `/data/local/tmp` (`/sdcard` fica fechado ao shell com `no_usb_file_transfer`).
+
+### 12.2 Domínio
+- Origem padrão do APK: `https://portariaprime.com.br`. `https://portariaprime.vercel.app` continua aceita pela WebView durante a transição (`LEGACY_APP_ORIGIN`), com as mesmas regras de rota e condomínio. Teste JVM `dominioAnteriorAceitoNaTransicaoSemAbrirOutrasOrigens`.
+- APK 1.0.1 já instalado (origem antiga) continua funcionando: o endereço antigo não foi redirecionado.
+
+### 12.3 Resultado
+```
+bash tests/e2e/kiosk-device.sh  → 22 PASS, 0 FALHA   (app 1.0.2-lab; expiração em 298 s para prazo de 300 s)
+bash tests/e2e/kiosk-exit.sh    → 30 PASS, 0 FALHA   (B pulado: admin já testOnly; recusa do não-testOnly registrada na seção 11)
+gradlew testDebugUnitTest lintLab lintRelease assembleLab assembleRelease → ok
+```
+
+| Item | Valor |
+|---|---|
+| Release 1.0.2 (versionCode 3) | `public/kiosk/portaria-prime-kiosk-1.0.2.apk`, 62.525 bytes, SHA-256 `773d30eca9f55b43b6de4203c2bb130b4aa98f755c8945621218865964d10aa1`, sem `testOnly` |
+| Assinatura | mesmo certificado (`cdc082cc…058061d`), checksum `zcCCzPlA3Q01sNr6QM-RpxYfoRUWQpfZQ0aDh8BYBh0` |
+| Lab 1.0.2 | `J:\android-toolchain\entrega\portaria-prime-kiosk-1.0.2-lab.apk` (fora do site), SHA-256 `88158114ff44b2242b1ca14dad5fda9addefc7ffed93bd2126eaf33adf1c7709` |
+
+Homologação física: **não executada**.
