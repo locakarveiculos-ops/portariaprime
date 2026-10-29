@@ -7,7 +7,7 @@ Decisão de arquitetura: `ADR_KIOSK_ANDROID.md`. Resultados de QA e pendências:
 | Onde | O quê |
 |---|---|
 | `android/` | App Kotlin (DPC + launcher + WebView). Sem AndroidX e sem dependências de runtime. APK release com cerca de 57 KB. |
-| `supabase/migrations/20261028000100…0400` | Tabelas `mdm_*`, validação de política, RPCs do painel, do agente e do Admin Master. |
+| `supabase/migrations/20261028000100…0500`, `20261029000100` | Tabelas `mdm_*`, validação de política, RPCs do painel, do agente, do Admin Master, auditoria de turno e correção de manutenção expirada. |
 | `api/totem/_kiosk.ts` | `/api/totem/kiosk-enroll`, `kiosk-sync`, `kiosk-ack` e `kiosk-event`, dentro da função existente do totem (não usa slot Vercel novo). |
 | `src/pages/tenant/config/DevicesCard.tsx` | Configurações → **Dispositivos e quiosque**. |
 | `src/pages/admin/DevicesPanel.tsx` | Admin Master → **Dispositivos** (leitura e publicação da versão do agente). |
@@ -52,9 +52,27 @@ Origens fixas no APK, em `app/build.gradle.kts`: `APP_ORIGIN` e `SUPABASE_ORIGIN
 4. Hospede o APK em **HTTPS** com URL estável e versionada (ex.: `…/kiosk/pp-kiosk-1.0.0.apk`).
 5. Admin Master → Dispositivos → **Publicar versão** (exige papel owner e MFA).
 
+### Builds: teste × laboratório × produção
+
+| Build | Comando | Assinatura | Aponta para | Uso |
+|---|---|---|---|---|
+| **Teste (debug)** | `./gradlew assembleDebug` | chave de *debug* do Android SDK (`~/.android/debug.keystore`, gerada automaticamente) | produção (`portariaprime.vercel.app` + Supabase de produção) | instalar por adb em aparelho de **teste**; não serve para o QR do cliente |
+| **Laboratório** | `./gradlew -PppLab=true assembleDebug` | debug | stack local por `adb reverse` (`http://127.0.0.1`) | só emulador/aparelho de laboratório; ADB nunca desligado; DevTools da WebView ligado |
+| **Produção (release)** | `./gradlew assembleRelease` com `keystore.properties` | chave **definitiva** do projeto (você guarda) | produção | o único que vai para o QR de provisionamento |
+
+A chave de debug muda de máquina para máquina. Um aparelho com o APK de teste só aceita atualização assinada com a **mesma** chave de debug; para trocar para o APK de produção é preciso desinstalar, o que remove o Device Owner e exige restauração. Por isso o APK de teste é só de laboratório.
+
+### Como manter a mesma assinatura em todas as atualizações
+
+1. A chave release é criada **uma vez** (passo 1 acima) e nunca é recriada.
+2. Guarde o `.jks` e as senhas em pelo menos dois lugares seguros, por exemplo cofre de senhas e mídia offline. Perder a chave impede atualizar os aparelhos já instalados: a única saída seria restaurá-los de fábrica.
+3. Nunca coloque a chave nem as senhas no Git, em issues ou em chat. `android/.gitignore` já ignora `*.jks`, `*.keystore` e `keystore.properties`.
+4. Cada versão nova: aumente `versionCode`, rode `assembleRelease` com o mesmo `keystore.properties` e confira que o checksum da assinatura (`scripts/signature-checksum.sh`) é **idêntico** ao da versão publicada antes. Se mudou, **não publique**.
+5. Em CI: chave e senhas só como segredos do CI, nas variáveis `PP_KIOSK_*`. O arquivo `.jks` é materializado no build e apagado ao final.
+
 **Situação nesta entrega:**
-- Foi gerado um APK release assinado com uma **chave de laboratório**. Ela fica em `J:\android-toolchain\lab\`, fora do repositório, e **não serve para produção**.
-- A chave definitiva, a hospedagem do APK e a publicação da versão **não foram feitas**: dependem de decisão do responsável e de segredo de produção.
+- Existe uma chave de **laboratório** em `J:\android-toolchain\lab\` (fora do repositório). Ela **não serve para produção**.
+- A chave definitiva, a hospedagem HTTPS do APK e a publicação da versão **não foram feitas**: dependem do responsável e de segredo de produção.
 - Sem versão publicada, o painel mostra o aviso e não exibe o QR.
 
 ## Atualização do agente
@@ -97,10 +115,13 @@ Para remover em laboratório, use "Desativar gerenciamento" no painel. A alterna
   - tokens vencidos há mais de 30 dias são apagados;
   - senhas de Wi-Fi não entregues são removidas após a expiração do comando.
 - **Logs:** não guardam tokens, senha de Wi-Fi nem dados de moradores. O inventário de apps se limita aos pacotes do catálogo.
-- **Cancelamento do SaaS:**
-  - a credencial do aparelho deixa de receber política e comandos;
-  - a última política permanece;
-  - o síndico usa um código de recuperação offline para entrar em manutenção, que suspende todas as restrições, inclusive o bloqueio de restauração;
-  - nessa janela, restaura o aparelho pelas Configurações do Android ou pelo procedimento do fabricante.
+- **Manutenção × desprovisionamento (separados de propósito):**
+  - *Manutenção temporária* (painel ou código offline): libera Configurações, Wi-Fi, instalação de apps e o restante do uso normal, e volta sozinha ao quiosque. **Continuam bloqueados** restauração de fábrica, novos usuários/contas e modo de segurança. Testado no emulador: o item "Erase all data" aparece desabilitado com "Blocked by work policy".
+  - *Desprovisionamento definitivo*: só pelo painel do síndico, em "Desativar gerenciamento" (com senha recente), e fica pendente até o aparelho confirmar. O app remove as restrições e libera o Device Owner. Não aparece como botão no tablet.
+- **Plano vencido ou cancelado:**
+  - o aparelho continua sincronizando e recebendo comandos (só novas inscrições são bloqueadas);
+  - o síndico pode desativar o gerenciamento pelo painel;
+  - sem internet, o aparelho mantém a última política.
 
-  O hardware nunca fica refém.
+  O hardware não fica refém do plano.
+- **Credencial revogada:** o aparelho mantém o quiosque com a última política e mostra a tela de reinscrição; um código novo do síndico o recoloca em operação. Código errado não apaga a identidade atual (chave nova só substitui a antiga depois do aceite do servidor).

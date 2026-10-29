@@ -31,7 +31,7 @@ import java.util.concurrent.Executors
 class Agent private constructor(private val ctx: Context) {
     val store = Store(ctx)
     val enforcer = PolicyEnforcer(ctx)
-    private val api = Api(BuildConfig.APP_ORIGIN, store)
+    private val api = Api(BuildConfig.APP_ORIGIN, store, ctx)
     private val io = Executors.newSingleThreadExecutor()
     @Volatile var listener: (() -> Unit)? = null
 
@@ -52,11 +52,14 @@ class Agent private constructor(private val ctx: Context) {
 
     fun enrollAsync(token: String, done: (String?) -> Unit) = io.execute {
         done(try {
-            val pub = DeviceIdentity.rotate()
+            // Código inválido/expirado não pode apagar a inscrição atual: a chave nova é gerada em alias
+            // temporário e só substitui a antiga (e zera contador/credencial local) depois do aceite do servidor.
+            val pub = DeviceIdentity.candidate(ctx)
             val info = JSONObject().put("managed", enforcer.isDeviceOwner).put("manufacturer", Build.MANUFACTURER).put("model", Build.MODEL)
                 .put("release", Build.VERSION.RELEASE).put("sdk", Build.VERSION.SDK_INT).put("agentVersion", BuildConfig.VERSION_NAME)
-            store.resetEnrollment()
             val r = api.enroll(token, pub, info)
+            DeviceIdentity.commit(ctx)
+            store.resetEnrollment()
             store.deviceId = r.getString("deviceId"); store.tenantSlug = r.getString("tenantSlug"); store.deviceName = r.optString("deviceName")
             ctx.getSharedPreferences("kiosk", Context.MODE_PRIVATE).edit().remove("pending_token").commit()
             sync(); null

@@ -93,7 +93,7 @@ class KioskActivity : Activity() {
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
         if (p.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val next = when {
-            s.deviceId == null -> "enroll"
+            s.deviceId == null || s.revoked -> "enroll"   // revogado: reinscrição com código novo, sem liberar o aparelho
             agent.maintenanceActive() -> "maintenance"
             else -> "web"
         }
@@ -117,6 +117,7 @@ class KioskActivity : Activity() {
 
     private fun enrollView(): View = column(padding = 48).apply {
         addView(title("Portaria Prime Kiosk"))
+        if (agent.store.revoked) addView(text("A credencial deste aparelho foi revogada no painel. O quiosque continua protegido com a última política. Para voltar a operar, o síndico gera um novo código de inscrição."))
         addView(text(if (agent.enforcer.isDeviceOwner) "Aparelho provisionado. Digite o código de inscrição gerado em Configurações → Dispositivos e quiosque (uso único, vale 1 hora)."
             else "Este aplicativo não é o proprietário do aparelho (Device Owner). Sem isso não há quiosque protegido: provisione pelo QR na configuração inicial do Android. Fullscreen ou fixação de tela não equivalem a gerenciamento."))
         val input = EditText(context).apply { hint = "Código de inscrição"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY) }
@@ -323,7 +324,8 @@ class KioskActivity : Activity() {
     private fun maintenanceView(): View = column(padding = 48).apply {
         val m = agent.store.maintenance()
         addView(title("Em manutenção"))
-        addView(text("Quiosque e restrições suspensos temporariamente; o aparelho continua gerenciado. Volta sozinho ao Portaria Prime em ${agent.maintenanceRemainingMs() / 60_000 + 1} min ou ao reiniciar."))
+        addView(text("Quiosque suspenso temporariamente para ajustes autorizados; o aparelho continua gerenciado. Volta sozinho ao Portaria Prime em ${agent.maintenanceRemainingMs() / 60_000 + 1} min ou ao reiniciar."))
+        addView(text("Restauração de fábrica, novos usuários/contas e modo de segurança continuam bloqueados. Retirar o gerenciamento é outro procedimento, feito pelo síndico no painel."))
         addView(text("Escopo: ${when (m?.scope) { "wifi" -> "Wi-Fi"; "apps" -> "apps"; else -> "configurações" }}"))
         addView(button("Abrir configurações do Android") {
             startActivity(Intent(if (m?.scope == "wifi") Settings.ACTION_WIFI_SETTINGS else Settings.ACTION_SETTINGS).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))

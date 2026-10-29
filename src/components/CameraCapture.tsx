@@ -17,18 +17,21 @@ export function CameraCapture({ onCapture, label = 'Fotografar' }: { onCapture: 
     stream.current = null;
   };
   useEffect(() => stop, []);
+  // Liga o stream depois que o <video> foi montado. Antes era um requestAnimationFrame logo após o
+  // setState: em aparelho lento o quadro rodava antes da montagem e o vídeo ficava sem imagem
+  // ("Capturar" não fazia nada). Encontrado no quiosque Android.
+  useEffect(() => {
+    const v = video.current;
+    if (state !== 'on' || !v || !stream.current) return;
+    v.srcObject = stream.current;
+    v.play().catch(() => { /* autoplay bloqueado: o usuário toca no vídeo */ });
+  }, [state]);
 
   const start = async () => {
     try {
       if (!navigator.mediaDevices?.getUserMedia) throw new Error('sem câmera');
       stream.current = await navigator.mediaDevices.getUserMedia({ video: { facingMode: { ideal: 'environment' }, width: { ideal: 1920 } }, audio: false });
       setState('on');
-      requestAnimationFrame(() => {
-        if (video.current) {
-          video.current.srcObject = stream.current;
-          video.current.play();
-        }
-      });
     } catch {
       setState('denied');
     }
@@ -37,6 +40,7 @@ export function CameraCapture({ onCapture, label = 'Fotografar' }: { onCapture: 
   const shoot = () => {
     const v = video.current;
     if (!v) return;
+    if (!v.videoWidth) { v.play().catch(() => {}); return; }   // câmera ainda sem imagem: tenta de novo em vez de falhar calado
     const c = document.createElement('canvas');
     c.width = v.videoWidth;
     c.height = v.videoHeight;

@@ -73,21 +73,29 @@ await waitFor(() => hasText('Registrar encomenda'), 25000, 'tela de recebimento'
 assert.equal(lock(), 'LOCKED');
 
 step('etiqueta pela câmera da WebView (permissão concedida pelo DPC)');
-await fakeCamera(svgUrl(['MARIA MORADORA LAB', 'BLOCO A APTO 101', `RASTREIO ${run}BR`, 'CORREIOS']));
+await fakeCamera(svgUrl(['DESTINATÁRIO:', 'MARIA MORADORA LAB', 'BLOCO A APTO 101', 'CORREIOS - SEDEX', `OBJETO: ${run}BR`]));
 assert.ok(await click('button', 'Fotografar etiqueta') || await click('button', 'Escanear etiqueta'), 'botão da câmera');
-await waitFor(() => ev(`!!document.querySelector('video')`), 15000, 'vídeo da câmera');
-await sleep(1500);
+await waitFor(() => ev(`(document.querySelector('video')?.videoWidth || 0) > 0`), 15000, 'vídeo da câmera com imagem');
+await sleep(800);
 assert.ok(await click('button', 'Capturar'));
 await waitFor(() => ev(`!!document.querySelector('img[alt="Foto da etiqueta"]')`), 15000, 'foto na galeria');
-const ocrBtn = await click('button', 'Ler etiqueta automaticamente');
-if (ocrBtn) { await sleep(6000); console.log(`   OCR: ${(await ev(`[...document.querySelectorAll('[role=alert], .text-xs')].map(e=>e.textContent).join(' | ').slice(0,200)`))}`); }
-else console.log('   OCR: botão indisponível no plano/ambiente');
+// OCR real (Gemini) dispara sozinho com a primeira foto; aguarda o resultado ou o aviso de falha.
+await waitFor(async () => !(await ev(`[...document.querySelectorAll('button')].some(b => b.textContent.includes('Ler etiqueta') && b.disabled)`)), 60000, 'OCR terminar').catch(() => {});
+await sleep(1500);
+const ocrOut = await ev(`({ fields: document.querySelector('[aria-label="Campos lidos"]')?.innerText || null,
+  match: [...document.querySelectorAll('[role=alert]')].map(e => e.textContent).join(' | ').slice(0, 300),
+  unit: [...document.querySelectorAll('input')].map(i => i.value).filter(Boolean).join(' / ') })`);
+console.log(`   OCR: ${JSON.stringify(ocrOut).slice(0, 600)}`);
 save('20-etiqueta');
 
 step('registro: unidade, rastreio, destinatário, guarda física confirmada');
-await setInput('Unidade de destino', 'A 101');
-await waitFor(() => ev(`!!document.querySelector('[role=listbox] button, [role=option]')`), 10000, 'unidade');
-await ev(`(() => { const b = [...document.querySelectorAll('[role=listbox] button, [role=option]')].find((x) => x.textContent.includes('101')); b.click(); return true; })()`);
+// Morador e unidade: se o OCR já casou a unidade, mantém; senão o porteiro escolhe (confirmação humana).
+if (!(await hasText('Selecionada: Bloco A · 101'))) {
+  await setInput('Unidade de destino', 'A 101');
+  await waitFor(() => ev(`!!document.querySelector('[role=listbox] button, [role=option]')`), 10000, 'unidade');
+  await ev(`(() => { const b = [...document.querySelectorAll('[role=listbox] button, [role=option]')].find((x) => x.textContent.includes('101')); b.click(); return true; })()`);
+}
+await waitFor(() => hasText('Selecionada: Bloco A · 101'), 10000, 'unidade confirmada');
 await setInput('Rastreio', `${run}BR`);
 await setInput('Destinatário', 'Maria Moradora Lab');
 await ev(`(() => { const s = document.querySelector('select'); if (s && [...s.options].some(o => o.value)) { s.value = [...s.options].find(o => o.value).value; s.dispatchEvent(new Event('change', { bubbles: true })); } return true; })()`);
@@ -118,6 +126,8 @@ save('22-qr-lido');
 step('quem retira, assinatura no canvas, foto do item e confirmação');
 await setInput('Quem está retirando', 'Maria Moradora Lab');
 // Assinatura com eventos de ponteiro reais no canvas do SignaturePad.
+await ev(`document.querySelector('[role=dialog] canvas').scrollIntoView({ block: 'center' }); true`);
+await sleep(500);
 const box = await ev(`(() => { const c = document.querySelector('[role=dialog] canvas'); const r = c.getBoundingClientRect(); return { x: r.x, y: r.y, w: r.width, h: r.height }; })()`);
 const dpr = await ev('devicePixelRatio');
 for (const [type, fx, fy] of [['mousePressed', 0.1, 0.5], ['mouseMoved', 0.3, 0.2], ['mouseMoved', 0.5, 0.8], ['mouseMoved', 0.8, 0.3], ['mouseReleased', 0.8, 0.3]]) {
@@ -125,10 +135,11 @@ for (const [type, fx, fy] of [['mousePressed', 0.1, 0.5], ['mouseMoved', 0.3, 0.
   await sleep(60);
 }
 void dpr;
+assert.ok(await ev(`(() => { const c = document.querySelector('[role=dialog] canvas'); const d = c.getContext('2d').getImageData(0, 0, c.width, c.height).data; let n = 0; for (let i = 3; i < d.length; i += 4) if (d[i]) n++; return n > 200; })()`), 'traço da assinatura no canvas');
 await fakeCamera(svgUrl(['CAIXA ENTREGUE', `${run}BR`]));
 await click('[role=dialog] button', 'Fotografar item entregue');
-await waitFor(() => ev(`!!document.querySelector('[role=dialog] video')`), 15000, 'câmera do item');
-await sleep(1200);
+await waitFor(() => ev(`(document.querySelector('[role=dialog] video')?.videoWidth || 0) > 0`), 15000, 'câmera do item com imagem');
+await sleep(800);
 await click('[role=dialog] button', 'Capturar');
 await waitFor(() => ev(`!!document.querySelector('img[alt="Foto do item entregue"]')`), 15000, 'foto do item');
 save('23-assinatura-foto');
@@ -145,5 +156,19 @@ assert.equal(p2.status, 'RETIRADA');
 const { count: notes } = await svc.from('notifications').select('id', { count: 'exact', head: true }).eq('package_id', pkg.id);
 console.log(`   protocolo ${rc.protocol}; avisos ao morador: ${notes}`);
 assert.equal(lock(), 'LOCKED', 'continua no quiosque');
+
+step('histórico: a entrega aparece na busca da portaria');
+await ev(`document.querySelector('[role=dialog] button[aria-label="Fechar"]')?.click(); true`);
+await click('[role=tab]', 'Buscar');
+await sleep(800);
+await ev(`(() => { const i = [...document.querySelectorAll('input')].find((x) => x.placeholder === 'Rastreio, unidade ou nome'); if (!i) return false;
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set.call(i, '${run}BR'); i.dispatchEvent(new Event('input', { bubbles: true })); i.form?.requestSubmit(); return true; })()`);
+await waitFor(() => hasText(`${run}BR`), 15000, 'histórico com a encomenda');
+assert.ok(await ev(`document.body.innerText.includes('Retirada') || document.body.innerText.includes('RETIRADA') || document.body.innerText.includes('Entregue')`), 'status de retirada no histórico');
+save('26-historico');
+
+step('notificações: o que foi pedido, aceito pelo provedor e confirmado');
+const { data: jobs } = await svc.from('notification_jobs').select('event, channel, status, attempts, last_error, recipient').eq('ref_id', pkg.id).order('created_at');
+console.log(JSON.stringify(jobs));
 console.log('OK kiosk-flow');
 ws.close();

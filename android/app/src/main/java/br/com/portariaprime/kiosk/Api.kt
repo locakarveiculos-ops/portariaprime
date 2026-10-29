@@ -11,12 +11,12 @@ import javax.net.ssl.HttpsURLConnection
  * Canal autenticado com o backend. Somente HTTPS (validação padrão de certificado; network security
  * config bloqueia cleartext e CAs do usuário). Cada requisição é assinada pela chave do Keystore.
  */
-class Api(private val base: String, private val store: Store) {
+class Api(private val base: String, private val store: Store, private val ctx: android.content.Context) {
     class HttpException(val status: Int, message: String) : IOException(message)
 
     fun enroll(token: String, publicKey: String, info: JSONObject): JSONObject {
         val agent = store.agentId
-        val proof = DeviceIdentity.sign("enroll\n$token\n$agent")
+        val proof = DeviceIdentity.signCandidate(ctx, "enroll\n$token\n$agent")
         return post("/api/totem/kiosk-enroll", JSONObject().put("token", token).put("agentId", agent).put("publicKey", publicKey)
             .put("proof", proof).put("info", info).toString(), emptyMap())
     }
@@ -25,7 +25,7 @@ class Api(private val base: String, private val store: Store) {
         val device = store.deviceId ?: throw IOException("não inscrito")
         val text = body.toString()
         val counter = store.nextCounter()
-        val sig = DeviceIdentity.sign("POST\n$path\n$device\n$counter\n${sha256(text)}")
+        val sig = DeviceIdentity.sign(ctx, "POST\n$path\n$device\n$counter\n${sha256(text)}")
         return post(path, text, mapOf("X-PP-Device" to device, "X-PP-Counter" to counter.toString(), "X-PP-Signature" to sig))
     }
 

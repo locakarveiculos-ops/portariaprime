@@ -39,6 +39,11 @@ class PolicyEnforcer(private val ctx: Context) {
         "no_config_bluetooth" to UserManager.DISALLOW_CONFIG_BLUETOOTH,
     )
 
+    companion object {
+        /** Restrições que a manutenção temporária mantém (saída definitiva só por desprovisionamento). */
+        val KEEP_IN_MAINTENANCE = setOf("no_factory_reset", "no_add_user", "no_modify_accounts", "no_safe_boot")
+    }
+
     /** Aplica e devolve a lista do que falhou (vazia = conforme). */
     fun apply(p: Policy, maintenance: Boolean): Set<String> {
         if (!isDeviceOwner) return setOf("lock_task")
@@ -57,10 +62,14 @@ class PolicyEnforcer(private val ctx: Context) {
             if (maintenance) dpm.clearPackagePersistentPreferredActivities(admin, self)
             else dpm.addPersistentPreferredActivity(admin, filter, ComponentName(ctx, KioskActivity::class.java))
         }
-        // Restrições: durante manutenção são suspensas (gerenciamento continua).
+        // Restrições: a manutenção libera o uso normal do aparelho (Configurações, Wi-Fi, apps), mas NÃO
+        // libera o que tornaria a saída definitiva: restauração de fábrica, usuários/contas extras e modo de
+        // segurança. Esses só caem no desprovisionamento supervisionado (releaseOwnership), nunca na manutenção.
         for ((key, r) in restrictionMap) step(key) {
+            val keepInMaintenance = key in KEEP_IN_MAINTENANCE
             // Build de laboratório nunca desliga o ADB (senão o próprio teste perde o acesso).
-            val wanted = !maintenance && key in p.restrictions && !(key == "no_debugging" && br.com.portariaprime.kiosk.BuildConfig.LAB_LOOPBACK)
+            val wanted = key in p.restrictions && (!maintenance || keepInMaintenance) &&
+                !(key == "no_debugging" && br.com.portariaprime.kiosk.BuildConfig.LAB_LOOPBACK)
             if (wanted) dpm.addUserRestriction(admin, r) else dpm.clearUserRestriction(admin, r)
         }
         step("no_screen_capture") { dpm.setScreenCaptureDisabled(admin, !maintenance && "no_screen_capture" in p.restrictions) }

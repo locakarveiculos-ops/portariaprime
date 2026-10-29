@@ -159,7 +159,8 @@ test('comandos: enumerados, idempotentes, expiram; desbloqueio velho não vale a
   const again = await asFresh(admin, 'mdm_command_create', { p_device: dev, p_action: 'start_maintenance', p_params: JSON.stringify({ minutes: 15, scope: 'settings', reason: 'Ajuste de Wi-Fi' }), p_idempotency_key: key, p_secret: null });
   assert.equal(again.id, c.id);
   assert.equal(again.replayed, true);
-  assert.equal((await db.rpc(admin, 'mdm_device_detail', { p_device: dev })).state, 'em_manutencao');
+  // Pedido ainda não confirmado pelo aparelho: o painel não afirma "em manutenção".
+  assert.notEqual((await db.rpc(admin, 'mdm_device_detail', { p_device: dev })).state, 'em_manutencao');
   // Aparelho reconecta 11 minutos depois: comando expirado, não é entregue.
   db.setNow('2026-10-28T12:11:00Z');
   const r = await sync(dev, 30);
@@ -281,5 +282,20 @@ test('troca de turno: nonce do aparelho + operador do mesmo condomínio; outros 
   assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.start' }), true);
   db.setNow('2026-10-30T13:00:00Z');
   assert.equal(await db.rpc(port, 'mdm_shift_event', { p_nonce: nonce, p_event: 'shift.end' }), false, 'anterior expirado');
+  db.setNow(NOW);
+});
+
+test('manutenção pedida que expira sem o aparelho aplicar não deixa o painel "em manutenção"', async () => {
+  const d = (await db.rpc(admin, 'mdm_device_create', { p_tenant: T, p_name: 'Expira', p_purpose: 'portaria', p_concierge: null })).device_id;
+  await enroll(d);
+  const r1 = await sync(d, 1);
+  await sync(d, 2, { applied_version_id: r1.policy.version_id });
+  await asFresh(admin, 'mdm_command_create', { p_device: d, p_action: 'start_maintenance', p_params: JSON.stringify({ minutes: 15, scope: 'settings', reason: 'Pedido não aplicado' }), p_idempotency_key: uuid(), p_secret: null });
+  assert.notEqual((await db.rpc(admin, 'mdm_device_detail', { p_device: d })).state, 'em_manutencao', 'pedido não confirmado não é manutenção');
+  db.setNow('2026-10-28T12:11:00Z');
+  await sync(d, 3, { applied_version_id: r1.policy.version_id });
+  const det = await db.rpc(admin, 'mdm_device_detail', { p_device: d });
+  assert.equal(det.state, 'ativo');
+  assert.ok(det.maintenance[0].ended_at, 'sessão encerrada');
   db.setNow(NOW);
 });

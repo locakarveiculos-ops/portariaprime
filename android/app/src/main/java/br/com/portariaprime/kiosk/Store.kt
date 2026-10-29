@@ -51,7 +51,7 @@ class Store(ctx: Context) {
         return n
     }
 
-    fun resetEnrollment() { p.edit().remove("device_id").remove("counter").remove("policy").remove("policy_version").putBoolean("revoked", false).commit() }
+    fun resetEnrollment() { p.edit().remove("device_id").remove("counter").remove("shift_nonce").putBoolean("revoked", false).commit() }   // mantém a última política até a nova chegar
 
     // Última política válida: continua valendo offline.
     fun savePolicy(versionId: String, config: JSONObject) { p.edit().putString("policy", config.toString()).putString("policy_version", versionId).commit() }
