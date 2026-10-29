@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- SOMENTE build debug: cleartext apenas para 127.0.0.1 (stack local via adb reverse). Release usa src/main. -->
+<!-- SOMENTE variante lab: cleartext apenas para 127.0.0.1 (stack local via adb reverse). Debug e release usam src/main. -->
 <network-security-config>
     <base-config cleartextTrafficPermitted="false">
         <trust-anchors><certificates src="system" /></trust-anchors>

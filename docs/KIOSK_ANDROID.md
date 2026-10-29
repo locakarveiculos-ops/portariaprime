@@ -57,9 +57,12 @@ Origens fixas no APK, em `app/build.gradle.kts`: `APP_ORIGIN` e `SUPABASE_ORIGIN
 
 | Build | Comando | Assinatura | Aponta para | Uso |
 |---|---|---|---|---|
-| **Teste (debug)** | `./gradlew assembleDebug` | chave de *debug* do Android SDK (`~/.android/debug.keystore`, gerada automaticamente) | produção (`portariaprime.vercel.app` + Supabase de produção) | instalar por adb em aparelho de **teste**; não serve para o QR do cliente |
-| **Laboratório** | `./gradlew -PppLab=true assembleDebug` | debug | stack local por `adb reverse` (`http://127.0.0.1`) | só emulador/aparelho de laboratório; ADB nunca desligado; DevTools da WebView ligado |
+| **Teste (debug)** | `./gradlew assembleDebug` | chave de *debug* do Android SDK (`~/.android/debug.keystore`, gerada automaticamente) | produção (`portariaprime.vercel.app` + Supabase de produção) | só compilação e testes JVM; mesmas regras do release (ADB pode ser desligado pela política) |
+| **Laboratório (lab)** | `./gradlew assembleLab` | debug | produção | aparelho **dedicado de teste**: `android:testOnly=true`, nome "PP Kiosk LAB (teste)", faixa vermelha "LABORATÓRIO" na tela, ADB nunca desligado, Device Owner removível por cabo (`dpm remove-active-admin`) |
+| **Laboratório local** | `./gradlew -PppLab=true assembleLab` | debug | stack local por `adb reverse` (`http://127.0.0.1`) | emulador; além do acima, cleartext só para 127.0.0.1 e DevTools da WebView ligado |
 | **Produção (release)** | `./gradlew assembleRelease` com `keystore.properties` | chave **definitiva** do projeto (você guarda) | produção | o único que vai para o QR de provisionamento |
+
+O `testOnly` e o cleartext ficam em `app/src/lab/` e **não entram** no debug nem no release (conferido no manifesto final de cada APK com `aapt dump xmltree`). O Android só instala APK `testOnly` com `adb install -t`; por isso a variante lab não instala por link nem por QR, nem serve para cliente.
 
 A chave de debug muda de máquina para máquina. Um aparelho com o APK de teste só aceita atualização assinada com a **mesma** chave de debug; para trocar para o APK de produção é preciso desinstalar, o que remove o Device Owner e exige restauração. Por isso o APK de teste é só de laboratório.
 
@@ -74,6 +77,7 @@ A chave de debug muda de máquina para máquina. Um aparelho com o APK de teste 
 **Situação nesta entrega:**
 - Existe uma chave de **laboratório** em `J:\android-toolchain\lab\` (fora do repositório). Ela **não serve para produção**.
 - 29/10/2026: chave definitiva criada fora do repositório (guarda do responsável, com backup). APK release 1.0.0 (versionCode 1) hospedado em `https://portariaprime.vercel.app/kiosk/portaria-prime-kiosk-1.0.0.apk`, SHA-256 do arquivo `1e721c3fdcdaa601d7f5c05f730f711ea9fb7e535ef0947cbc759f68ce45eff0`, checksum de assinatura `zcCCzPlA3Q01sNr6QM-RpxYfoRUWQpfZQ0aDh8BYBh0`. Toda versão futura deve ter esse mesmo checksum.
+- 29/10/2026 (2ª rodada): release 1.0.1 (versionCode 2) em `https://portariaprime.vercel.app/kiosk/portaria-prime-kiosk-1.0.1.apk`, SHA-256 `41fe00b919b09963a524d50f33b80d254c5f013723aa979482b32839ae023c71`, **mesmo** certificado (`cdc082cc…058061d`, checksum `zcCCzPlA…`). Corrige a desativação (confirma só depois de o Android liberar). O arquivo 1.0.0 continua publicado.
 - "Publicar versão" no Admin Master fica com o responsável (owner + MFA). Sem versão publicada, o painel mostra o aviso e não exibe o QR.
 - Homologação física ainda não feita (`docs/KIOSK_HOMOLOGACAO_FISICA.md`).
 
@@ -101,12 +105,21 @@ Aparelho já gerenciado por outro MDM: **não** prossiga. Peça a liberação a 
 Use apenas em aparelho de teste, sem contas Google e sem outros usuários. Nunca use em aparelho de cliente nem como onboarding padrão.
 
 ```bash
-adb install app-debug.apk
+adb install -t app-lab.apk
 adb shell dpm set-device-owner br.com.portariaprime.kiosk/.admin.KioskAdminReceiver
 # abra o app e digite o código de inscrição gerado no painel
 ```
 
-Para remover em laboratório, use "Desativar gerenciamento" no painel. A alternativa é restaurar de fábrica.
+Para remover em laboratório:
+- pelo painel: "Desativar gerenciamento" (aparelho online); ou
+- por cabo, sem internet e sem painel (só a variante lab, que é `testOnly`):
+  ```bash
+  adb shell dpm remove-active-admin br.com.portariaprime.kiosk/.admin.KioskAdminReceiver
+  adb uninstall br.com.portariaprime.kiosk
+  ```
+  Depois, no painel: Desativar gerenciamento → "Registrar liberação local".
+
+No APK de produção esse comando é **recusado** pelo Android (admin não-testOnly). Roteiro completo: `docs/KIOSK_LAB_APARELHO_DEDICADO.md`.
 
 ## Operação
 
@@ -119,7 +132,7 @@ Para remover em laboratório, use "Desativar gerenciamento" no painel. A alterna
 - **Logs:** não guardam tokens, senha de Wi-Fi nem dados de moradores. O inventário de apps se limita aos pacotes do catálogo.
 - **Manutenção × desprovisionamento (separados de propósito):**
   - *Manutenção temporária* (painel ou código offline): libera Configurações, Wi-Fi, instalação de apps e o restante do uso normal, e volta sozinha ao quiosque. **Continuam bloqueados** restauração de fábrica, novos usuários/contas e modo de segurança. Testado no emulador: o item "Erase all data" aparece desabilitado com "Blocked by work policy".
-  - *Desprovisionamento definitivo*: só pelo painel do síndico, em "Desativar gerenciamento" (com senha recente), e fica pendente até o aparelho confirmar. O app remove as restrições e libera o Device Owner. Não aparece como botão no tablet.
+  - *Desprovisionamento definitivo*: só pelo painel do síndico, em "Desativar gerenciamento" (com senha recente), e fica pendente até o aparelho confirmar. O app remove as restrições, libera o Device Owner, **confere no Android** que saiu e só então confirma; se o Android recusar, o comando vai como "falhou" e o quiosque é reaplicado. Sem conexão, nada é liberado: o pedido espera até 30 dias. Se a confirmação se perder na rede depois da liberação, o próximo envio a repete. Não aparece como botão no tablet.
 - **Plano vencido ou cancelado:**
   - o aparelho continua sincronizando e recebendo comandos (só novas inscrições são bloqueadas);
   - o síndico pode desativar o gerenciamento pelo painel;

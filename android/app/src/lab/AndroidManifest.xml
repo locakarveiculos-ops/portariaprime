@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- SOMENTE variante "lab": testOnly impede instalação comum e permite remover o Device Owner por ADB. -->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+    <application android:testOnly="true" tools:ignore="HardcodedDebugMode" />
+</manifest>

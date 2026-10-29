@@ -54,7 +54,13 @@ class KioskActivity : Activity() {
         super.onCreate(savedInstanceState)
         agent = Agent.get(this)
         root = FrameLayout(this).apply { setBackgroundColor(Color.parseColor("#101F30")) }
-        setContentView(root)
+        if (BuildConfig.LAB_BUILD) setContentView(LinearLayout(this).apply {
+            // Faixa fixa: a variante de laboratório (testOnly, ADB sempre ligado) nunca pode passar por versão de cliente.
+            orientation = LinearLayout.VERTICAL
+            addView(TextView(context).apply { text = "LABORATÓRIO · versão de teste · não usar em cliente"; setTextColor(Color.WHITE); textSize = 13f
+                gravity = Gravity.CENTER; setPadding(8, 6, 8, 6); setBackgroundColor(Color.parseColor("#B91C1C")) })
+            addView(root, LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, 0, 1f))
+        }) else setContentView(root)
         // Token do QR (provisionamento) é consumido aqui se ainda não inscrito.
         getSharedPreferences("kiosk", MODE_PRIVATE).getString("pending_token", null)?.let { t -> if (agent.store.deviceId == null) enroll(t) }
         agent.listener = { ui.post { render() } }
@@ -93,6 +99,7 @@ class KioskActivity : Activity() {
             else -> ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED }
         if (p.keepScreenOn) window.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON) else window.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
         val next = when {
+            s.released && !agent.enforcer.isDeviceOwner -> "released"
             s.deviceId == null || s.revoked -> "enroll"   // revogado: reinscrição com código novo, sem liberar o aparelho
             agent.maintenanceActive() -> "maintenance"
             else -> "web"
@@ -104,6 +111,7 @@ class KioskActivity : Activity() {
         when (next) {
             "enroll" -> root.addView(enrollView())
             "maintenance" -> root.addView(maintenanceView())
+            "released" -> root.addView(releasedView())
             else -> root.addView(webLayout())
         }
     }
@@ -123,6 +131,17 @@ class KioskActivity : Activity() {
         val input = EditText(context).apply { hint = "Código de inscrição"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY) }
         addView(input)
         addView(button("Inscrever") { enroll(input.text.toString().uppercase().filter { it.isLetterOrDigit() }) })
+        addView(text("Agente ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE}"))
+    }
+
+    /** Depois da desativação pelo painel: aparelho comum de novo; o app pode ser desinstalado. */
+    private fun releasedView(): View = column(padding = 48).apply {
+        addView(title("Gerenciamento retirado"))
+        addView(text("O síndico desativou o gerenciamento deste aparelho. O modo quiosque e as restrições do Portaria Prime foram removidos; nenhum dado do aparelho foi apagado."))
+        addView(text("Para remover este aplicativo: Configurações → Apps → Portaria Prime Kiosk → Desinstalar. Se o Android perguntar qual tela inicial usar, escolha a do fabricante."))
+        addView(button("Abrir detalhes do app") {
+            startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:$packageName")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+        })
         addView(text("Agente ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE}"))
     }
 

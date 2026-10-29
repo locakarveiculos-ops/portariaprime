@@ -127,7 +127,11 @@ class Agent private constructor(private val ctx: Context) {
 
     private fun handle(c: JSONObject, serverTime: String) {
         val id = c.getString("id"); val seq = c.getLong("seq")
-        if (store.commandDone(id)) { ack(id, "applied", "Já aplicado."); return }
+        if (store.commandDone(id)) {
+            ack(id, "applied", "Já aplicado.")
+            if (c.getString("action") == "deactivate" && store.released) { store.revoked = true; listener?.invoke() }   // confirmação que tinha caído
+            return
+        }
         // Validade: o servidor só entrega não expirados; ordem por seq evita reaplicar comando antigo.
         if (seq <= store.lastCommandSeq && c.getString("status") == "pending") { ack(id, "failed", "Fora de ordem."); return }
         if (c.optString("expires_at") <= serverTime) return
@@ -150,17 +154,19 @@ class Agent private constructor(private val ctx: Context) {
                 "wifi_apply" -> { ack(id, "applying"); wifiTwoStep(p) }
                 "deactivate" -> {
                     ack(id, "applying")
-                    store.markCommandDone(id); store.lastCommandSeq = seq
-                    ack(id, "applied", "Restrições removidas; Device Owner liberado.")
-                    enforcer.releaseOwnership()
-                    store.revoked = true
-                    return
+                    // Libera primeiro e confere no Android; só então confirma. Chave e credencial ficam intactas até o
+                    // servidor aceitar o "applied": sem conexão, a confirmação é reenviada no próximo sync.
+                    val err = enforcer.releaseOwnership()
+                    if (err != null) { applyLocal(); "failed" to err }
+                    else { store.released = true; "applied" to "Restrições removidas; Device Owner liberado." }
                 }
                 else -> "failed" to "Ação desconhecida."
             }
         } catch (e: Exception) { "failed" to (e.message ?: "erro").take(200) }
         store.markCommandDone(id); store.lastCommandSeq = seq
         ack(id, result.first, result.second)
+        // Servidor aceitou a desativação: a credencial foi revogada lá; o agente para de sincronizar.
+        if (c.getString("action") == "deactivate" && result.first == "applied") { store.revoked = true; listener?.invoke() }
     }
 
     // ---- Manutenção ------------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 # QA — Dispositivos gerenciados e Portaria Prime Kiosk
 
-Atualizado em 29/10/2026. Base: commits `8a5f78c` e `a9b0f4c` (em `main`, deploy `dpl_5jSbsssXiF1yo5Tqr4txDbzk92xj` READY) e as correções desta rodada, descritas abaixo.
+Atualizado em 29/10/2026 (2ª rodada: saídas, desativação e variante de laboratório, seção 11). Base: commits `8a5f78c`, `a9b0f4c`, `81946a8`, `d482793` e as correções descritas abaixo.
 
 > **Situação: validado em emulador Android 14 gerenciado (Device Owner + Lock Task reais). NÃO homologado em aparelho físico.**
 > Não é um MDM completo. É um agente próprio de quiosque Single-App/Multi-App com as políticas descritas no ADR.
@@ -63,7 +63,7 @@ Consulta feita em 29/10/2026, sem alterações:
 
 - Emulador AVD `ppkiosk34`: Pixel Tablet, **Android 14 (API 34)**, patch 2023-09-05, imagem AOSP x86_64 userdebug, aceleração WHPX, sem contas.
 - Device Owner aplicado por `dpm set-device-owner` (procedimento de laboratório).
-- Backend: stack Supabase local + Vite/API locais, ligados ao emulador por `adb reverse`. Build de laboratório `-PppLab=true`.
+- Backend: stack Supabase local + Vite/API locais, ligados ao emulador por `adb reverse`. Build de laboratório `./gradlew -PppLab=true assembleLab` (variante lab, testOnly).
 - OCR: Gemini real, com a chave do `.env` local, que não é versionado.
 
 ## 5. Validação em Android gerenciado (saída real de `kiosk-device.sh`)
@@ -155,7 +155,8 @@ Nada abaixo pode ser concluído com emulador:
 - Wi-Fi em duas etapas com rollback (não testado em emulador);
 - leitores USB/Bluetooth, consumo de bateria, aquecimento em 8 h de tomada;
 - comportamento de fabricante (Samsung, Motorola, Xiaomi, Positivo etc.) e Android Go;
-- desativação: se o modelo volta ao uso comum ou exige restauração;
+- desativação: se o modelo volta ao uso comum ou exige restauração (no emulador AOSP voltou sem restauração, seção 11);
+- variante lab num aparelho real: `dpm set-device-owner` aceito pelo fabricante e ADB após reboot;
 - notificações reais por e-mail e WhatsApp (destinatários autorizados pendentes).
 
 Roteiro para você executar: `docs/KIOSK_HOMOLOGACAO_FISICA.md`.
@@ -168,3 +169,80 @@ Roteiro para você executar: `docs/KIOSK_HOMOLOGACAO_FISICA.md`.
 - Atualização do APK: manual, dentro da manutenção (instalação silenciosa não implementada).
 - Restauração por botões físicos (recovery) não é bloqueável por software.
 - PDF local: a fila processa 5 por execução do job, então ele pode levar alguns minutos.
+
+## 11. Segunda rodada (29/10/2026): manutenção, desativação e variante de laboratório
+
+Nenhum aparelho físico foi instalado ou provisionado nesta rodada. Tudo abaixo é **emulador** (Android 14, AOSP, sem contas) ou **teste automatizado**.
+
+### 11.1 O que mudou no código
+
+| Item | Mudança |
+|---|---|
+| Desativação pelo painel (`Agent.kt`, `PolicyEnforcer.releaseOwnership`) | Antes o app confirmava "aplicado" **antes** de liberar o Android, sem conferir. Agora: libera, **confere** `isDeviceOwnerApp == false`, remove o admin ativo (app fica desinstalável) e só então confirma. Se o Android recusar: confirma "falhou" e reaplica o quiosque. Se a confirmação se perder na rede, o próximo envio a repete; a credencial só para de sincronizar depois do aceite do servidor. |
+| Tela pós-desativação (`KioskActivity`) | "Gerenciamento retirado", com o caminho para desinstalar. Sem botão de saída no quiosque ativo. |
+| Variante `lab` (`build.gradle.kts`, `app/src/lab/`) | Nova variante separada: `android:testOnly=true`, nome "PP Kiosk LAB (teste)", faixa vermelha permanente "LABORATÓRIO · versão de teste · não usar em cliente", ADB nunca desligado pela política, cleartext só para 127.0.0.1 e só com `-PppLab=true`. Debug e release não herdam nada disso. |
+| Versão | 1.0.1 (versionCode 2). |
+
+Manutenção temporária e saída local autenticada **já existiam** e foram reverificadas (seção 5): painel (com reautenticação do síndico) ou código de recuperação de uso único (PBKDF2, gerado no navegador do síndico, sem senha padrão ou global, nada no frontend do quiosque), 5 erros → bloqueio de 15 min (dobra até 4 h), contado desde o boot, eventos `recovery.failed`/`recovery.locked`/`maintenance.offline_start` na auditoria. Na manutenção continuam bloqueados: restauração de fábrica, novos usuários, contas e modo de segurança. Desativação definitiva é outro fluxo: só pelo painel, com senha recente.
+
+### 11.2 Manifesto final dos APKs (`aapt dump xmltree` e `apksigner`)
+
+| APK | versão | `testOnly` | `debuggable` | Assinatura | Nome |
+|---|---|---|---|---|---|
+| `portaria-prime-kiosk-1.0.1.apk` (release) | 1.0.1 / 2 | **ausente** | ausente | chave definitiva, cert SHA-256 `cdc082cc…058061d` (igual à 1.0.0) | Portaria Prime Kiosk |
+| `app-debug.apk` | 1.0.1 / 2 | **ausente** | sim | debug | Portaria Prime Kiosk |
+| `portaria-prime-kiosk-1.0.1-lab.apk` | 1.0.1-lab / 2 | **presente** | sim | debug (`CN=Android Debug`) | PP Kiosk LAB (teste) |
+
+- Release 1.0.1: 62.353 bytes, SHA-256 `41fe00b919b09963a524d50f33b80d254c5f013723aa979482b32839ae023c71`, em `public/kiosk/`.
+- Lab 1.0.1: 895.763 bytes, SHA-256 `c34f51f1d7fe5c625fd2e4678bc1eb70862af8c46359fec58fe464b43f529d41`, em `J:\android-toolchain\entrega\` (fora do repositório e do site; **não entregar a clientes**).
+
+### 11.3 Matriz de testes
+
+Legenda: **Auto** = teste automatizado (JVM/PGlite/API); **Emu** = emulador gerenciado real (Device Owner + Lock Task do Android); **Físico** = aparelho real.
+
+| Cenário | Auto | Emu | Físico | Evidência |
+|---|---|---|---|---|
+| Bloqueio Single-App (Início, Recentes, Configurações, intent externo, outro app, barra) | — | PASS | pendente | `kiosk-device.sh` 3 |
+| Reboot em quiosque (com e sem internet) → volta ao condomínio vinculado | — | PASS | pendente | `kiosk-device.sh` 4–5 (URL `/c/<slug>/portaria`) |
+| Manutenção com internet (painel): abre Configurações, mantém reset bloqueado, encerra pelo painel | PGlite | PASS | pendente | `kiosk-device.sh` 6 |
+| Manutenção sem internet (código de recuperação), uso único, encerramento manual | JVM | PASS | pendente | `kiosk-device.sh` 9 |
+| Expiração da manutenção | JVM | PASS (301 s para prazo de 300 s) | pendente | `kiosk-device.sh` 7 |
+| Reboot durante manutenção → volta ao quiosque | JVM | PASS | pendente | `kiosk-device.sh` 8 |
+| Código incorreto: 5 erros, bloqueio, código certo recusado durante o bloqueio, reboot não fura, eventos no painel | JVM | PASS | pendente | `kiosk-exit.sh` A |
+| Com códigos bloqueados, manutenção pelo painel continua disponível | — | PASS | pendente | `kiosk-exit.sh` A |
+| Admin não-testOnly recusa `dpm remove-active-admin` | — | PASS (`SecurityException`, 1ª execução, app 1.0.0 sem testOnly) | pendente | `kiosk-exit.sh` B |
+| Desativação sem conexão: continua gerenciado e em quiosque; painel "desativação pendente" | PGlite | PASS | pendente | `kiosk-exit.sh` C |
+| Desativação com conexão: painel "desativado"; Android sem Device Owner, sem restrições, sem Lock Task, Configurações abrem, tela "Gerenciamento retirado", agente para | PGlite | PASS | pendente | `kiosk-exit.sh` C, `emu-51-gerenciamento-retirado.png` |
+| App desinstalável após desativação, sem restauração | — | PASS | pendente | `kiosk-exit.sh` C |
+| Lab: Device Owner por cabo + inscrição + quiosque; admin `testOnly` | — | PASS | pendente | `kiosk-exit.sh` D |
+| Lab: ADB ativo com quiosque e após reboot; volta ao quiosque após reboot | — | PASS | pendente | `kiosk-exit.sh` D |
+| Lab: `dpm remove-active-admin` remove Device Owner, restrições e Lock Task; app desinstala | — | PASS | pendente | `kiosk-exit.sh` D |
+| Painel: "liberação local verificada" com o aparelho fora do ar | PGlite | PASS | — | `kiosk-exit.sh` D |
+| Dados preservados em cada fluxo não destrutivo (arquivo-sentinela em `/data/local/tmp`) | — | PASS (A, C, D) | pendente | `kiosk-exit.sh` |
+| Regressão completa com a variante lab | — | 22/22 | — | `kiosk-device.sh` |
+
+Saídas reais desta rodada:
+
+```
+bash tests/e2e/kiosk-device.sh   → Resultado: 22 PASS, 0 FALHA   (app 1.0.0-lab)
+bash tests/e2e/kiosk-exit.sh     → Resultado: 30 PASS, 0 FALHA   (2ª execução; B pulado porque o admin já era testOnly)
+                                   1ª execução: 28 PASS, 3 FALHA — as 3 falhas eram do próprio teste: a sentinela
+                                   não era criada em /sdcard (fechado ao shell pela restrição no_usb_file_transfer);
+                                   B passou nessa execução com o app 1.0.0 não-testOnly.
+gradlew testDebugUnitTest lintDebug lintLab lintRelease assembleDebug assembleLab assembleRelease → ok, 0 erros
+```
+
+Restrições efetivas após a desativação e após a remoção por cabo (`dumpsys user`): **nenhuma**.
+
+### 11.4 Achados
+
+1. **Desativação confirmava antes de executar** (corrigido): o "aplicado" ia ao servidor antes de o Android liberar; uma recusa do Android deixaria o painel "desativado" com o aparelho ainda travado. Reteste: `kiosk-exit.sh` C.
+2. **Achado de teste, não de produto:** com `no_usb_file_transfer`, o shell ADB não escreve em `/sdcard`. Esperado; o roteiro passou a usar `/data/local/tmp`.
+3. **Inscrição no emulador:** um código digitado com caracteres perdidos pelo teclado virtual foi recusado ("Código de inscrição inválido"); o roteiro agora confere o texto do campo antes de enviar. O aparelho segue protegido nesse caso (identidade A/B preservada).
+
+### 11.5 Limitações e pendências
+
+- Emulador AOSP sem contas, sem Pasta Segura/Segundo espaço e sem camada de fabricante. Em aparelho real, `dpm set-device-owner` exige nenhum usuário/perfil extra e nenhuma conta; alguns fabricantes recusam. Ver `KIOSK_LAB_APARELHO_DEDICADO.md`, passo 1 (identificar antes de mudar).
+- A release 1.0.1 **não** foi instalada no emulador: o emulador usa a variante lab (assinatura debug), e as duas não se atualizam uma sobre a outra. O código Android é o mesmo nas duas; difere só o `testOnly`, o nome, a faixa e o ADB.
+- Atualizar um aparelho já provisionado com a 1.0.0 para a 1.0.1 (mesma chave) não foi testado em aparelho físico.
+- **Homologação física: não executada.**

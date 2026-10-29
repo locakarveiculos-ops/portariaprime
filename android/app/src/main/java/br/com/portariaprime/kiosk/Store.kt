@@ -31,6 +31,10 @@ class Store(ctx: Context) {
     var revoked: Boolean
         get() = p.getBoolean("revoked", false)
         set(v) { p.edit().putBoolean("revoked", v).apply() }
+    /** Gerenciamento retirado pelo painel (desativação concluída no Android). */
+    var released: Boolean
+        get() = p.getBoolean("released", false)
+        set(v) { p.edit().putBoolean("released", v).commit() }
     var lastSyncOkWall: Long
         get() = p.getLong("last_sync_ok", 0)
         set(v) { p.edit().putLong("last_sync_ok", v).apply() }
@@ -51,7 +55,7 @@ class Store(ctx: Context) {
         return n
     }
 
-    fun resetEnrollment() { p.edit().remove("device_id").remove("counter").remove("shift_nonce").putBoolean("revoked", false).commit() }   // mantém a última política até a nova chegar
+    fun resetEnrollment() { p.edit().remove("device_id").remove("counter").remove("shift_nonce").putBoolean("revoked", false).putBoolean("released", false).commit() }   // mantém a última política até a nova chegar
 
     // Última política válida: continua valendo offline.
     fun savePolicy(versionId: String, config: JSONObject) { p.edit().putString("policy", config.toString()).putString("policy_version", versionId).commit() }

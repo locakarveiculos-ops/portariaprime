@@ -22,8 +22,8 @@ android {
         applicationId = "br.com.portariaprime.kiosk"
         minSdk = 26          // Android 8.0: Keystore EC, setLockTaskFeatures só no 28+ (degrada com aviso)
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = 2
+        versionName = "1.0.1"
         // Origem do sistema web e do backend. HTTPS obrigatório; sem override em release.
         buildConfigField("String", "APP_ORIGIN", "\"${project.findProperty("ppAppOrigin") ?: "https://portariaprime.vercel.app"}\"")
         buildConfigField("String", "SUPABASE_ORIGIN", "\"${project.findProperty("ppSupabaseOrigin") ?: "https://zehijyqgqkouzhldeqio.supabase.co"}\"")
@@ -41,19 +41,29 @@ android {
     buildTypes {
         release {
             buildConfigField("boolean", "LAB_LOOPBACK", "false")
+            buildConfigField("boolean", "LAB_BUILD", "false")
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
             signingConfig = signingConfigs.findByName("release")
         }
         debug {
-            // Laboratório: com -PppLab=true aponta para a stack local por adb reverse (http://127.0.0.1).
-            // Release nunca aceita cleartext nem loopback.
-            val lab = project.findProperty("ppLab") == "true"
-            buildConfigField("boolean", "LAB_LOOPBACK", lab.toString())
-            if (lab) {
+            buildConfigField("boolean", "LAB_LOOPBACK", "false")
+            buildConfigField("boolean", "LAB_BUILD", "false")
+        }
+        // Laboratório (NUNCA para cliente): android:testOnly=true (src/lab/AndroidManifest.xml), chave de debug,
+        // nome "LAB" e faixa vermelha na tela. ADB nunca é desligado e o Device Owner sai por cabo
+        // (adb shell dpm remove-active-admin), o que o Android só aceita em app testOnly.
+        // Padrão: backend de produção (aparelho dedicado de teste). Com -PppLab=true: stack local por adb reverse.
+        create("lab") {
+            initWith(getByName("debug"))
+            matchingFallbacks += "debug"
+            versionNameSuffix = "-lab"
+            buildConfigField("boolean", "LAB_BUILD", "true")
+            val loop = project.findProperty("ppLab") == "true"
+            buildConfigField("boolean", "LAB_LOOPBACK", loop.toString())
+            if (loop) {
                 buildConfigField("String", "APP_ORIGIN", "\"http://127.0.0.1:3017\"")
                 buildConfigField("String", "SUPABASE_ORIGIN", "\"http://127.0.0.1:54321\"")
-                resValue("bool", "lab_cleartext", "true")
             }
         }
     }

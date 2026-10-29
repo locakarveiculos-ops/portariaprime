@@ -7,7 +7,7 @@ Tempo estimado: 1 h 30 min, mais 8 h de teste de tomada (item 11).
 ## Antes de começar (obrigatório)
 
 1. **O aparelho deve ser do condomínio** ou de laboratório. Nunca use celular pessoal, de morador ou de funcionário.
-2. **O processo apaga tudo do aparelho.** O Android só deixa um app virar "proprietário" (Device Owner) em aparelho recém-restaurado de fábrica. Antes de restaurar:
+2. **O provisionamento por QR apaga tudo do aparelho.** Por QR, o Android só deixa um app virar "proprietário" (Device Owner) em aparelho recém-restaurado de fábrica. A alternativa sem restauração (laboratório, por cabo) está no anexo. Antes de restaurar:
    - faça backup do que for importante (fotos, documentos, conversas);
    - anote as senhas de Wi-Fi da portaria;
    - **remova a conta Google** (Configurações → Contas → remover). Com a conta presente, o aparelho pode pedir essa conta depois do reset (proteção contra roubo);
@@ -53,7 +53,8 @@ Para cada item, anote **Aprovado** ou **Reprovado**, com uma foto da tela e o ho
 | 15 | **Wi-Fi:** no painel, Trocar Wi-Fi com a **senha errada**; depois com a senha certa. | Senha errada: volta para a rede anterior. Senha certa: troca e remove a antiga |
 | 16 | Se houver leitor de código USB ou Bluetooth: no campo Rastreio, leia uma etiqueta. | O código entra no campo |
 | 17 | Deixe ligado na tomada por 8 h, com a tela ativa na portaria. | Sem superaquecimento (anote a temperatura ao toque) e sem travar |
-| 18 | **Só se for retirar o aparelho do serviço:** painel → Desativar gerenciamento (pede senha). | Fica "desativação pendente" até o aparelho confirmar e depois "desativado". Anote se o aparelho voltou ao uso normal ou se pediu restauração |
+| 18 | **Só se for retirar o aparelho do serviço:** painel → Desativar gerenciamento (pede senha). Primeiro com o aparelho em modo avião por 5 min, depois com internet. | Sem internet: continua em quiosque e o painel mostra "desativação pendente". Com internet: painel "desativado", app mostra "Gerenciamento retirado", Configurações abrem, apps instalam e o Portaria Prime Kiosk desinstala. Anote se o aparelho voltou ao uso normal ou se pediu restauração |
+| 19 | **Só variante lab:** com o quiosque ativo e depois de reiniciar, rode `adb devices` e `adb shell dpm remove-active-admin br.com.portariaprime.kiosk/.admin.KioskAdminReceiver`. | ADB responde nas duas situações; o comando responde `Success` e o aparelho sai do quiosque; o app desinstala |
 
 **Critério final:** o modelo é **homologado** se os itens 2 a 15 forem aprovados, junto com o 16 e o 17 quando aplicáveis. Qualquer reprovação: mande a foto, o horário e o modelo.
 
@@ -72,17 +73,8 @@ Para cada item, anote **Aprovado** ou **Reprovado**, com uma foto da tela e o ho
 
 ## Anexo: instalação de laboratório por cabo (aparelho de TESTE apenas)
 
-Para quando ainda não há APK de produção publicado. **Nunca use em aparelho de cliente.**
+Sem restauração de fábrica, com a variante de laboratório (`portaria-prime-kiosk-1.0.1-lab.apk`, `testOnly`, removível por cabo). **Nunca use em aparelho de cliente.** Roteiro completo, com pré-requisitos e remoção: `docs/KIOSK_LAB_APARELHO_DEDICADO.md`.
 
-1. Restaure o aparelho e, na configuração inicial, **não** adicione conta Google.
-2. Ative Opções do desenvolvedor → Depuração USB.
-3. No computador, com o arquivo `portaria-prime-kiosk-1.0.0-teste-debug.apk`:
-   ```
-   adb install portaria-prime-kiosk-1.0.0-teste-debug.apk
-   adb shell dpm set-device-owner br.com.portariaprime.kiosk/.admin.KioskAdminReceiver
-   ```
-   Resposta esperada: `Success: Device owner set to package br.com.portariaprime.kiosk/...`
-4. Abra o app, digite o código de inscrição gerado no painel e siga do passo 3 da tabela.
-5. Para tirar: painel → Desativar gerenciamento, ou restauração de fábrica.
+Nesse caminho o item 2 da tabela (QR na tela de boas-vindas) **não** é testado; ele exige aparelho restaurado e o APK de produção.
 
-**Atenção:** o APK de teste é assinado com chave de *debug*. Para passar o aparelho para o APK de produção, é preciso restaurá-lo de fábrica de novo.
+**Atenção:** a variante lab é assinada com chave de *debug*. Para passar o aparelho para o APK de produção, remova a lab e provisione de novo.

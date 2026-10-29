@@ -67,9 +67,9 @@ class PolicyEnforcer(private val ctx: Context) {
         // segurança. Esses só caem no desprovisionamento supervisionado (releaseOwnership), nunca na manutenção.
         for ((key, r) in restrictionMap) step(key) {
             val keepInMaintenance = key in KEEP_IN_MAINTENANCE
-            // Build de laboratório nunca desliga o ADB (senão o próprio teste perde o acesso).
+            // Variante de laboratório nunca desliga o ADB: é por ele que o Device Owner sai sem restauração.
             val wanted = key in p.restrictions && (!maintenance || keepInMaintenance) &&
-                !(key == "no_debugging" && br.com.portariaprime.kiosk.BuildConfig.LAB_LOOPBACK)
+                !(key == "no_debugging" && br.com.portariaprime.kiosk.BuildConfig.LAB_BUILD)
             if (wanted) dpm.addUserRestriction(admin, r) else dpm.clearUserRestriction(admin, r)
         }
         step("no_screen_capture") { dpm.setScreenCaptureDisabled(admin, !maintenance && "no_screen_capture" in p.restrictions) }
@@ -124,14 +124,21 @@ class PolicyEnforcer(private val ctx: Context) {
 
     /**
      * Desativação supervisionada: remove restrições, Lock Task e launcher persistente e abre mão do Device Owner.
-     * Não apaga dados nem restaura de fábrica.
+     * Não apaga dados nem restaura de fábrica. Devolve null só se o Android confirmar a saída; senão, o motivo.
+     * Já fora do gerenciamento (repetição após queda de conexão) também é sucesso.
      */
-    fun releaseOwnership() {
-        if (!isDeviceOwner) return
+    fun releaseOwnership(): String? {
+        if (!isDeviceOwner) return null
         apply(Policy.fallback().copy(restrictions = emptySet(), statusBarDisabled = false), maintenance = true)
         try { dpm.setLockTaskPackages(admin, emptyArray()) } catch (_: Exception) {}
         try { dpm.setKeyguardDisabled(admin, false) } catch (_: Exception) {}
         try { dpm.setSystemUpdatePolicy(admin, null) } catch (_: Exception) {}
-        @Suppress("DEPRECATION") dpm.clearDeviceOwnerApp(self)
+        try { dpm.setPermissionGrantState(admin, self, android.Manifest.permission.CAMERA, DevicePolicyManager.PERMISSION_GRANT_STATE_DEFAULT) } catch (_: Exception) {}
+        return try {
+            @Suppress("DEPRECATION") dpm.clearDeviceOwnerApp(self)
+            // Sem admin ativo o app fica desinstalável pelo caminho comum (Configurações → Apps).
+            if (dpm.isAdminActive(admin)) dpm.removeActiveAdmin(admin)
+            if (isDeviceOwner) "O Android manteve o Device Owner." else null
+        } catch (e: Exception) { "O Android recusou liberar o Device Owner: ${e.message}".take(200) }
     }
 }
