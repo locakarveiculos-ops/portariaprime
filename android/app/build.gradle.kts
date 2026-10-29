@@ -7,8 +7,9 @@ plugins {
 
 // Assinatura release: keystore FORA do repositório (android/keystore.properties ou variáveis de CI).
 // Perder a keystore impede atualizar aparelhos já provisionados — guarde com backup.
+// PP_KIOSK_PROPERTIES aponta para um keystore.properties fora do projeto (preferido: a chave nunca entra aqui).
 val ks = Properties().apply {
-    val f = rootProject.file("keystore.properties")
+    val f = System.getenv("PP_KIOSK_PROPERTIES")?.let { file(it) } ?: rootProject.file("keystore.properties")
     if (f.exists()) f.inputStream().use { load(it) }
 }
 fun secret(name: String): String? = (ks.getProperty(name) ?: System.getenv("PP_KIOSK_$name"))?.takeIf { it.isNotBlank() }

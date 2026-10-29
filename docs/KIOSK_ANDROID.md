@@ -42,6 +42,7 @@ Origens fixas no APK, em `app/build.gradle.kts`: `APP_ORIGIN` e `SUPABASE_ORIGIN
    KEY_ALIAS=pp-kiosk
    KEY_PASSWORD=…
    ```
+   Preferido: deixe o `keystore.properties` junto da chave, fora do projeto, e aponte `PP_KIOSK_PROPERTIES=/caminho/keystore.properties` no build.
    Em CI, use as variáveis de ambiente `PP_KIOSK_STORE_FILE`, `PP_KIOSK_STORE_PASSWORD`, `PP_KIOSK_KEY_ALIAS` e `PP_KIOSK_KEY_PASSWORD`, com o conteúdo vindo de segredo do CI.
 3. Gere o APK e o checksum:
    ```bash
@@ -49,7 +50,7 @@ Origens fixas no APK, em `app/build.gradle.kts`: `APP_ORIGIN` e `SUPABASE_ORIGIN
    ANDROID_HOME=… bash scripts/signature-checksum.sh app/build/outputs/apk/release/app-release.apk
    ```
    A última linha impressa é o valor de `PROVISIONING_DEVICE_ADMIN_SIGNATURE_CHECKSUM` (SHA-256 do certificado em base64url).
-4. Hospede o APK em **HTTPS** com URL estável e versionada (ex.: `…/kiosk/pp-kiosk-1.0.0.apk`).
+4. Hospede o APK em **HTTPS** com URL estável e versionada: copie para `public/kiosk/portaria-prime-kiosk-<versão>.apk` e faça deploy; sai em `https://portariaprime.vercel.app/kiosk/…` (fora do rewrite da SPA e do precache do PWA). Nunca sobrescreva um arquivo já publicado: versão nova, nome novo.
 5. Admin Master → Dispositivos → **Publicar versão** (exige papel owner e MFA).
 
 ### Builds: teste × laboratório × produção
@@ -72,8 +73,9 @@ A chave de debug muda de máquina para máquina. Um aparelho com o APK de teste 
 
 **Situação nesta entrega:**
 - Existe uma chave de **laboratório** em `J:\android-toolchain\lab\` (fora do repositório). Ela **não serve para produção**.
-- A chave definitiva, a hospedagem HTTPS do APK e a publicação da versão **não foram feitas**: dependem do responsável e de segredo de produção.
-- Sem versão publicada, o painel mostra o aviso e não exibe o QR.
+- 29/10/2026: chave definitiva criada fora do repositório (guarda do responsável, com backup). APK release 1.0.0 (versionCode 1) hospedado em `https://portariaprime.vercel.app/kiosk/portaria-prime-kiosk-1.0.0.apk`, SHA-256 do arquivo `1e721c3fdcdaa601d7f5c05f730f711ea9fb7e535ef0947cbc759f68ce45eff0`, checksum de assinatura `zcCCzPlA3Q01sNr6QM-RpxYfoRUWQpfZQ0aDh8BYBh0`. Toda versão futura deve ter esse mesmo checksum.
+- "Publicar versão" no Admin Master fica com o responsável (owner + MFA). Sem versão publicada, o painel mostra o aviso e não exibe o QR.
+- Homologação física ainda não feita (`docs/KIOSK_HOMOLOGACAO_FISICA.md`).
 
 ## Atualização do agente
 
