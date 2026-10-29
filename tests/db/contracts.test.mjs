@@ -86,12 +86,12 @@ test('aceite: sha divergente, permissão, preço do servidor, isolamento, append
 
     // Preço do catálogo, nunca do navegador; token de proposta inexistente é rejeitado.
     const q = await s.db.rpc(s.sindico, 'contract_quote', { p_tenant: s.A, p_plan_code: 'profissional', p_cycle: 'monthly', p_proposal: null });
-    assert.equal(q.terms.amount_cents, 14900); assert.equal(q.terms.source, 'catalog'); assert.equal(q.document.sha256, doc.sha256);
+    assert.equal(q.terms.amount_cents, 16900); assert.equal(q.terms.source, 'catalog'); assert.equal(q.document.sha256, doc.sha256);
     await assert.rejects(s.db.rpc(s.sindico, 'contract_quote', { p_tenant: s.A, p_plan_code: null, p_cycle: null, p_proposal: 'tok' }), /Proposta não encontrada/);
 
     const a1 = await accept(s, s.sindico, doc.sha256, { p_contractor_document: '11.444.777/0001-61' });
     assert.equal(a1.status, 'pending_verification');
-    assert.equal(a1.terms.amount_cents, 14900);
+    assert.equal(a1.terms.amount_cents, 16900);
     assert.equal(a1.document_sha256, doc.sha256);
     assert.equal(a1.ip, '203.0.113.7');
 
@@ -138,7 +138,7 @@ test('aceite: sha divergente, permissão, preço do servidor, isolamento, append
     assert.equal((await s.db.rpc(s.sindico, 'contract_overview', { p_tenant: s.A })).needs_new_acceptance, true);
     await assert.rejects(accept(s, s.sindico, doc.sha256), /documento mudou/i);
     const a2 = await accept(s, s.sindico, doc2.sha256, { p_plan_code: 'prime' });
-    assert.deepEqual([a2.kind, a2.previous_id, a2.terms.amount_cents], ['aditivo', a1.id, 34900]);
+    assert.deepEqual([a2.kind, a2.previous_id, a2.terms.amount_cents], ['aditivo', a1.id, 36900]);
     await svcCall(s.db, 'contract_set_code', { p_actor: s.sindico, p_acceptance: a2.id, p_code: '654321' });
     await svcCall(s.db, 'contract_verify', { p_actor: s.sindico, p_acceptance: a2.id, p_code: '654321' });
     const rows = await s.db.sql('select id, status, superseded_by from contract_acceptances order by accepted_at, kind desc');

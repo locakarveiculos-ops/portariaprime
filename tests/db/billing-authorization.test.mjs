@@ -70,7 +70,7 @@ test('preço publicado é imutável; versionamento continua disponível', async 
  const s=await setup(); try {
  await s.db.sql('insert into platform_admins(user_id) values($1)',[s.admin]);
  await assert.rejects(s.db.as(s.admin,"update plan_prices set amount_cents=1 where cycle='monthly'"),/imutável|version/i);
- assert.ok(await s.db.rpc(s.admin,'admin_set_price',{p_plan_code:'profissional',p_cycle:'monthly',p_amount_cents:15900}));
- assert.equal((await s.db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1',[s.tenant]))[0].price_cents_snapshot,14900);
+ assert.ok(await s.db.rpc(s.admin,'admin_set_price',{p_plan_code:'profissional',p_cycle:'monthly',p_amount_cents:17900}));
+ assert.equal((await s.db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1',[s.tenant]))[0].price_cents_snapshot,16900);
  } finally {await s.db.raw.close();}
 });

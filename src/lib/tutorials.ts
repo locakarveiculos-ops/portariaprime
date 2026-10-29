@@ -130,10 +130,11 @@ export const TUTORIALS: Tutorial[] = [
     errors: [['Paguei e aparece pendente', 'A confirmação vem do provedor e pode levar alguns minutos.']],
   },
   {
-    slug: 'quiosque-preparar-inscrever', profile: 'sindico', title: 'Tablet da portaria em modo quiosque (preparar e inscrever)', keywords: 'quiosque kiosk tablet android dispositivo gerenciar device owner qr provisionamento',
+    slug: 'quiosque-preparar-inscrever', profile: 'sindico', title: 'Modo Portaria Exclusiva: preparar e vincular o Android', keywords: 'quiosque kiosk tablet android dispositivo gerenciar device owner qr provisionamento portaria exclusiva piloto',
     goal: 'Deixar um tablet do condomínio preso à portaria do Portaria Prime, voltando sozinho após reiniciar.',
-    before: ['Tablet ou celular Android 8.0 ou superior, de propriedade do condomínio (nunca aparelho pessoal).',
-      'Aparelho restaurado de fábrica: o processo apaga tudo. Faça backup e remova contas pessoais antes.',
+    before: ['Acesso piloto liberado: peça em “Solicitar ativação piloto” na página inicial; a liberação depende de validação de compatibilidade do modelo.',
+      'O modo quiosque exige dispositivo Android compatível, dedicado à portaria, e configuração inicial. Equipamento não incluso. Android 8.0 ou superior, do condomínio (nunca aparelho pessoal). Não funciona em iPhone ou iPad.',
+      'O provisionamento pode exigir restauração de fábrica, conforme o dispositivo e o método. Pelo QR (método oficial), o aparelho precisa estar restaurado de fábrica, o que apaga tudo: faça backup e remova contas pessoais antes.',
       'Instalar o app (PWA) e gerenciar o aparelho são etapas diferentes: aqui é o gerenciamento.'],
     steps: [
       { title: 'Cadastre o aparelho', text: 'Em Configurações → Dispositivos e quiosque, toque em “Adicionar dispositivo”, dê um nome (ex.: Tablet Guarita) e escolha a finalidade.' },
@@ -141,10 +142,11 @@ export const TUTORIALS: Tutorial[] = [
       { title: 'Leia o QR no tablet', text: 'Na tela de boas-vindas do Android, toque 6 vezes no mesmo ponto, conecte ao Wi-Fi e leia o QR. O Android baixa o Portaria Prime Kiosk e conclui sozinho.' },
       { title: 'Confira no painel', text: 'O aparelho aparece como “Device Owner · conforme” e “Ativo”. Gere e imprima os códigos de recuperação e guarde fora da portaria.' },
     ],
-    result: 'Tablet abre direto a portaria do condomínio; Início, Recentes e Configurações ficam bloqueados.', next: 'quiosque-manutencao',
+    result: 'Tablet abre direto a portaria do condomínio e volta a ela depois de reiniciar; Início, Recentes e Configurações ficam bloqueados.', next: 'quiosque-manutencao',
     errors: [['Aparelho já gerenciado por outra empresa', 'Não continue: peça a liberação a quem gerencia o aparelho.'],
       ['Aparece “Não gerenciado”', 'O app foi instalado sem o QR da configuração inicial. Restaure de fábrica e use o QR.'],
-      ['Sem QR, aviso de versão não publicada', 'A versão do aplicativo ainda não foi publicada pela plataforma. Fale com o suporte.']],
+      ['Sem QR, aviso de versão não publicada', 'A versão do aplicativo ainda não foi publicada pela plataforma. Fale com o suporte.'],
+      ['Não quero restaurar de fábrica', 'Em aparelhos sem contas existe configuração técnica por cabo sem restauração, mas depende do fabricante. Fale com o suporte antes de tentar.']],
   },
   {
     slug: 'quiosque-manutencao', profile: 'sindico', title: 'Manutenção, recuperação e remoção do quiosque', keywords: 'quiosque manutencao desbloquear wifi recuperar codigo remover desativar',
@@ -152,9 +154,9 @@ export const TUTORIALS: Tutorial[] = [
     before: ['Aparelho ativo em Dispositivos e quiosque.'],
     steps: [
       { title: 'Manutenção pelo painel', text: 'Em Detalhes, toque em “Abrir manutenção”, informe o motivo e a duração. O tablet sai do quiosque e volta sozinho no prazo, ao reiniciar ou quando você encerrar.' },
-      { title: 'Sem internet no tablet', text: 'No tablet, toque em “Manutenção” e digite um código de recuperação impresso. Cada código vale uma vez; erros seguidos bloqueiam por 15 minutos.' },
+      { title: 'Sem internet no tablet', text: 'No tablet, toque em “Manutenção” e digite um código de recuperação impresso. Cada código vale uma vez; erros seguidos bloqueiam por 15 minutos. Sem internet, o tablet continua travado com a última política; recebimentos e entregas só são confirmados com conexão.', screen: 'quiosqueManutencao' },
       { title: 'Trocar o Wi-Fi', text: 'Use “Trocar Wi-Fi”: o tablet testa a nova rede antes de apagar a anterior e volta para a antiga se falhar.' },
-      { title: 'Remover o gerenciamento', text: 'Use “Desativar gerenciamento”. O aparelho fica “desativação pendente” até confirmar. Se foi perdido ou restaurado à mão, registre como foi liberado.' },
+      { title: 'Remover o gerenciamento', text: 'Use “Desativar gerenciamento”. O aparelho precisa estar on-line e fica “desativação pendente” até confirmar. Se foi perdido ou restaurado à mão, registre como foi liberado.' },
     ],
     result: 'Cada ação fica registrada com data e confirmação do aparelho. “Solicitado” não significa “executado”.',
     errors: [['Pedido expirou', 'O tablet estava sem internet por mais de 10 minutos. Use um código de recuperação no próprio aparelho.'],
@@ -209,7 +211,7 @@ export const TUTORIALS: Tutorial[] = [
     errors: [['Internet caiu', 'Nada é considerado feito sem confirmação do servidor. Anote e registre quando voltar.'], ['Canal de aviso falhou', 'A encomenda continua registrada; o sistema tenta de novo e avisa a administração.']],
   },
   {
-    slug: 'quiosque-operar', profile: 'portaria', title: 'Usar o tablet em modo quiosque e trocar de turno', keywords: 'quiosque tablet turno trocar sair login manutencao',
+    slug: 'quiosque-operar', profile: 'portaria', title: 'Usar o terminal do Modo Portaria Exclusiva e trocar de turno', keywords: 'quiosque tablet turno trocar sair login manutencao',
     goal: 'Operar a portaria no tablet do condomínio sem sair do aplicativo.',
     before: ['Tablet já configurado pelo síndico (Dispositivos e quiosque).'],
     steps: [

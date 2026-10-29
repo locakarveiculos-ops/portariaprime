@@ -27,10 +27,10 @@ test('preço Prime R$ 249 em rascunho; ativação só com viabilidade; assinatur
     const T = (await db.rpc(sindico, 'provision_tenant', { p_request_id: crypto.randomUUID(), p_name: 'Prime Antigo', p_slug: 'prime-antigo',
       p_document: '11444777000161', p_timezone: 'America/Sao_Paulo', p_plan_code: 'prime', p_cycle: 'monthly' })).tenant_id;
     const [{ price_cents_snapshot: before }] = await db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1', [T]);
-    assert.equal(before, 34900);
+    assert.equal(before, 36900);
     const ov = await db.rpc(owner, 'commercial_overview');
     const draft = ov.drafts.find((d) => d.plan === 'prime');
-    assert.deepEqual([draft.amount_cents, draft.status, draft.current_cents], [24900, 'draft', 34900]);
+    assert.deepEqual([draft.amount_cents, draft.status, draft.current_cents], [24900, 'draft', 36900]);
     assert.equal(ov.missing.length, 10);
     assert.equal(ov.plans.find((p) => p.code === 'prime').typical.validated, false);
     const act = (action, target = draft.id) => db.rpc(owner, 'commercial_action', { p_action: action, p_target: target, p_data: '{}', p_reason: 'Revisão comercial do Prime' });
@@ -42,14 +42,14 @@ test('preço Prime R$ 249 em rascunho; ativação só com viabilidade; assinatur
     assert.equal(r.changes.status, 'active');
     // Catálogo para novos contratos = 24900; assinatura existente mantém snapshot e limites congelados.
     assert.equal((await db.sql("select amount_cents from plan_prices pr join plans p on p.id=pr.plan_id where p.code='prime' and cycle='monthly' and active"))[0].amount_cents, 24900);
-    assert.equal((await db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1', [T]))[0].price_cents_snapshot, 34900);
+    assert.equal((await db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1', [T]))[0].price_cents_snapshot, 36900);
     const other = await db.createUser('novo@com.invalid');
     const N = (await db.rpc(other, 'provision_tenant', { p_request_id: crypto.randomUUID(), p_name: 'Prime Novo', p_slug: 'prime-novo',
       p_document: '11222333000181', p_timezone: 'America/Sao_Paulo', p_plan_code: 'prime', p_cycle: 'monthly' })).tenant_id;
     assert.equal((await db.sql('select price_cents_snapshot from subscriptions where tenant_id=$1', [N]))[0].price_cents_snapshot, 24900);
     // Essencial e Profissional mantêm valores.
     const keep = await db.sql("select p.code, pr.amount_cents from plan_prices pr join plans p on p.id=pr.plan_id where pr.active and cycle='monthly' and p.code in ('essencial','profissional') order by 1");
-    assert.deepEqual(keep.map((x) => x.amount_cents), [9900, 14900]);
+    assert.deepEqual(keep.map((x) => x.amount_cents), [11900, 16900]);
     assert.ok((await db.sql("select 1 from audit_logs where action='commercial.price_activate'")).length === 1);
   } finally { await db.raw.close(); }
 });
@@ -91,8 +91,8 @@ test('sugestão 5% abaixo com piso, needs_review e proposta imutável com token'
     for (const [k, v] of Object.entries(COSTS)) await cost(k, v);
     s = await db.rpc(owner, 'quote_suggest', { p_quote: q1.id });
     assert.equal(s.plan, 'profissional');
-    // Catálogo 14900 já é <= 95% de 20000 -> catálogo.
-    assert.deepEqual([s.status, s.suggested_cents], ['catalog', 14900]);
+    // Catálogo 16900 já é <= 95% de 20000 -> catálogo.
+    assert.deepEqual([s.status, s.suggested_cents], ['catalog', 16900]);
     s = await db.rpc(owner, 'quote_suggest', { p_quote: q2.id });
     assert.deepEqual([s.status, s.suggested_cents], ['ok', 13300]);
     const q3 = await submit({ ...base, budget_cents: 3000 }, 'c'.repeat(64));
@@ -259,7 +259,7 @@ test('ponte proposta -> contrato verificado -> billing: snapshot idêntico, pres
     // Assinatura continua trialing sem alteração.
     const subDuringTrial = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
     assert.equal(subDuringTrial.status, 'trialing');
-    assert.equal(subDuringTrial.price_cents_snapshot, 34900);
+    assert.equal(subDuringTrial.price_cents_snapshot, 36900);
 
     // Fim do mês grátis: agora a cobrança é permitida com o snapshot da proposta.
     db.setNow('2026-11-25T12:00:00Z');
@@ -292,7 +292,7 @@ test('ponte proposta -> contrato verificado -> billing: snapshot idêntico, pres
     // O serviço ainda NÃO mudou antes do pagamento verificado.
     const subBeforePay = (await db.sql('select * from subscriptions where tenant_id = $1', [T]))[0];
     assert.equal(subBeforePay.status, 'pending_payment');
-    assert.equal(subBeforePay.price_cents_snapshot, 34900, 'ainda snapshot antigo');
+    assert.equal(subBeforePay.price_cents_snapshot, 36900, 'ainda snapshot antigo');
 
     // Pagamento verificado aplica a proposta, congela limites e preserva período anterior.
     const paid = await db.service(

@@ -1,12 +1,12 @@
 ---
 kind: contrato_saas
-version: 0.1-rascunho
-summary: Contrato de uso do Portaria Prime por condomínios. Um mês de teste sem cartão; depois, cobrança por link a cada ciclo, sem débito automático. O condomínio pode cancelar sozinho pelo sistema; o acesso segue até o fim do período já liberado e os registros de entrega não são apagados por atraso de pagamento.
+version: 0.2-rascunho
+summary: Contrato de uso do Portaria Prime por condomínios. Um mês de teste sem cartão; inclui o Modo Portaria Exclusiva para Android, opcional, em acesso piloto e sem equipamento incluso; depois, cobrança por link a cada ciclo, sem débito automático. O condomínio pode cancelar sozinho pelo sistema; o acesso segue até o fim do período já liberado e os registros de entrega não são apagados por atraso de pagamento.
 ---
 
 # Contrato de prestação de serviços Portaria Prime
 
-> Minuta 0.1-rascunho para revisão jurídica. Não vigente até publicação no sistema.
+> Minuta 0.2-rascunho para revisão jurídica. Não vigente até publicação no sistema. Versão 0.2: inclui o Modo Portaria Exclusiva (item 2.4) e a nova tabela de preços para novas contratações (item 3.3). A versão 0.1 e os aceites anteriores ficam preservados.
 
 ## 1. Partes e poderes
 
@@ -24,11 +24,23 @@ summary: Contrato de uso do Portaria Prime por condomínios. Um mês de teste se
 
 2.3. Novos recursos podem ser incluídos; recursos do plano contratado não serão retirados durante o período já pago sem aviso prévio de {{PRAZO_AVISO_MUDANCA}} [PENDENTE DE DEFINIÇÃO].
 
+2.4. **Modo Portaria Exclusiva para Android (acesso piloto).** Incluído em todos os planos, de uso opcional e sem cobrança de ativação. Permite usar um dispositivo Android compatível, de propriedade do condomínio e dedicado à portaria, como terminal do Portaria Prime, com acesso controlado para a equipe. Condições:
+
+- o equipamento não está incluso e é fornecido e mantido pelo condomínio;
+- a liberação depende de validação de compatibilidade do modelo pela contratada; durante o acesso piloto pode ser negada ou suspensa para modelos sem compatibilidade confirmada;
+- a configuração inicial (provisionamento) pode exigir restauração de fábrica do aparelho, que apaga seus dados; o condomínio é responsável por backup e pela remoção de contas pessoais antes;
+- não funciona em iPhone ou iPad; o app instalado pelo navegador (PWA) dá acesso ao sistema, mas não bloqueia o aparelho;
+- sem internet, o aparelho mantém a última configuração recebida, mas recebimentos, entregas e comprovantes só são confirmados com conexão;
+- o gerenciamento pode ser retirado pelo painel do síndico com o aparelho on-line; em alguns modelos, voltar ao uso comum pode exigir restauração de fábrica;
+- o recurso não inclui controle remoto de tela, localização do aparelho nem apagamento remoto.
+
 ## 3. Plano, limites e valores
 
 3.1. Plano, ciclo (mensal, trimestral ou anual), valor e limites (unidades, portarias, leituras de etiqueta, mensagens de WhatsApp, armazenamento) são os exibidos e registrados no momento do aceite, calculados pelo servidor a partir do catálogo publicado ou de proposta comercial aceita.
 
 3.2. Ao atingir um limite, o sistema avisa e pode bloquear apenas o recurso excedido; nenhum dado é apagado por isso.
+
+3.3. A tabela de preços vigente a partir desta versão vale só para novas contratações. Contratos, assinaturas, propostas e cobranças já emitidos mantêm o valor aceito, sem reajuste automático; qualquer reajuste segue o item 8.1.
 
 ## 4. Mês de teste
 

@@ -81,12 +81,12 @@ test('PDF do contrato: arquivo real com texto longo e caractere fora da fonte', 
   assert.ok(bytes.length > 2000);
 });
 
-test('minutas: versão 0.1-rascunho, marcadores pendentes (não publicáveis) e nenhum CNPJ/dado da contratada inventado', async () => {
+test('minutas: versão rascunho (contrato 0.2 com Modo Portaria Exclusiva), marcadores pendentes (não publicáveis) e nenhum CNPJ/dado da contratada inventado', async () => {
   const { readFileSync } = await import('node:fs');
   const { parseDraft, pendingMarks, headings, lineDiff } = await import('../../src/lib/legal-text.ts');
   for (const f of ['contrato-saas', 'termos', 'privacidade', 'anexo-tratamento-dados']) {
     const { meta, body } = parseDraft(readFileSync(`docs/legal/${f}.md`, 'utf8'));
-    assert.equal(meta.version, '0.1-rascunho', f);
+    assert.equal(meta.version, f === 'contrato-saas' ? '0.2-rascunho' : '0.1-rascunho', f);
     assert.ok(meta.summary && pendingMarks(body).length > 0, `${f}: resumo e pendências`);
     assert.doesNotMatch(body, /\d{2}\.\d{3}\.\d{3}\/\d{4}-\d{2}/, `${f}: sem CNPJ literal`);
     assert.ok(headings(body).length >= 3);
@@ -95,6 +95,10 @@ test('minutas: versão 0.1-rascunho, marcadores pendentes (não publicáveis) e 
   for (const re of [/MP 2\.200-2\/2001, art\. 10, §2º/, /não é a API oficial da Meta/, /um mês de calendário/, /sem débito automático/i, /\{\{FORO\}\}/, /\{\{HORARIO_SUPORTE\}\}/])
     assert.match(contrato, re);
   assert.doesNotMatch(contrato, /garant\w+ (a )?validade jurídica/i);
+  // Modo Portaria Exclusiva: opcional, piloto, sem equipamento, provisionamento e sem reajuste de quem já contratou.
+  for (const re of [/Modo Portaria Exclusiva/, /uso opcional/, /equipamento não está incluso/, /validação de compatibilidade/, /restauração de fábrica/, /sem reajuste automático/])
+    assert.match(contrato, re);
+  assert.doesNotMatch(contrato, /qualquer (aparelho|android)|100% inviolável|segurança total|impossível sair/i);
   assert.deepEqual(lineDiff('a\nb\nc', 'a\nx\nc').map(l => l.op + l.text), [' a', '-b', '+x', ' c']);
 });
 

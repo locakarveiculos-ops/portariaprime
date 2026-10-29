@@ -10,11 +10,12 @@ import { useSession } from '../lib/session';
 import { Markdown } from '../lib/legal';
 import { Alert, Badge, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
 import { PortariaPrimeLogo } from '../components/Brand';
+import { KIOSK } from '../lib/kiosk-offer';
 
 const LIMIT: Record<string, string> = { max_units: 'Unidades', max_concierges: 'Portarias', ocr_monthly: 'Leituras OCR por mês', whatsapp_monthly: 'Mensagens de WhatsApp por mês', storage_mb: 'Armazenamento (MB)' };
 
 type Quote = {
-  terms: { source: string; plan_name: string; plan_code: string; cycle: string; amount_cents: number; limits: Record<string, any>; trial_ends_at: string | null; valid_until?: string | null };
+  terms: { source: string; plan_name: string; plan_code: string; cycle: string; amount_cents: number; limits: Record<string, any>; trial_ends_at: string | null; valid_until?: string | null; price_kept?: boolean };
   document: { version: string; content_md: string; sha256: string; summary: string | null } | null;
   contractor: { name: string; document: string | null };
   subscription: { status: string; plan_code: string; cycle: string; trial_ends_at: string | null; current_period_end: string | null; cancel_at_period_end: boolean } | null;
@@ -103,6 +104,8 @@ export default function ContratarPage() {
               <div className="flex flex-wrap items-center gap-2"><p className="font-semibold text-lg">{t!.plan_name} · {CYCLE_LABEL[t!.cycle] || t!.cycle}</p>{t!.source === 'proposal' && <Badge tone="accent">Proposta comercial</Badge>}</div>
               <p><strong>{brl(t!.amount_cents)}</strong> por ciclo {(CYCLE_LABEL[t!.cycle] || '').toLowerCase()}, cobrado por link a cada ciclo. Sem débito automático.</p>
               <ul className="text-sm text-muted grid sm:grid-cols-2 gap-x-4">{Object.entries(t!.limits || {}).filter(([k]) => LIMIT[k]).map(([k, v]) => <li key={k}>{LIMIT[k]}: {String(v)}</li>)}</ul>
+              {t!.price_kept && <p className="text-sm">Mesmo plano e ciclo da assinatura atual: o valor contratado é mantido, sem reajuste pela nova tabela.</p>}
+              <p className="text-sm text-muted"><strong className="text-text">{KIOSK.feature}</strong> — {KIOSK.included} {KIOSK.requirement} {KIOSK.pilot}</p>
               {inTrial
                 ? <Alert>O mês grátis segue até <strong>{dateTime(t!.trial_ends_at)}</strong>. Contratar agora <strong>não encurta o teste</strong> e não cobra nada: o primeiro link de pagamento só é gerado ao fim do teste. Pagar antes não é possível pelo sistema.</Alert>
                 : <Alert>O aceite do contrato <strong>não é pagamento</strong>. Depois do aceite, você segue para o pagamento pelo link da InfinitePay; a assinatura só é ativada quando a InfinitePay confirmar o pagamento.</Alert>}

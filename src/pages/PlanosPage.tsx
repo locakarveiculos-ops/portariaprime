@@ -6,7 +6,9 @@ import { Check, FileText, MessageCircle, Printer } from 'lucide-react';
 import { PortariaPrimeLogo } from '../components/Brand';
 import { Alert, Badge, Button, Field, Input, Select, Spinner } from '../components/ui';
 import { api } from '../lib/api';
+import { KioskPlanNote } from '../components/KioskPilotForm';
 import { featureList, loadCatalog, PlanRow } from '../lib/catalog';
+import { KIOSK } from '../lib/kiosk-offer';
 import { brl, CYCLE_LABEL, CYCLE_MONTHS } from '../lib/format';
 import { track } from '../lib/funnel';
 import { headings, Markdown } from '../lib/legal';
@@ -134,13 +136,14 @@ export default function PlanosPage() {
                       <span><span className="text-2xl font-semibold">{brl(total)}</span> <span className="text-sm text-muted">{cycle === 'monthly' ? 'por mês' : `a cada ${CYCLE_MONTHS[cycle]} meses`}</span></span>
                       {cycle !== 'monthly' && m && <span className="text-sm">equivale a <strong>{brl(Math.round(total / CYCLE_MONTHS[cycle]))}/mês</strong>{pct > 0 && <Badge tone="success">economia de {brl(m * CYCLE_MONTHS[cycle] - total)} ({pct}%)</Badge>}</span>}
                     </> : <span className="text-sm text-muted">Ciclo indisponível.</span>}
-                    <ul className="text-sm space-y-1 mt-1">{featureList(p).slice(0, 5).map((x) => <li key={x} className="flex gap-2"><Check className="w-4 h-4 mt-0.5 text-success shrink-0" aria-hidden />{x}</li>)}</ul>
+                    <ul className="text-sm space-y-1 mt-1">{[...featureList(p).slice(0, 5), KIOSK.feature].map((x) => <li key={x} className="flex gap-2"><Check className="w-4 h-4 mt-0.5 text-success shrink-0" aria-hidden />{x}</li>)}</ul>
+                    <KioskPlanNote />
                   </button>
                 );
               })}
             </div>
           )}
-          <p className="text-xs text-muted">Valores após o mês grátis. Ciclo trimestral ou anual é pago de uma vez, por link (Pix ou cartão), sem débito automático. Preços valem para novas contratações.</p>
+          <p className="text-xs text-muted">Valores após o mês grátis. Ciclo trimestral ou anual é pago de uma vez, por link (Pix ou cartão), sem débito automático. Preços valem para novas contratações; contratos existentes não são reajustados automaticamente.</p>
         </Step>
 
         <form onSubmit={submit} className="space-y-6">
@@ -191,6 +194,7 @@ export default function PlanosPage() {
                 <input type="checkbox" className="mt-1 w-5 h-5" checked={agree} onChange={(e) => setAgree(e.target.checked)} />
                 <span className="text-sm">Li o contrato acima e concordo com os termos para seguir com a contratação do plano {plan?.name || ''} ({CYCLE_LABEL[cycle].toLowerCase()}).</span>
               </label>
+              <Alert><strong>{KIOSK.name} (acesso piloto):</strong> {KIOSK.included} {KIOSK.requirement} {KIOSK.pilot} <a href={KIOSK.href} onClick={onLink} className="underline">{KIOSK.cta}</a>.</Alert>
               <p className="text-xs text-muted">Este envio é um <strong>pedido de contratação</strong>, não substitui o aceite formal feito dentro do sistema (com versão registrada, confirmação do e-mail e PDF). Nenhuma cobrança é feita agora; o mês grátis vem primeiro.</p>
               {error && <Alert tone="danger">{error}</Alert>}
               <div className="flex flex-wrap gap-2 print:hidden">

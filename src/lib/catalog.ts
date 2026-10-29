@@ -1,4 +1,5 @@
 import { supabase } from './supabase';
+import { KIOSK } from './kiosk-offer';
 
 export interface PlanRow {
   id: string;
@@ -52,5 +53,6 @@ export function featureList(p: PlanRow): string[] {
   if (e.feature_whatsapp) f.push(p.is_custom ? 'Avisos por WhatsApp' : `Avisos por WhatsApp: ${e.whatsapp_monthly}/mês`);
   if (e.feature_totem) f.push('Totem de autoatendimento para entregadores');
   f.push(e.feature_reports_plus ? 'Relatórios ampliados' : 'Relatórios básicos e exportação CSV');
+  f.push(KIOSK.feature); // todos os planos; nota obrigatória via KioskPlanNote
   return f.filter(Boolean);
 }

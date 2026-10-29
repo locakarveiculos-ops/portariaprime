@@ -55,14 +55,14 @@ test('plano pago futuro respeita início exclusivo do anterior sem scheduler', a
       const overview = await s.db.rpc(s.admin, 'subscription_overview', { p_tenant: s.tenant });
       assert.equal(overview.plan.code, 'profissional');
       assert.equal(overview.entitlements.feature_ocr, true);
-      assert.equal(overview.price_cents, 14900);
+      assert.equal(overview.price_cents, 16900);
       assert.equal(overview.next_plan.code, 'essencial');
     }
     s.db.setNow('2026-03-02T12:00:00Z');
     const overview = await s.db.rpc(s.admin, 'subscription_overview', { p_tenant: s.tenant });
     assert.equal(overview.plan.code, 'essencial');
     assert.equal(overview.entitlements.feature_ocr, false);
-    assert.equal(overview.price_cents, 9900);
+    assert.equal(overview.price_cents, 11900);
     assert.equal((await s.db.as(s.admin, 'select app.has_feature($1,\'ocr\') allowed', [s.tenant]))[0].allowed, false);
   } finally { await s.db.raw.close(); }
 });

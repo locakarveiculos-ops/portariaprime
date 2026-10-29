@@ -18,3 +18,13 @@ Dados 100% fictícios (domínio `.invalid`). Nenhum envio externo. QR desfocado;
 | `public/screens/og.png` | derivada de painel-desktop | 1200x630 | Imagem Open Graph |
 
 Recapturar: `node scripts/local-stack.mjs up`, `npm run dev:stack` e `node --env-file=.env.stack.local scripts/capture-screens.mjs`.
+
+## Modo Portaria Exclusiva (29/10/2026)
+
+Derivadas de capturas reais do app Android gerenciado em **emulador Android 14** (`tests/evidence/emu-21-registrada.png`, `emu-24-comprovante.png`, `emu-04-manutencao.png`), condomínio de laboratório fictício. Código de verificação do comprovante desfocado. Exibidas como "demonstração em emulador"; não são fotos de aparelho físico.
+
+| Arquivo | Origem |
+|---|---|
+| `public/screens/quiosque-recebimento.webp` (+ `-720`) | `emu-21-registrada.png` |
+| `public/screens/quiosque-comprovante.webp` (+ `-720`) | `emu-24-comprovante.png` (verificação desfocada) |
+| `public/screens/quiosque-manutencao.webp` (+ `-720`) | `emu-04-manutencao.png` |

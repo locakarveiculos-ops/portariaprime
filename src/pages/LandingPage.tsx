@@ -1,7 +1,9 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { Bell, Check, ClipboardCheck, FileCheck2, History, MapPin, Menu, PackageSearch, ScanLine, ShieldCheck, Warehouse, X } from 'lucide-react';
+import { Bell, Check, ClipboardCheck, FileCheck2, History, LayoutDashboard, ListChecks, MapPin, Menu, PackageSearch, ScanLine, ShieldCheck, Smartphone, Target, Warehouse, X } from 'lucide-react';
 import { PortariaPrimeLogo } from '../components/Brand';
 import { ContactForm } from '../components/ContactForm';
+import { KioskPilotForm, KioskPlanNote } from '../components/KioskPilotForm';
+import { KIOSK } from '../lib/kiosk-offer';
 import { QuoteForm, QUOTE_POLICY_SUMMARY } from '../components/QuoteForm';
 import { Button, Card } from '../components/ui';
 import { featureList, loadCatalog, loadQuotePolicy, PlanRow } from '../lib/catalog';
@@ -30,6 +32,23 @@ const DEMO: Record<'sindico' | 'portaria' | 'morador', { benefit: string; screen
   portaria: { benefit: 'Receber e entregar com menos digitação e prova registrada.', screen: 'recebimento', tasks: ['Fotografar a etiqueta e conferir a leitura', 'Guardar no local sugerido', 'Entregar com QR, assinatura e foto'] },
   morador: { benefit: 'Saber o que chegou e retirar sem fila de conferência.', screen: 'morador', tasks: ['Ver encomendas aguardando no Início', 'Mostrar o QR de retirada', 'Consultar quem retirou e o comprovante'] },
 };
+
+/** Comportamento real do app Android gerenciado (docs/KIOSK_ANDROID.md e KIOSK_QA.md). */
+const KIOSK_FAQ: [string, string][] = [
+  ['O que é o Modo Portaria Exclusiva?', `${KIOSK.description} O aparelho abre direto na portaria do condomínio e cada porteiro entra com a própria conta.`],
+  ['Em qual plano está incluído?', `Em todos os planos. ${KIOSK.pilot}`],
+  ['É obrigatório?', 'Não. O uso é opcional; o sistema continua funcionando no navegador e no app instalado.'],
+  ['Preciso comprar aparelho?', 'O equipamento não está incluso. É preciso um Android compatível, do condomínio e dedicado à portaria. Antes de comprar, solicite a ativação piloto para conferirmos o modelo.'],
+  ['Funciona em qualquer Android?', 'Não. O app exige Android 8.0 ou superior e o comportamento varia por fabricante. A liberação depende da validação de compatibilidade do modelo.'],
+  ['Funciona em iPhone ou iPad?', 'Não. O Modo Portaria Exclusiva é só para Android compatível. No iPhone e no iPad, use o sistema pelo navegador ou pelo app instalado.'],
+  ['Qual a diferença para o app instalado (PWA)?', KIOSK.pwa],
+  ['Como solicito?', 'Preencha o formulário desta seção com o condomínio, a marca, o modelo e a versão do Android. Você recebe um protocolo e a resposta da equipe por e-mail.'],
+  ['O síndico pode liberar o aparelho para manutenção?', 'Sim. Pelo painel, abre uma manutenção com prazo, que termina sozinha. Sem internet no aparelho, usa um código de recuperação de uso único gerado pelo síndico; tentativas erradas seguidas bloqueiam por alguns minutos.'],
+  ['E depois de reiniciar?', 'O aparelho volta sozinho ao Portaria Prime. Isso foi validado em emulador; a homologação em aparelho físico ainda está pendente.'],
+  ['O que funciona sem internet?', 'O aparelho continua travado com a última configuração recebida. Recebimentos, entregas e comprovantes só são confirmados com conexão com o servidor.'],
+  ['Pode exigir formatação?', 'Pode. O método oficial de configuração (QR na tela inicial do Android) exige restauração de fábrica, que apaga os dados do aparelho. Em alguns aparelhos sem contas é possível uma configuração técnica por cabo sem restauração, mas isso depende do fabricante e é avaliado caso a caso.'],
+  ['Como retiro o gerenciamento?', 'Pelo painel do síndico, em “Desativar gerenciamento”. O aparelho precisa estar on-line para confirmar. Em alguns modelos, voltar ao uso comum pode exigir restauração de fábrica.'],
+];
 
 function Shot({ s, onZoom, eager, sizes = '(min-width: 1024px) 560px, 100vw', className = '' }: { s: Screen; onZoom: (s: Screen) => void; eager?: boolean; sizes?: string; className?: string }) {
   return (
@@ -81,7 +100,7 @@ export default function LandingPage() {
   };
   const selectable = (plans || []).filter((p) => p.published && !p.is_custom && p.prices.length);
   const custom = (plans || []).find((p) => p.is_custom);
-  const nav: [string, string][] = [['#como-funciona', 'Como funciona'], ['#demonstracao', 'Demonstração'], ['/tutoriais', 'Tutoriais'], ['/planos', 'Planos e contrato']];
+  const nav: [string, string][] = [['#como-funciona', 'Como funciona'], ['#demonstracao', 'Demonstração'], ['#portaria-exclusiva', 'Portaria Exclusiva'], ['/tutoriais', 'Tutoriais'], ['/planos', 'Planos e contrato']];
   const navLink = ([h, l]: [string, string], extra = '') => h.startsWith('/')
     ? <a key={h} href={h} onClick={(e) => { onLink(e); setMenu(false); }} className={extra}>{l}</a>
     : <a key={h} href={h} onClick={() => setMenu(false)} className={extra}>{l}</a>;
@@ -189,6 +208,45 @@ export default function LandingPage() {
           </div>
         </section>
 
+        {/* Modo Portaria Exclusiva (acesso piloto) */}
+        <section id="portaria-exclusiva" className="bg-midnight text-porcelain" aria-labelledby="kiosk-h">
+          <div className="max-w-6xl mx-auto px-4 py-16 grid lg:grid-cols-[1fr_1.15fr] gap-10 items-start">
+            <div>
+              <p className="inline-flex items-center gap-2 rounded-full border border-champagne/50 px-3 py-1 text-xs font-semibold text-champagne"><Smartphone className="w-4 h-4" aria-hidden />{KIOSK.name} · acesso piloto</p>
+              <h2 id="kiosk-h" className="mt-4 text-3xl sm:text-4xl font-semibold leading-tight">Um dispositivo dedicado à portaria. Mais foco na operação.</h2>
+              <p className="mt-3 text-lg text-porcelain/80">Organize a rotina de encomendas em um Android preparado para o Portaria Prime, com gerenciamento pelo condomínio e acesso controlado.</p>
+              <ul className="mt-6 grid sm:grid-cols-2 gap-3 text-sm">
+                {([
+                  [Target, 'Foco da equipe', 'O aparelho abre direto na portaria do condomínio, sem outros apps no caminho.'],
+                  [ListChecks, 'Terminal padronizado', 'Mesma tela de receber, entregar e buscar em todos os turnos.'],
+                  [ShieldCheck, 'Dispositivos autorizados', 'Só aparelhos vinculados pelo síndico entram; cada porteiro usa a própria conta.'],
+                  [PackageSearch, 'Fluxo completo', 'Leitura de etiqueta, QR, assinatura, foto do item e comprovante dentro do terminal.'],
+                  [LayoutDashboard, 'Administração centralizada', 'Situação, manutenção com prazo e retirada do gerenciamento pelo painel.'],
+                ] as [React.ElementType, string, string][]).map(([I, t, x]) => <li key={t} className="flex gap-3"><I className="w-5 h-5 mt-0.5 text-champagne shrink-0" aria-hidden /><span><strong className="block">{t}</strong><span className="text-porcelain/75">{x}</span></span></li>)}
+              </ul>
+              <ol className="mt-8 grid sm:grid-cols-3 gap-3 text-sm" aria-label="Como ativar">
+                {['Verificar compatibilidade e preparar o equipamento', 'Vincular o aparelho ao condomínio', 'Ativar e gerenciar pelo painel'].map((t, i) =>
+                  <li key={t} className="rounded-xl border border-porcelain/20 p-3"><span className="h-7 w-7 rounded-full bg-champagne text-midnight grid place-items-center font-semibold">{i + 1}</span><span className="block mt-2">{t}</span></li>)}
+              </ol>
+              <div className="mt-8 flex flex-wrap gap-3">
+                <button onClick={() => trial()} className="min-h-12 px-6 rounded-xl bg-champagne text-midnight font-semibold hover:opacity-90">Começar meu mês grátis</button>
+                <a href="/tutoriais/sindico#quiosque-preparar-inscrever" onClick={onLink} className="min-h-12 px-6 rounded-xl border border-porcelain/40 inline-flex items-center font-semibold hover:bg-white/10">Ver como funciona</a>
+                <a href="#ativacao-piloto" className="min-h-12 px-6 rounded-xl border border-champagne inline-flex items-center font-semibold text-champagne hover:bg-white/10">{KIOSK.cta}</a>
+              </div>
+              <p className="mt-6 text-sm text-porcelain/80">{KIOSK.included} {KIOSK.pilot}</p>
+              <p className="mt-2 text-sm text-porcelain/80"><strong>{KIOSK.requirement}</strong> A configuração inicial pode exigir restauração de fábrica, conforme o dispositivo e o método. Não funciona em iPhone ou iPad.</p>
+              <p className="mt-2 text-xs text-porcelain/60">{KIOSK.pwa}</p>
+            </div>
+            <figure>
+              <div className="rounded-[1.75rem] bg-black/60 p-3 ring-1 ring-porcelain/20 shadow-2xl"><Shot s={SCREENS.quiosqueRecebimento} onZoom={setZoom} sizes="(min-width: 1024px) 600px, 100vw" /></div>
+              <div className="mt-4 grid grid-cols-2 gap-3">
+                {(['quiosqueComprovante', 'quiosqueManutencao'] as const).map((k) => <div key={k} className="rounded-2xl bg-black/60 p-2 ring-1 ring-porcelain/20"><Shot s={SCREENS[k]} onZoom={setZoom} sizes="(min-width: 1024px) 300px, 50vw" /></div>)}
+              </div>
+              <figcaption className="mt-3 text-xs text-porcelain/60">Demonstração em emulador Android 14 com dados fictícios. Ainda sem homologação em aparelho físico; por isso o recurso está em acesso piloto. Toque para ampliar.</figcaption>
+            </figure>
+          </div>
+        </section>
+
         {/* Personalização */}
         <section className="max-w-6xl mx-auto px-4 py-16" aria-labelledby="marca-h">
           <h2 id="marca-h" className="text-3xl font-semibold">A identidade do seu condomínio</h2>
@@ -256,6 +314,7 @@ export default function LandingPage() {
                         return <p className="text-xs text-muted">equivale a {brl(Math.round(pr.amount_cents / CYCLE_MONTHS[cycle]))}/mês{pct > 0 && <strong className="text-success"> · {pct}% de desconto</strong>}; o valor total é cobrado de uma vez no início do ciclo</p>; })()}
                       <p className="text-xs text-muted mt-1">Valor após o mês grátis.</p>
                       <ul className="mt-4 space-y-2 text-sm flex-1">{featureList(p).map((x) => <li key={x} className="flex gap-2"><Check className="w-4 h-4 mt-0.5 text-success shrink-0" aria-hidden />{x}</li>)}</ul>
+                      <KioskPlanNote className="mt-3" />
                       <Button className="mt-6 w-full" onClick={() => trial(p.code)} disabled={!pr}>Testar grátis por 1 mês</Button>
                       <a href={`/planos?plano=${p.code}&ciclo=${cycle}`} onClick={onLink} className="mt-2 text-center text-sm font-semibold underline min-h-11 inline-flex items-center justify-center">Ver contrato e contratar</a>
                     </Card>
@@ -263,7 +322,8 @@ export default function LandingPage() {
                 })}
               </div>
             )}
-            {custom && <p className="mt-6 text-sm"><strong>{custom.name}:</strong> {custom.description} <a href="#contato" className="underline">Fale com a gente</a>.</p>}
+            <p className="mt-6 text-sm"><strong>{KIOSK.name}:</strong> {KIOSK.included} {KIOSK.pilot} <a href="#ativacao-piloto" className="underline">{KIOSK.cta}</a>.</p>
+            {custom && <p className="mt-2 text-sm"><strong>{custom.name}:</strong> {custom.description} <a href="#contato" className="underline">Fale com a gente</a>.</p>}
             <p className="mt-2 text-sm"><strong>Administradoras:</strong> carteira de condomínios com acesso consolidado e vínculo aprovado por cada síndico. Valor sob proposta, conforme número de condomínios, unidades e consumo. <a href="#proposta" className="underline">Pedir proposta</a>.</p>
             <p className="mt-4 text-xs text-muted">Franquias de leitura de etiqueta e WhatsApp são mensais e contam mensagens aceitas pelo provedor por destinatário; falhas e repetições não contam. Ao esgotar, a digitação manual e os avisos no app continuam; nada é cobrado a mais sem contratação. Contrato, termos e privacidade: <a href="/contrato" onClick={onLink} className="underline">contrato</a>, <a href="/termos" onClick={onLink} className="underline">termos</a>, <a href="/privacidade" onClick={onLink} className="underline">privacidade</a>.</p>
           </div>
@@ -304,8 +364,8 @@ export default function LandingPage() {
             {[
               ['Como funciona o mês grátis?', 'O teste começa ao cadastrar o condomínio e vai até o mesmo dia do mês seguinte (ou o último dia do mês, quando esse dia não existir). Não pedimos cartão. É um teste por condomínio.'],
               ['Como é a cobrança depois? Posso cancelar?', 'No fim do teste é gerado um link de pagamento da InfinitePay (Pix ou cartão) para o ciclo escolhido. Não há débito automático. Cancelar interrompe as próximas cobranças e mantém o acesso até o fim do período pago; os comprovantes não são apagados.'],
-              ['Preciso comprar equipamento?', 'Não. Funciona no navegador de celular, tablet ou computador. Leitor de código de barras USB e câmera são opcionais.'],
-              ['É aplicativo de loja?', 'Não está na App Store nem na Play Store. É um aplicativo web que pode ser instalado na tela inicial, com a marca do condomínio, conforme o navegador.'],
+              ['Preciso comprar equipamento?', 'Não. O sistema funciona no navegador de celular, tablet ou computador. Leitor de código de barras USB e câmera são opcionais. O Modo Portaria Exclusiva, opcional, usa um Android compatível do próprio condomínio: equipamento não incluso.'],
+              ['É aplicativo de loja?', 'Não está na App Store nem na Play Store. É um aplicativo web que pode ser instalado na tela inicial, com a marca do condomínio, conforme o navegador. O app Android do Modo Portaria Exclusiva é instalado na configuração inicial do aparelho, pelo QR gerado no painel.'],
               ['O aviso é automático mesmo?', 'Sim. Ao registrar a encomenda, os avisos entram em uma fila no servidor e são enviados sem depender da tela da portaria, com novas tentativas em caso de falha. WhatsApp depende do plano e da conexão do condomínio.'],
               ['O que acontece quando a franquia acaba?', 'A leitura de etiqueta volta à digitação manual e o WhatsApp deixa de ser enviado até o mês seguinte; o aviso no app e o e-mail continuam. Nada é cobrado a mais sem contratação.'],
               ['Quantos moradores por unidade?', 'Vários. Todos os moradores autorizados da unidade são avisados; o limite por unidade é configurado pela administração.'],
@@ -314,6 +374,20 @@ export default function LandingPage() {
               ['E se algo falhar?', 'Nada é considerado registrado sem confirmação do servidor. Falhas de aviso aparecem para a administração e são tentadas de novo.'],
               ['Como funciona o suporte?', 'A equipe do condomínio abre chamados com protocolo dentro do sistema e acompanha as respostas. O horário de atendimento é informado no próprio chamado.'],
             ].map(([q, a]) => <details key={q} className="rounded-xl border border-line bg-surface p-4"><summary className="cursor-pointer font-semibold min-h-6">{q}</summary><p className="mt-3 text-sm text-muted">{a}</p></details>)}
+          </div>
+        </section>
+
+        {/* Modo Portaria Exclusiva: perguntas + solicitação piloto */}
+        <section id="ativacao-piloto" className="bg-surface border-y border-line" aria-labelledby="piloto-h">
+          <div className="max-w-6xl mx-auto px-4 py-16 grid lg:grid-cols-[1fr_1.1fr] gap-10">
+            <div>
+              <h2 id="piloto-h" className="text-3xl font-semibold">{KIOSK.name}: perguntas e ativação piloto</h2>
+              <p className="text-muted mt-2">{KIOSK.description}</p>
+              <div className="mt-6 space-y-2">
+                {KIOSK_FAQ.map(([q, a]) => <details key={q} className="rounded-xl border border-line bg-bg p-4"><summary className="cursor-pointer font-semibold min-h-6">{q}</summary><p className="mt-3 text-sm text-muted">{a}</p></details>)}
+              </div>
+            </div>
+            <Card><h3 className="font-semibold">{KIOSK.cta}</h3><p className="text-sm text-muted mt-1 mb-4">Conte qual aparelho pretende usar. A equipe confere a compatibilidade antes de liberar. Sem cobrança de ativação.</p><KioskPilotForm /></Card>
           </div>
         </section>
 

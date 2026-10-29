@@ -19,8 +19,8 @@ atualize a coluna "Documentado".
 
 | Item | Documentado na fonte pública (23/10/2026) | Portaria Prime (catálogo) | Observação |
 |---|---|---|---|
-| Faixa até 300 unidades | R$ 199/mês ¹ | Profissional R$ 149/mês até 400 unidades | Diferença de R$ 50 (≈25,1%) **só na mensalidade**. Franquias e canais diferem: não é equivalência de cobertura. |
-| Grande porte | R$ 299/mês ¹ | Prime: R$ 349 vigente; proposta de R$ 249 para **novos** contratos, pendente de validação de custos | Diferença de ≈16,7% **só se** a proposta for ativada. Não comparar com oferta de carteira. |
+| Faixa até 300 unidades | R$ 199/mês ¹ | Profissional R$ 169/mês até 400 unidades (tabela 20261029000200; R$ 149 para contratos anteriores) | Diferença de R$ 30 (≈15,1%) **só na mensalidade**. Franquias e canais diferem: não é equivalência de cobertura. |
+| Grande porte | R$ 299/mês ¹ | Prime: R$ 369 na tabela 20261029000200 (R$ 349 antes); o rascunho de R$ 249 não foi ativado e precisa ser revisto | Hoje o Prime é **mais caro** (≈23,4% acima). Não usar comparação de preço nessa faixa. |
 | Administradoras | Oferta para até 20 condomínios ² | Sob proposta (carteira com vínculos explícitos) | Preço por carteira ≠ preço por condomínio. |
 | Teste | 7 dias ¹ | 1 mês de calendário, sem cartão | Conferir no código: `provision_tenant` + `subscriptions.trial_*`. |
 | Cancelamento | Aviso de 30 dias ¹ | Fim do período pago, sem fidelidade; ver minuta | A minuta contratual está pendente de revisão jurídica. |

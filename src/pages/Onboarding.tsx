@@ -7,6 +7,7 @@ import { navigate, query } from '../lib/router';
 import { useSession } from '../lib/session';
 import { Alert, Button, Card, Field, Input, Select, Spinner } from '../components/ui';
 import { PortariaPrimeLogo } from '../components/Brand';
+import { KioskPlanNote } from '../components/KioskPilotForm';
 import { track } from '../lib/funnel';
 
 const slugify = (s: string) =>
@@ -135,6 +136,7 @@ export function OnboardingPage() {
                 <p className="text-muted">Teste estimado até <strong>{dateTime(trialEnd.toISOString())}</strong> (a data exata é definida pelo servidor ao ativar).</p>
                 <p className="text-muted">Sem cobrança durante o teste. Ao final, geramos o link de pagamento — sem débito automático. Cancele quando quiser em Assinatura.</p>
                 <ul className="pt-2 space-y-1">{featureList(chosen).map((f) => <li key={f} className="flex gap-2"><Check className="w-4 h-4 text-success shrink-0 mt-0.5" />{f}</li>)}</ul>
+                <KioskPlanNote />
               </Card>
             )}
             <label className="flex gap-3 items-start text-sm">

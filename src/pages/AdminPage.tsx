@@ -26,7 +26,7 @@ const COLUMNS: Record<string, [string, string][]> = {
   users: [['full_name', 'Nome'], ['email', 'E-mail protegido'], ['tenant_id', 'Condomínio'], ['user_id', 'Usuário'], ['role', 'Papel local'], ['status', 'Vínculo']],
   team: [['full_name', 'Nome'], ['email', 'E-mail protegido'], ['role', 'Papel global'], ['active', 'Ativo']],
   notifications: [['tenant_id', 'Condomínio'], ['event', 'Evento'], ['channel', 'Canal'], ['recipient', 'Destinatário protegido'], ['status', 'Situação'], ['attempts', 'Tentativas'], ['next_attempt_at', 'Próxima tentativa']],
-  contacts: [['name', 'Nome'], ['email', 'E-mail protegido'], ['phone', 'Telefone protegido'], ['source', 'Origem'], ['status', 'Atendimento'], ['created_at', 'Criação']],
+  contacts: [['name', 'Nome'], ['email', 'E-mail protegido'], ['phone', 'Telefone protegido'], ['source', 'Origem'], ['status', 'Atendimento'], ['created_at', 'Criação'], ['message', 'Detalhes (ajuda e ativação piloto)']],
   audit: [['actor_id', 'Ator'], ['action', 'Ação'], ['target_type', 'Tipo do alvo'], ['target_id', 'Alvo'], ['created_at', 'Horário']],
 };
 const METRICS: [string, string][] = [['tenants_total', 'Condomínios'], ['tenants_active', 'Condomínios ativos'], ['trial_active', 'Testes ativos'], ['trial_expired', 'Testes expirados'], ['paid_cents', 'Pagamentos confirmados no período'], ['orders_pending', 'Pedidos pendentes'], ['incidents_open', 'Incidentes abertos'], ['jobs_failed', 'Avisos com falha'], ['contacts_total', 'Contatos']];

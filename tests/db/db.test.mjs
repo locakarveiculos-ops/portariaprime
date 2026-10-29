@@ -233,7 +233,7 @@ test('cobrança: sem checkout durante o teste; job cria exatamente 1 pedido na e
   await db.service(`select public.billing_tick()`);
   const orders = await db.sql(`select * from public.billing_orders where tenant_id = $1`, [A]);
   assert.equal(orders.length, 1);
-  assert.equal(orders[0].amount_cents, 14900);
+  assert.equal(orders[0].amount_cents, 16900); // Profissional mensal (20261029000200: +R$ 20)
   const [s] = await db.sql(`select status from public.subscriptions where tenant_id = $1`, [A]);
   assert.equal(s.status, 'pending_payment');
   // Porteiro não acessa faturamento.
@@ -255,16 +255,16 @@ test('carência e restrição comercial: bloqueia recebimento, mantém retirada'
 test('pagamento: valor menor vai para revisão; verificado ativa período por calendário; duplicado não estende', async () => {
   const [o] = await db.sql(`select * from public.billing_orders where tenant_id = $1 and status = 'pending'`, [A]);
   // Usuário comum não consegue aplicar pagamento.
-  await rejects(db.as(adminA, `select public.apply_verified_payment($1,'t','s',14900,14900,1,'pix','')`, [o.order_nsu]), /permission denied/);
+  await rejects(db.as(adminA, `select public.apply_verified_payment($1,'t','s',16900,16900,1,'pix','')`, [o.order_nsu]), /permission denied/);
   const low = await db.service(`select public.apply_verified_payment($1,'tx-low','s',100,100,1,'pix','') r`, [o.order_nsu]);
   assert.equal(low[0].r.result, 'review');
   await db.sql(`update public.billing_orders set status = 'pending', review_reason = null where id = $1`, [o.id]);
-  const ok = await db.service(`select public.apply_verified_payment($1,'tx-1','slug1',14900,15200,2,'credit_card','https://r') r`, [o.order_nsu]);
+  const ok = await db.service(`select public.apply_verified_payment($1,'tx-1','slug1',16900,17200,2,'credit_card','https://r') r`, [o.order_nsu]);
   assert.equal(ok[0].r.result, 'activated');
   assert.equal(new Date(ok[0].r.period_end).toISOString(), '2026-04-08T16:00:00.000Z');
-  const dup = await db.service(`select public.apply_verified_payment($1,'tx-1','slug1',14900,15200,2,'credit_card','https://r') r`, [o.order_nsu]);
+  const dup = await db.service(`select public.apply_verified_payment($1,'tx-1','slug1',16900,17200,2,'credit_card','https://r') r`, [o.order_nsu]);
   assert.equal(dup[0].r.result, 'duplicate_ignored');
-  const second = await db.service(`select public.apply_verified_payment($1,'tx-2','slug1',14900,14900,1,'pix','') r`, [o.order_nsu]);
+  const second = await db.service(`select public.apply_verified_payment($1,'tx-2','slug1',16900,16900,1,'pix','') r`, [o.order_nsu]);
   assert.equal(second[0].r.result, 'review');
   const [s] = await db.sql(`select status, current_period_end from public.subscriptions where tenant_id = $1`, [A]);
   assert.equal(s.status, 'active');
@@ -282,12 +282,12 @@ test('cancelamento no teste: não gera pedido e reativação mantém a data orig
   await db.rpc(u, 'reactivate_subscription', { p_tenant: t });
   const [after] = await db.sql(`select trial_ends_at, cancel_at_period_end, price_cents_snapshot from public.subscriptions where tenant_id = $1`, [t]);
   assert.equal(String(after.trial_ends_at), String(before.trial_ends_at));
-  assert.equal(after.price_cents_snapshot, 100900); // anual com 15% (20261023000700)
+  assert.equal(after.price_cents_snapshot, 121300); // Essencial anual: 12 x 11900 - 15% (20261029000200)
   // Troca de plano no teste mantém vencimento.
   await db.rpc(u, 'change_plan', { p_tenant: t, p_plan_code: 'prime', p_cycle: 'quarterly' });
   const [ch] = await db.sql(`select trial_ends_at, price_cents_snapshot from public.subscriptions where tenant_id = $1`, [t]);
   assert.equal(String(ch.trial_ends_at), String(before.trial_ends_at));
-  assert.equal(ch.price_cents_snapshot, 99400); // Prime trimestral com 5%
+  assert.equal(ch.price_cents_snapshot, 105100); // Prime trimestral: 3 x 36900 - 5%
   await db.rpc(u, 'cancel_subscription', { p_tenant: t });
   db.setNow('2026-06-11T12:00:00Z');
   await db.service(`select public.billing_tick()`);

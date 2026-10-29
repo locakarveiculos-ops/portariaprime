@@ -8,11 +8,12 @@ import { fileURLToPath } from 'node:url';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
 
-export async function createDb({ seed = false } = {}) {
+/** before: aplica só as migrations anteriores a esse nome (simula dados criados antes dela; use applyMigration depois). */
+export async function createDb({ seed = false, before = null } = {}) {
   const db = new PGlite();
   await db.exec(readFileSync(join(root, 'tests/db/supabase-shim.sql'), 'utf8').replace(/\r\n/g, '\n'));
   const dir = join(root, 'supabase/migrations');
-  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql')).sort()) {
+  for (const f of readdirSync(dir).filter((f) => f.endsWith('.sql') && (!before || f < before)).sort()) {
     try {
       await db.exec(readFileSync(join(dir, f), 'utf8').replace(/\r\n/g, '\n'));
     } catch (e) {
@@ -28,6 +29,7 @@ function wrap(db) {
   let clock = null;
   const api = {
     raw: db,
+    applyMigration: (name) => db.exec(readFileSync(join(root, 'supabase/migrations', name), 'utf8').replace(/\r\n/g, '\n')),
     setNow(iso) { clock = iso; },
     async sql(text, params = []) { return (await db.query(text, params)).rows; },
     async createUser(email, { verified = true, name } = {}) {

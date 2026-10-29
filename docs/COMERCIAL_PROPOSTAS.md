@@ -8,9 +8,14 @@ Testes: `tests/db/commercial.test.mjs`, `tests/api/quote.test.mjs`.
 
 | Plano | Mensal | Unidades | Portarias | OCR/mês | WhatsApp/mês |
 |---|---|---|---|---|---|
-| Essencial | R$ 99 | 80 | 1 | não incluso | não incluso |
-| Profissional | R$ 149 | 400 | 2 | 600 | 1.500 |
-| Prime | R$ 349 (vigente) → **R$ 249 proposto** | 600 | 4 | 1.500 | 4.000 |
+| Essencial | R$ 119 (R$ 99 até 20261029000200) | 80 | 1 | não incluso | não incluso |
+| Profissional | R$ 169 (R$ 149 antes) | 400 | 2 | 600 | 1.500 |
+| Prime | R$ 369 (R$ 349 antes); rascunho de R$ 249 pendente de revisão | 600 | 4 | 1.500 | 4.000 |
+
+Tabela `20261029000200_kiosk_pilot_pricing.sql` (novas contratações): mensal + R$ 20 pelo Modo Portaria Exclusiva
+(quiosque Android, acesso piloto, incluído em todos os planos); trimestral = 3 × mensal − 5% e anual = 12 × mensal − 15%,
+arredondados para baixo ao real. Essencial 119/339/1.213; Profissional 169/481/1.723; Prime 369/1.051/3.763.
+Limite técnico de 20 aparelhos ativos por condomínio (`mdm_device_create`); **não há limite por plano** (política comercial pendente).
 | Sob medida / administradoras | por proposta | — | — | — | — |
 
 - `plan_prices` continua sendo o catálogo (versões imutáveis, uma ativa por plano/ciclo).

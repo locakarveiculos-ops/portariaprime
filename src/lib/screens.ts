@@ -16,6 +16,11 @@ export const SCREENS = {
   marcaB: { file: '/screens/marca-b-desktop.webp', title: 'Condomínio B', caption: 'Outro condomínio, outra identidade, dados separados.', width: 1440, height: 900 },
   moradorQr: { file: '/screens/morador-qr-mobile.webp', title: 'QR de retirada', caption: 'Código de uso único com unidade e encomenda identificadas (desfocado nesta imagem).', width: 390, height: 844 },
   assinatura: { file: '/screens/assinatura-desktop.webp', title: 'Mês grátis e plano', caption: 'Início e fim do teste, plano escolhido e valor depois do teste.', width: 1440, height: 900 },
+  // Modo Portaria Exclusiva: capturas reais do app Android gerenciado em EMULADOR Android 14 (tests/evidence/emu-*),
+  // condomínio de laboratório fictício; código de verificação desfocado. Não são fotos de aparelho físico.
+  quiosqueRecebimento: { file: '/screens/quiosque-recebimento.webp', title: 'Recebimento no terminal Android', caption: 'Demonstração em emulador: encomenda registrada dentro do app dedicado.', width: 1280, height: 800 },
+  quiosqueComprovante: { file: '/screens/quiosque-comprovante.webp', title: 'Comprovante no terminal Android', caption: 'Demonstração em emulador: retirada confirmada com protocolo.', width: 1280, height: 800 },
+  quiosqueManutencao: { file: '/screens/quiosque-manutencao.webp', title: 'Manutenção com prazo', caption: 'Demonstração em emulador: liberação temporária que volta sozinha ao terminal.', width: 1280, height: 800 },
 } satisfies Record<string, Screen>;
 
 export type ScreenKey = keyof typeof SCREENS;
