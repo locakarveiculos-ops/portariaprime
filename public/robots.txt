@@ -9,4 +9,4 @@ Allow: /screens/
 Allow: /brand/
 Disallow: /
 
-Sitemap: https://portariaprime.vercel.app/sitemap.xml
+Sitemap: https://portariaprime.com.br/sitemap.xml

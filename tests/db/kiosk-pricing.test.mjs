@@ -110,3 +110,74 @@ test('pedido de ativação piloto: só superadmin lê; detalhes técnicos visív
     assert.equal((await db.as(user, 'select count(*)::int n from contact_requests'))[0].n, 0);
   } finally { await db.raw.close(); }
 });
+
+test('pedidos piloto: papéis do Admin Master leem, só contact_status muda status; contato completo só por consulta auditada com MFA', async () => {
+  const db = await createDb();
+  try {
+    await db.sql('update plans set published = true');
+    const ids = {};
+    for (const r of ['owner', 'support', 'finance', 'auditor']) {
+      ids[r] = await db.createUser(`${r}@plat.invalid`);
+      await db.sql('insert into platform_admins(user_id, role) values ($1, $2)', [ids[r], r]);
+    }
+    const sindico = await db.createUser('sindico@cond.invalid');
+    const comum = await db.createUser('comum@x.invalid');
+    await db.rpc(sindico, 'provision_tenant', { p_request_id: crypto.randomUUID(), p_name: 'Cond', p_slug: 'cond-piloto',
+      p_document: '11444777000161', p_timezone: 'America/Sao_Paulo', p_plan_code: 'essencial', p_cycle: 'monthly' });
+    const [{ id }] = await db.sql(`insert into contact_requests(name, email, phone, message, source) values ('Síndica Piloto', 'piloto@cond.invalid',
+      '11988887777', 'Solicitação de ativação piloto PQ-20261029-ABC123 — Modo Portaria Exclusiva.\nCondomínio: Cond.\nAparelho: Samsung Galaxy Tab A9 · Android 14 · 1 aparelho(s).', 'quiosque:piloto') returning id`);
+
+    // Leitura: anon, usuário comum e síndico não leem a tabela nem a lista; os 4 papéis leem pela lista (mascarada).
+    await assert.rejects(db.as(null, 'select * from contact_requests'), /permission denied/);
+    for (const u of [comum, sindico]) {
+      assert.equal((await db.as(u, 'select count(*)::int n from contact_requests'))[0].n, 0);
+      await assert.rejects(db.rpc(u, 'platform_list', { p_section: 'contacts' }), /restrito/);
+      await assert.rejects(db.rpc(u, 'platform_contact_reveal', { p_id: id, p_reason: 'Retorno ao solicitante piloto' }), /restrito/);
+    }
+    for (const r of ['owner', 'support', 'finance', 'auditor']) {
+      const list = await db.rpc(ids[r], 'platform_list', { p_section: 'contacts' });
+      assert.equal(list.rows[0].status, 'novo', r);
+      assert.match(list.rows[0].message, /PQ-20261029-ABC123/);
+      assert.doesNotMatch(JSON.stringify(list), /piloto@cond\.invalid|11988887777/, r);
+    }
+
+    // Status: só quem tem contact_status (owner, support, finance); auditor não.
+    const act = (u, status) => db.rpc(u, 'platform_action', { p_action: 'contact_status', p_target: id, p_reason: 'Contato iniciado com a síndica',
+      p_data: JSON.stringify({ status }), p_request: crypto.randomUUID() });
+    await assert.rejects(act(ids.auditor, 'resolvido'), /restrito/);
+    await assert.rejects(act(sindico, 'resolvido'), /restrito/);
+    for (const r of ['support', 'finance', 'owner']) assert.equal((await act(ids[r], 'em_atendimento')).ok, true, r);
+    const [row] = await db.sql('select status, handled_by from contact_requests where id = $1', [id]);
+    assert.deepEqual([row.status, row.handled_by], ['em_atendimento', ids.owner]);
+
+    // Contato completo: quem atende (contact_status) com justificativa; auditor não; cada consulta auditada sem o dado.
+    await assert.rejects(db.rpc(ids.auditor, 'platform_contact_reveal', { p_id: id, p_reason: 'Retorno ao solicitante piloto' }), /restrito/);
+    await assert.rejects(db.rpc(ids.support, 'platform_contact_reveal', { p_id: id, p_reason: 'curto' }), /Justificativa/);
+    await assert.rejects(db.rpc(ids.support, 'platform_contact_reveal', { p_id: crypto.randomUUID(), p_reason: 'Retorno ao solicitante piloto' }), /não encontrado/);
+    const c = await db.rpc(ids.support, 'platform_contact_reveal', { p_id: id, p_reason: 'Retorno ao solicitante piloto' });
+    assert.deepEqual([c.email, c.phone], ['piloto@cond.invalid', '11988887777']);
+    const audit = await db.sql("select actor_id, target_id, data from audit_logs where action = 'platform.contact_reveal'");
+    assert.equal(audit.length, 1);
+    assert.deepEqual([audit[0].actor_id, audit[0].target_id, audit[0].data.reason, audit[0].data.source], [ids.support, id, 'Retorno ao solicitante piloto', 'quiosque:piloto']);
+    assert.doesNotMatch(JSON.stringify(audit), /piloto@cond\.invalid|11988887777/, 'auditoria não guarda o dado revelado');
+    // Aparece na trilha do Admin Master.
+    assert.ok((await db.rpc(ids.owner, 'platform_list', { p_section: 'audit' })).rows.some((r) => r.action === 'platform.contact_reveal'));
+
+    // MFA: com fator verificado, exige aal2 (mesma regra de app.platform_require).
+    await db.raw.exec('create table auth.mfa_factors (user_id uuid, status text)');
+    await db.sql("insert into auth.mfa_factors values ($1, 'verified')", [ids.finance]);
+    const withAal = async (aal) => {
+      await db.raw.exec('begin');
+      try {
+        await db.raw.query(`select set_config('request.jwt.claim.sub', $1, true), set_config('request.jwt.claims', $2, true)`, [ids.finance, JSON.stringify({ sub: ids.finance, aal })]);
+        await db.raw.exec('set local role authenticated');
+        const r = await db.raw.query('select public.platform_contact_reveal($1, $2) r', [id, 'Retorno ao solicitante piloto']);
+        await db.raw.exec('commit');
+        return r.rows[0].r;
+      } catch (e) { await db.raw.exec('rollback'); throw e; }
+    };
+    await assert.rejects(withAal('aal1'), /Confirme o MFA/);
+    assert.equal((await withAal('aal2')).email, 'piloto@cond.invalid');
+    assert.equal((await db.sql("select count(*)::int n from audit_logs where action = 'platform.contact_reveal'"))[0].n, 2, 'recusa por MFA não grava consulta');
+  } finally { await db.raw.close(); }
+});

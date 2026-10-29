@@ -35,7 +35,7 @@ export const POST = handler(async (request) => {
 <p><a href="${esc(link)}" style="display:inline-block;background:#101F30;color:#fff;padding:12px 20px;border-radius:8px;text-decoration:none">Aceitar convite</a></p>
 <p style="color:#526174;font-size:12px">Se você não esperava este convite, ignore esta mensagem.</p>
 <p style="color:#526174;font-size:11px">Tecnologia Portaria Prime</p></div></body></html>`;
-  const sent = await sendEmail(b.email.trim().toLowerCase(), `Convite para ${tenant?.name || 'o condomínio'}`, html);
+  const sent = await sendEmail(b.email.trim().toLowerCase(), `Convite para ${tenant?.name || 'o condomínio'}`, html, undefined, tenant?.name);
   return json({
     invitationId: data.invitation_id,
     expiresAt: data.expires_at,

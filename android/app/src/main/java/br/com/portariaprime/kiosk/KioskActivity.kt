@@ -128,7 +128,7 @@ class KioskActivity : Activity() {
         if (agent.store.revoked) addView(text("A credencial deste aparelho foi revogada no painel. O quiosque continua protegido com a última política. Para voltar a operar, o síndico gera um novo código de inscrição."))
         addView(text(if (agent.enforcer.isDeviceOwner) "Aparelho provisionado. Digite o código de inscrição gerado em Configurações → Dispositivos e quiosque (uso único, vale 1 hora)."
             else "Este aplicativo não é o proprietário do aparelho (Device Owner). Sem isso não há quiosque protegido: provisione pelo QR na configuração inicial do Android. Fullscreen ou fixação de tela não equivalem a gerenciamento."))
-        val input = EditText(context).apply { hint = "Código de inscrição"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY) }
+        val input = EditText(context).apply { hint = "Código de inscrição"; inputType = CODE_INPUT; setTextColor(Color.WHITE); setHintTextColor(Color.LTGRAY) }
         addView(input)
         addView(button("Inscrever") { enroll(input.text.toString().uppercase().filter { it.isLetterOrDigit() }) })
         addView(text("Agente ${BuildConfig.VERSION_NAME} · Android ${android.os.Build.VERSION.RELEASE}"))
@@ -196,7 +196,7 @@ class KioskActivity : Activity() {
         web?.let { (it.parent as? ViewGroup)?.removeView(it); return it }
         val lab = BuildConfig.LAB_LOOPBACK
         val origins = setOfNotNull(NavigationGuard.origin(BuildConfig.SUPABASE_ORIGIN, lab))
-        val g = NavigationGuard(BuildConfig.APP_ORIGIN, origins, lab).also { guard = it }
+        val g = NavigationGuard(BuildConfig.APP_ORIGIN, origins, lab, setOf(BuildConfig.LEGACY_APP_ORIGIN)).also { guard = it }
         val slug = agent.store.tenantSlug
         // DevTools da WebView só no build de laboratório (testes automatizados); nunca em release.
         WebView.setWebContentsDebuggingEnabled(BuildConfig.LAB_LOOPBACK)
@@ -355,7 +355,7 @@ class KioskActivity : Activity() {
     /** Recuperação offline: código descartável do síndico, validado localmente (hash), com limite de tentativas. */
     private fun askRecovery() {
         val s = agent.store
-        val input = EditText(this).apply { hint = "Código de recuperação"; inputType = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS }
+        val input = EditText(this).apply { hint = "Código de recuperação"; inputType = CODE_INPUT }
         AlertDialog.Builder(this).setTitle("Manutenção do síndico")
             .setMessage("Online: o síndico abre a manutenção pelo painel. Sem internet: digite um código de recuperação deste aparelho (uso único).")
             .setView(input).setNegativeButton("Cancelar", null)
@@ -382,6 +382,11 @@ class KioskActivity : Activity() {
     }
 
     // ---- UI mínima ---------------------------------------------------------------------------------
+
+    // Códigos (inscrição e recuperação): sem sugestões nem autocorreção. Achado no emulador: o teclado
+    // reescrevia o código digitado e um código válido virava "inválido" (e contava tentativa).
+    private val CODE_INPUT = InputType.TYPE_CLASS_TEXT or InputType.TYPE_TEXT_FLAG_CAP_CHARACTERS or
+        InputType.TYPE_TEXT_FLAG_NO_SUGGESTIONS or InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD
 
     private fun column(padding: Int) = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; setPadding(padding, padding, padding, padding); gravity = Gravity.CENTER_HORIZONTAL }
     private fun title(s: String) = TextView(this).apply { text = s; textSize = 26f; setTextColor(Color.WHITE); setPadding(0, 0, 0, 24) }

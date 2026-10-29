@@ -9,8 +9,10 @@ export const ACTION_LABELS: Record<string, string> = {
   plan_limits: 'Editar franquias', plan_publish: 'Publicação do catálogo', plan_price: 'Versionar preço',
   contact_status: 'Atualizar atendimento', password_reset: 'Enviar redefinição de senha',
   courtesy_grant: 'Conceder cortesia temporária', courtesy_revoke: 'Revogar cortesia',
-  plan_change: 'Trocar plano contratado',
+  plan_change: 'Trocar plano contratado', contact_reveal: 'Ver contato completo',
 };
+/** Ações que não são capacidades próprias: exigem a capacidade indicada. */
+const ACTION_CAPABILITY: Record<string, string> = { contact_reveal: 'contact_status' };
 export const ACTION_EFFECTS: Record<string, string> = {
   tenant_status: 'Altera acesso operacional ao condomínio. Não confirma pagamento.',
   trial_extend: 'Define o prazo final absoluto. Reativação de teste expirado exige escolha explícita.',
@@ -26,6 +28,7 @@ export const ACTION_EFFECTS: Record<string, string> = {
   plan_price: 'Cria uma versão de preço para o ciclo; não modifica pedidos pagos retroativamente.',
   contact_status: 'Atualiza a situação do atendimento.',
   password_reset: 'Solicita e-mail de recuperação pelo fluxo oficial. Nenhuma senha será exibida.',
+  contact_reveal: 'Mostra e-mail e telefone completos deste contato para retorno. A consulta e a justificativa ficam na auditoria. Não copie o dado para fora dos canais de atendimento.',
 };
 export function rowActions(section: string, row: Row, ctx: PlatformContext): string[] {
   const actions = section === 'tenants' ? ['tenant_status'] : section === 'trials' ? ['trial_extend']
@@ -33,8 +36,8 @@ export function rowActions(section: string, row: Row, ctx: PlatformContext): str
     : section === 'incidents' && !row.resolved_at ? ['incident_resolve']
     : section === 'notifications' && row.status === 'failed' && row.retryable === true ? ['notification_retry']
     : section === 'plans' ? ['plan_publish', 'plan_price', 'plan_limits']
-    : section === 'contacts' ? ['contact_status'] : [];
-  return actions.filter(action => ctx.capabilities.includes(action));
+    : section === 'contacts' ? ['contact_status', 'contact_reveal'] : [];
+  return actions.filter(action => ctx.capabilities.includes(ACTION_CAPABILITY[action] || action));
 }
 export function actionData(action: string, form: FormData, row: Row): Row {
   if (action === 'plan_change') {

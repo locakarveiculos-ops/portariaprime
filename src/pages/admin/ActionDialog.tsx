@@ -7,6 +7,7 @@ export default function ActionDialog({ action, row, onClose, onDone }: { action:
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [review, setReview] = useState<{ data: Row; reason: string; request: string } | null>(null);
+  const [revealed, setRevealed] = useState<{ name: string; email: string; phone: string | null } | null>(null);
   const lock = useRef(false);
   const target = String(action === 'password_reset' || action === 'team_role' && row.user_id ? row.user_id : row.id);
   const close = () => { if (!lock.current) onClose(); };
@@ -14,7 +15,9 @@ export default function ActionDialog({ action, row, onClose, onDone }: { action:
     if (!review || lock.current) return;
     lock.current = true; setBusy(true); setError('');
     try {
-      if (action === 'password_reset') {
+      if (action === 'contact_reveal') {
+        setRevealed(await rpc('platform_contact_reveal', { p_id: target, p_reason: review.reason }));
+      } else if (action === 'password_reset') {
         const result = await api<{ ok: boolean; message?: string }>('/api/platform/users', { action, userId: target, reason: review.reason });
         if (result.ok !== true) throw new Error('Servidor não confirmou a solicitação.');
         onDone(result.message || 'Solicitação aceita pelo provedor. Entrega do e-mail não confirmada.');
@@ -32,8 +35,14 @@ export default function ActionDialog({ action, row, onClose, onDone }: { action:
     <div className="space-y-4">
       <p className="break-words"><strong>Alvo:</strong> {row.name || row.full_name || row.code || row.kind || row.event || 'Registro'}<br /><span className="font-mono text-xs">{target}</span>{row.tenant_id && <><br />Condomínio: <span className="font-mono text-xs">{row.tenant_id}</span></>}</p>
       <Alert tone="warning">{ACTION_EFFECTS[action]}</Alert>
-      {error && <Alert tone="danger">{error} {review && action !== 'password_reset' ? 'Tentar novamente reutiliza o mesmo identificador de solicitação.' : ''}</Alert>}
-      {review ? <div className="space-y-3">
+      {error && <Alert tone="danger">{error} {review && !['password_reset', 'contact_reveal'].includes(action) ?'Tentar novamente reutiliza o mesmo identificador de solicitação.' : ''}</Alert>}
+      {revealed ? <div className="space-y-3">
+        <dl className="text-sm space-y-1 break-words"><div><dt className="inline font-medium">Nome: </dt><dd className="inline">{revealed.name}</dd></div>
+          <div><dt className="inline font-medium">E-mail: </dt><dd className="inline"><a className="underline" href={`mailto:${revealed.email}`}>{revealed.email}</a></dd></div>
+          <div><dt className="inline font-medium">Telefone: </dt><dd className="inline">{revealed.phone || 'não informado'}</dd></div></dl>
+        <p className="text-xs text-muted">Consulta registrada na auditoria.</p>
+        <Button variant="secondary" onClick={close}>Fechar</Button>
+      </div> : review ? <div className="space-y-3">
         <h3 className="font-semibold">Revise antes de confirmar</h3>
         <dl className="text-sm space-y-1">{Object.entries(review.data).map(([key, value]) => <div key={key} className="break-words"><dt className="inline font-medium">{labels[key] || key}: </dt><dd className="inline">{typeof value === 'boolean' ? value ? 'Sim' : 'Não' : String(value)}</dd></div>)}</dl>
         <p className="text-sm whitespace-pre-wrap break-words"><strong>Justificativa:</strong> {review.reason}</p>

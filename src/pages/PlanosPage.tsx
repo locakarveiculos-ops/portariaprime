@@ -182,7 +182,7 @@ export default function PlanosPage() {
             {done ? (
               <div className="space-y-4">
                 <Alert tone="success">Pedido <strong>{done.protocol}</strong> recebido: {done.plan}, {CYCLE_LABEL[done.cycle].toLowerCase()}, {brl(done.amount_cents)} por ciclo. Entraremos em contato pelo e-mail informado.</Alert>
-                <p className="text-sm">Próximo passo: crie a conta do condomínio e ative o mês grátis. O contrato é aceito formalmente dentro do sistema, com confirmação do e-mail do representante e cópia em PDF.</p>
+                <p className="text-sm">Próximo passo: crie a conta do condomínio e ative o mês grátis. O contrato é aceito formalmente dentro do sistema, com confirmação do e-mail do representante e cópia em PDF.{!legal?.published && <> <strong>O aceite ainda não foi feito:</strong> a contratação eletrônica só fica disponível depois que a Portaria Prime publicar a versão vigente do contrato.</>}</p>
                 <div className="flex flex-wrap gap-2 print:hidden">
                   <Button onClick={startTrial}>Ativar o mês grátis com este plano</Button>
                   {SALES_WHATSAPP && <a href={`https://wa.me/${SALES_WHATSAPP}?text=${encodeURIComponent(summary())}`} target="_blank" rel="noopener" className="inline-flex items-center gap-2 rounded-xl px-4 min-h-11 border border-line font-semibold"><MessageCircle className="w-4 h-4" aria-hidden />Enviar resumo pelo WhatsApp</a>}
@@ -195,7 +195,7 @@ export default function PlanosPage() {
                 <span className="text-sm">Li o contrato acima e concordo com os termos para seguir com a contratação do plano {plan?.name || ''} ({CYCLE_LABEL[cycle].toLowerCase()}).</span>
               </label>
               <Alert><strong>{KIOSK.name} (acesso piloto):</strong> {KIOSK.included} {KIOSK.requirement} {KIOSK.pilot} <a href={KIOSK.href} onClick={onLink} className="underline">{KIOSK.cta}</a>.</Alert>
-              <p className="text-xs text-muted">Este envio é um <strong>pedido de contratação</strong>, não substitui o aceite formal feito dentro do sistema (com versão registrada, confirmação do e-mail e PDF). Nenhuma cobrança é feita agora; o mês grátis vem primeiro.</p>
+              <p className="text-xs text-muted">Este envio é um <strong>pedido de contratação</strong>, não substitui o aceite formal feito dentro do sistema (com versão registrada, confirmação do e-mail e PDF). Nenhuma cobrança é feita agora; o mês grátis vem primeiro.{legal && !legal.published && ' Enquanto o contrato estiver em minuta, a contratação eletrônica não está disponível e nenhum aceite é registrado.'}</p>
               {error && <Alert tone="danger">{error}</Alert>}
               <div className="flex flex-wrap gap-2 print:hidden">
                 <Button type="submit" loading={busy} disabled={!ready}><FileText className="w-4 h-4" aria-hidden />Enviar pedido de contratação</Button>

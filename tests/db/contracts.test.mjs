@@ -67,6 +67,60 @@ test('publicação exige dados legais completos, aprovação e texto sem pendên
   } finally { await s.db.raw.close(); }
 });
 
+// Condomínio NOVO depois da tabela 20261029000200. Já cobertos no teste seguinte (não repetidos aqui):
+// sha divergente, permissão, verificação por código, append-only, isolamento e aditivo.
+test('condomínio novo: sem contrato publicado não há aceite; publicado grava preço/versão; nova versão arquiva a anterior; checkout cobra o snapshot', async () => {
+  const s = await setup();
+  try {
+    // Mês grátis de calendário (provisionado em 23/10 09:00 local termina em 23/11 09:00 local).
+    const [sub] = await s.db.sql('select status, trial_ends_at, price_cents_snapshot, price_id from subscriptions where tenant_id = $1', [s.A]);
+    assert.deepEqual([sub.status, sub.trial_ends_at.toISOString(), sub.price_cents_snapshot], ['trialing', '2026-11-23T12:00:00.000Z', 16900]);
+    const [active] = await s.db.sql(`select pp.id, pp.version from plan_prices pp join plans p on p.id = pp.plan_id
+      where p.code = 'profissional' and pp.cycle = 'monthly' and pp.active`);
+    assert.equal(sub.price_id, active.id, 'assinatura nasce na versão ativa da tabela nova');
+
+    // Sem documento publicado: cotação mostra a tabela nova, sem documento; aceite recusado e nada gravado.
+    const q0 = await s.db.rpc(s.sindico, 'contract_quote', { p_tenant: s.A, p_plan_code: 'profissional', p_cycle: 'monthly', p_proposal: null });
+    assert.deepEqual([q0.document, q0.terms.amount_cents, q0.terms.price_id], [null, 16900, active.id]);
+    for (const [plan, cycle, cents] of [['essencial', 'monthly', 11900], ['prime', 'monthly', 36900], ['essencial', 'quarterly', 33900], ['profissional', 'quarterly', 48100], ['prime', 'quarterly', 105100], ['essencial', 'yearly', 121300], ['profissional', 'yearly', 172300], ['prime', 'yearly', 376300]])
+      assert.equal((await s.db.rpc(s.sindico, 'contract_quote', { p_tenant: s.A, p_plan_code: plan, p_cycle: cycle, p_proposal: null })).terms.amount_cents, cents, `${plan}/${cycle}`);
+    await assert.rejects(accept(s, s.sindico, 'a'.repeat(64)), /Ainda não há contrato publicado/);
+    // Rascunho do Admin Master (como o seed das minutas) também não habilita aceite.
+    await s.db.rpc(s.owner, 'platform_legal_doc_save', { p_id: null, p_kind: 'contrato_saas', p_version: '0.2-rascunho', p_content: CONTRATO, p_summary: null, p_change_note: null, p_material: true });
+    await assert.rejects(accept(s, s.sindico, 'a'.repeat(64)), /Ainda não há contrato publicado/);
+    assert.equal((await s.db.sql('select count(*)::int n from contract_acceptances'))[0].n, 0);
+
+    // Publicação pelo fluxo real (banco de TESTE): dados legais fictícios, draft -> review -> approved -> published.
+    await s.db.rpc(s.owner, 'platform_legal_entity_set', { p: JSON.stringify(LEGAL) });
+    const v1 = await publish(s);
+    const a1 = await accept(s, s.sindico, v1.sha256);
+    assert.deepEqual([a1.document_id, a1.document_version, a1.document_sha256], [v1.id, '1.0', v1.sha256]);
+    assert.deepEqual([a1.terms.source, a1.terms.amount_cents, a1.terms.price_id, a1.terms.price_version, a1.terms.plan_code, a1.terms.cycle],
+      ['catalog', 16900, active.id, active.version, 'profissional', 'monthly']);
+    assert.match(a1.document_md, /Empresa Exemplo de Teste Ltda/);
+
+    // Nova versão publicada: a anterior vira archived; o aceite antigo continua na versão e no preço antigos.
+    const v2 = await publish(s, CONTRATO + '\n## 3. Novidade\nTexto novo.\n', '1.1');
+    const docs = await s.db.sql("select id, status, effective_until from legal_documents where kind = 'contrato_saas' and status <> 'draft' order by created_at");
+    assert.deepEqual(docs.map((d) => [d.id, d.status]), [[v1.id, 'archived'], [v2.id, 'published']]);
+    assert.ok(docs[0].effective_until);
+    const pdf1 = await svcCall(s.db, 'contract_pdf_data', { p_acceptance: a1.id });
+    assert.deepEqual([pdf1.document_id, pdf1.document_version, pdf1.document_sha256, pdf1.terms.amount_cents, pdf1.terms.price_id], [v1.id, '1.0', v1.sha256, 16900, active.id]);
+    assert.doesNotMatch(pdf1.document_md, /Novidade/, 'PDF histórico usa o texto da versão aceita');
+    assert.equal((await s.db.sql('select status from legal_documents where id = $1', [v1.id]))[0].status, 'archived');
+
+    // Catálogo muda depois do aceite: a primeira cobrança (fim do teste) usa o snapshot do servidor.
+    await s.db.sql(`update plan_prices set active = false where id = $1`, [active.id]);
+    await s.db.sql(`insert into plan_prices (plan_id, cycle, amount_cents, version) select plan_id, cycle, 19900, version + 1 from plan_prices where id = $1`, [active.id]);
+    await assert.rejects(s.db.rpc(s.sindico, 'prepare_proposal_billing', { p_tenant: s.A }), /mês grátis vai até/, 'sem cobrança durante o teste');
+    s.db.setNow('2026-11-23T12:00:01Z');
+    const order = await s.db.rpc(s.sindico, 'prepare_proposal_billing', { p_tenant: s.A });
+    assert.equal(order.amount_cents, 16900);
+    const [o] = await s.db.sql('select price_id, amount_cents, snapshot from billing_orders where id = $1', [order.order_id]);
+    assert.deepEqual([o.price_id, o.amount_cents, o.snapshot.price_version], [active.id, 16900, active.version]);
+  } finally { await s.db.raw.close(); }
+});
+
 test('aceite: sha divergente, permissão, preço do servidor, isolamento, append-only, verificação, aditivo e pagamento intacto', async () => {
   const s = await setup();
   try {

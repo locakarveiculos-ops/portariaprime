@@ -14,6 +14,12 @@ test('ações exigem capability; proprietário não ganha bypass no frontend', (
   assert.deepEqual(rowActions('incidents', { resolved_at: '2026-01-01' }, context(['incident_resolve'])), []);
   assert.deepEqual(rowActions('users', { status: 'unassigned' }, context(['membership_status', 'password_reset'])), ['password_reset']);
 });
+test('contatos: "Ver contato completo" só para quem atende (contact_status); auditor só lê', () => {
+  assert.deepEqual(rowActions('contacts', {}, context(['contacts', 'contact_status'])), ['contact_status', 'contact_reveal']);
+  assert.deepEqual(rowActions('contacts', {}, context(['contacts'])), []);
+  assert.deepEqual(rowActions('contacts', {}, context(['contacts', 'contact_reveal'])), [], 'capacidade inexistente não habilita');
+  assert.deepEqual(actionData('contact_reveal', form({}), {}), {});
+});
 test('retry somente falha terminal elegível informada pelo servidor', () => {
   for (const status of ['queued', 'sending', 'accepted', 'delivered']) assert.deepEqual(rowActions('notifications', { status, retryable: true }, context(['notification_retry'])), []);
   assert.deepEqual(rowActions('notifications', { status: 'failed', retryable: false }, context(['notification_retry'])), []);

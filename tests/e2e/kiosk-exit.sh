@@ -40,7 +40,7 @@ enroll_ui() {
     for i in $(seq 1 15); do ui 40 | grep -q 'Código de inscrição' && break; sleep 2; done
     tapText "Código de inscrição" >/dev/null; $ADB shell input keyevent KEYCODE_MOVE_END; for k in $(seq 1 30); do $ADB shell input keyevent KEYCODE_DEL; done
     typeText "$tok"; sleep 1
-    $ADB shell uiautomator dump /sdcard/ui.xml >/dev/null; got=$($ADB shell cat /sdcard/ui.xml | grep -oE 'text="[A-Z0-9]{24}"' | head -1 | cut -d'"' -f2)
+    $ADB shell uiautomator dump /data/local/tmp/ui.xml >/dev/null; got=$($ADB shell cat /data/local/tmp/ui.xml | grep -oE 'text="[A-Z0-9]{24}"' | head -1 | cut -d'"' -f2)
     [ "$got" = "$tok" ] || continue
     tapText "Inscrever" >/dev/null
     for i in $(seq 1 20); do prefs | grep -q 'name="revoked" value="false"' && prefs | grep -q device_id && return 0; sleep 2; done
@@ -59,7 +59,7 @@ DEV0=$(prefs | grep -oE 'name="device_id">[^<]+' | cut -d'>' -f2)
 echo "A. Código de recuperação incorreto e limite de tentativas"
 codes=$(node --env-file=.env.stack.local --import tsx tests/e2e/kiosk-lab-cmd.mjs recovery | grep -oE '[0-9A-Z]{4}-[0-9A-Z]{4}-[0-9A-Z]{4}')
 good=$(echo "$codes" | sed -n 2p); kick; sleep 10
-try_code() { tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeText "$1"; tapText "VALIDAR" >/dev/null; sleep 4; }
+try_code() { tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeChecked "$1"; tapText "VALIDAR" >/dev/null; sleep 4; }
 for i in 1 2 3 4 5; do try_code "ZZZZ-ZZZZ-ZZZ$i"; done
 [ "$(lock)" = LOCKED ] && ok "5 códigos errados: continua em quiosque" || ko "código errado liberou: $(lock)"
 prefs | grep -q 'name="att_fail" value="5"' && ok "5 falhas contadas no aparelho" || ko "falhas: $(prefs | grep -oE 'att_fail" value="[0-9]+')"

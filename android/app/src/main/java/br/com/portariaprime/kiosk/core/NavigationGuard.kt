@@ -8,8 +8,12 @@ import java.net.URI
  * Vale também para navegação interna do SPA (pushState), checada em doUpdateVisitedHistory.
  * `labLoopback`: só em build debug de laboratório aceita http://127.0.0.1 (adb reverse); release exige HTTPS.
  */
-class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>, private val labLoopback: Boolean = false) {
+class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>, private val labLoopback: Boolean = false,
+                      legacyOrigins: Set<String> = emptySet()) {
     private val app = origin(appOrigin, labLoopback) ?: error("APP_ORIGIN inválida")
+    // Origem anterior do mesmo sistema (troca de domínio): tratada como o app para não prender um redirecionamento
+    // vindo de link antigo. Só origens fixas no APK; o painel não acrescenta nada aqui.
+    private val apps = setOf(app) + legacyOrigins.mapNotNull { origin(it, labLoopback) }
 
     enum class Decision { ALLOW, PDF_VIEWER, BLOCK }
 
@@ -21,7 +25,7 @@ class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>, 
         val u = parse(url) ?: return Decision.BLOCK
         val o = "${u.scheme}://${u.authority}"
         val p = path(u)
-        if (o == app) {
+        if (o in apps) {
             if (p in setOf("/entrar", "/recuperar-senha", "/nova-senha", "/app")) return Decision.ALLOW
             val m = Regex("^/c/([a-z0-9][a-z0-9-]{1,46}[a-z0-9])(/([a-z-]+))?/?$").find(p) ?: return Decision.BLOCK
             if (slug != null && m.groupValues[1] != slug) return Decision.BLOCK
@@ -36,11 +40,11 @@ class NavigationGuard(appOrigin: String, private val extraOrigins: Set<String>, 
     fun resource(url: String): Boolean {
         if (url.startsWith("data:") || url.startsWith("blob:")) return true
         val u = parse(url) ?: return false
-        return "${u.scheme}://${u.authority}" == app || "${u.scheme}://${u.authority}" in extraOrigins
+        return "${u.scheme}://${u.authority}" in apps || "${u.scheme}://${u.authority}" in extraOrigins
     }
 
     /** Câmera (getUserMedia) só para a origem do app. */
-    fun mayUseCamera(origin: String) = origin.trimEnd('/') == app
+    fun mayUseCamera(origin: String) = origin.trimEnd('/') in apps
 
     fun startUrl(slug: String, path: String): String {
         require(SLUG.matches(slug)) { "slug inválido" }

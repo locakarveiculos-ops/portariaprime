@@ -52,7 +52,13 @@ export const LOCK_FEATURES: { key: string; label: string; singleApp: boolean }[]
   { key: 'notifications', label: 'Notificações do sistema (exige Início)', singleApp: false },
 ];
 
-export const START_PATHS: Record<string, string> = { portaria: 'Portaria (recebimento e entrega)', 'totem-equipe': 'Totem da equipe', painel: 'Painel do síndico' };
+/** Teto técnico por condomínio (mdm_device_create recusa o 21º não desativado; a mensagem do servidor é a fonte final). */
+export const DEVICE_LIMIT = 20;
+export const DEVICE_LIMIT_MSG = `Limite técnico de ${DEVICE_LIMIT} aparelhos ativos por condomínio atingido. Desative um aparelho para cadastrar outro.`;
+/** Ocupam vaga todos menos os desativados (desativação pendente ainda conta). */
+export const countsTowardLimit = (devices: { raw_state: string }[]) => devices.filter((d) => d.raw_state !== 'deactivated').length;
+
+export const START_PATHS: Record<string, string> ={ portaria: 'Portaria (recebimento e entrega)', 'totem-equipe': 'Totem da equipe', painel: 'Painel do síndico' };
 
 /**
  * QR de provisionamento (setup inicial, toque 6 vezes na tela de boas-vindas no Android 7+, nativo no 9+).

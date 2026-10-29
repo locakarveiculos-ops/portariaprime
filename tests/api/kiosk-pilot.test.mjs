@@ -1,17 +1,33 @@
 // /api/public/kiosk-pilot: "Solicitar ativação piloto" do Modo Portaria Exclusiva. Grava antes de confirmar,
-// valida campos, exige confirmação de aparelho dedicado, honeypot e limite por IP. Textos comerciais sem promessas proibidas.
+// valida campos, exige confirmação de aparelho dedicado, honeypot, limite por IP e reenvio idêntico sem duplicar.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 
 process.env.SUPABASE_URL = 'http://127.0.0.1:9';
 process.env.SUPABASE_SERVICE_ROLE_KEY = 'service-test';
-const inserted = [];
-let recent = 0;
+// Tabela contact_requests em memória (PostgREST: HEAD = contagem, GET = filtros eq/gte, POST = insert com defaults).
+const rows = [];
+const inserted = rows;
+let recent = 0, failInsert = false, failSelect = false;
 globalThis.fetch = async (url, init = {}) => {
   const u = new URL(String(url));
-  if (u.pathname === '/rest/v1/contact_requests' && (init.method || 'GET') === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': `*/${recent}` } });
-  if (u.pathname === '/rest/v1/contact_requests') { inserted.push(JSON.parse(init.body)); return new Response('', { status: 201 }); }
-  return new Response(JSON.stringify({ message: 'inesperado ' + u.pathname }), { status: 500 });
+  const method = init.method || 'GET';
+  if (u.pathname !== '/rest/v1/contact_requests') return new Response(JSON.stringify({ message: 'inesperado ' + u.pathname }), { status: 500 });
+  if (method === 'HEAD') return new Response(null, { status: 200, headers: { 'content-range': `*/${recent}` } });
+  if (method === 'GET') {
+    if (failSelect) return new Response(JSON.stringify({ message: 'banco indisponível' }), { status: 503 });
+    let out = rows.slice();
+    for (const [k, v] of u.searchParams) {
+      if (['select', 'order', 'limit'].includes(k)) continue;
+      const [op, val] = [v.slice(0, v.indexOf('.')), v.slice(v.indexOf('.') + 1)];
+      out = out.filter((r) => (op === 'eq' ? String(r[k]) === val : op === 'gte' ? r[k] >= val : false));
+    }
+    out.sort((a, b) => b.created_at.localeCompare(a.created_at));
+    return new Response(JSON.stringify(out.slice(0, Number(u.searchParams.get('limit') || 1000))), { status: 200, headers: { 'content-type': 'application/json' } });
+  }
+  if (failInsert) return new Response(JSON.stringify({ message: 'falha ao gravar' }), { status: 500, headers: { 'content-type': 'application/json' } });
+  rows.push({ created_at: new Date().toISOString(), ...JSON.parse(init.body) });
+  return new Response('', { status: 201 });
 };
 const { POST } = await import('../../api/public/[action].ts');
 const base = { condoName: 'Residencial Teste', name: 'Pessoa Teste', role: 'Síndica', email: 'Teste@Example.invalid', phone: '(11) 98888-7777',
@@ -44,9 +60,58 @@ test('honeypot não grava; limite por IP devolve 429', async () => {
   assert.equal((await POST(req({ ...base, website: 'bot' }))).status, 200);
   assert.equal(inserted.length, n);
   recent = 3;
-  assert.equal((await POST(req(base))).status, 429);
+  assert.equal((await POST(req({ ...base, email: 'outra@example.invalid' }))).status, 429);
   assert.equal(inserted.length, n);
   recent = 0;
+});
+
+test('persistência: uma linha com source, sem status forçado (default "novo" do banco), e-mail normalizado e protocolo na mensagem', async () => {
+  rows.length = 0;
+  const b = await (await POST(req({ ...base, email: 'nova@example.invalid' }))).json();
+  assert.equal(rows.length, 1);
+  assert.equal(rows[0].source, 'quiosque:piloto');
+  assert.equal(rows[0].status, undefined, 'API não define status: o default do banco é "novo" (tests/db/kiosk-pricing.test.mjs)');
+  assert.ok(rows[0].ip_hash && !rows[0].ip_hash.includes('.'), 'só hash do IP');
+  assert.ok(rows[0].message.startsWith(`Solicitação de ativação piloto ${b.protocol}`));
+});
+
+test('erro do banco devolve erro e não confirma protocolo', async () => {
+  rows.length = 0;
+  failInsert = true;
+  const r = await POST(req({ ...base, email: 'erro@example.invalid' }));
+  failInsert = false;
+  assert.equal(r.status, 500);
+  const b = await r.json();
+  assert.equal(b.protocol, undefined);
+  assert.equal(rows.length, 0);
+  failSelect = true;
+  const r2 = await POST(req({ ...base, email: 'erro@example.invalid' }));
+  failSelect = false;
+  assert.equal(r2.status, 500, 'falha na checagem de duplicidade também não confirma');
+  assert.equal(rows.length, 0);
+});
+
+test('reenvio idêntico em 30 min devolve o mesmo protocolo sem nova linha; outro aparelho, outro e-mail ou após 30 min criam nova', async () => {
+  rows.length = 0;
+  const first = await (await POST(req(base))).json();
+  const again = await (await POST(req({ ...base, email: 'TESTE@example.invalid', condoName: 'residencial  teste', notes: 'outra obs' }))).json();
+  assert.equal(again.protocol, first.protocol);
+  assert.equal(again.duplicate, true);
+  assert.equal(rows.length, 1);
+  // Outro modelo: nova solicitação.
+  const other = await (await POST(req({ ...base, model: 'Galaxy Tab A8' }))).json();
+  assert.notEqual(other.protocol, first.protocol);
+  assert.equal(rows.length, 2);
+  // Outra pessoa com o mesmo condomínio/aparelho não recebe o protocolo de ninguém.
+  const stranger = await (await POST(req({ ...base, email: 'intrusa@example.invalid' }))).json();
+  assert.ok(![first.protocol, other.protocol].includes(stranger.protocol));
+  assert.equal(stranger.duplicate, undefined);
+  assert.equal(rows.length, 3);
+  // Depois de 30 min, mesmo pedido gera novo protocolo.
+  for (const r of rows) r.created_at = new Date(Date.now() - 31 * 60_000).toISOString();
+  const later = await (await POST(req(base))).json();
+  assert.notEqual(later.protocol, first.protocol);
+  assert.equal(rows.length, 4);
 });
 
 test('textos do recurso: obrigatórios presentes e sem promessas proibidas', async () => {

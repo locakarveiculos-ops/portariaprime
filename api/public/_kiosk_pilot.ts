@@ -3,7 +3,8 @@
  * Grava em contact_requests (source 'quiosque:piloto', status inicial 'novo'); o Admin Master acompanha em
  * Contatos e suporte (condomínio, marca, modelo e Android visíveis; e-mail/telefone mascarados).
  * Leitura só por superadmin (RLS de contact_requests). Não ativa nada: a liberação depende de validação
- * de compatibilidade feita pela equipe. Honeypot "website"; limite de 3 envios por IP/hora (hash do IP).
+ * de compatibilidade feita pela equipe. Honeypot "website"; limite de 3 envios por IP/hora (hash do IP);
+ * reenvio idêntico em 30 min devolve o protocolo já gravado. Só confirma depois que o banco gravou.
  */
 import { handler, json, readJson, HttpError, sha256Hex } from '../_lib/http.js';
 import { serviceClient } from '../_lib/supabase.js';
@@ -26,9 +27,20 @@ export const POST = handler(async (request) => {
   if (phone && (phone.length < 10 || phone.length > 13)) throw new HttpError(400, 'Telefone com DDD, 10 a 13 dígitos.');
   if (b.dedicated !== true) throw new HttpError(400, 'Confirme que o aparelho é do condomínio e será dedicado à portaria.');
 
+  const svc = serviceClient();
+  // Reenvio da mesma solicitação (mesmo e-mail + condomínio + marca + modelo em 30 min): devolve o protocolo
+  // existente em vez de criar outra linha. Busca só pelo e-mail informado: nunca expõe pedido de outra pessoa.
+  const condoLine = `Condomínio: ${condo}.`.toLowerCase(), deviceLine = `Aparelho: ${brand} ${model} ·`.toLowerCase();
+  const { data: recentRows, error: dupError } = await svc.from('contact_requests').select('message')
+    .eq('source', 'quiosque:piloto').eq('email', email.toLowerCase())
+    .gte('created_at', new Date(Date.now() - 30 * 60_000).toISOString()).order('created_at', { ascending: false }).limit(10);
+  if (dupError) throw new Error(dupError.message);
+  const dup = (recentRows || []).map((r: { message: string }) => r.message.toLowerCase())
+    .find((m: string) => m.includes(condoLine) && m.includes(deviceLine))?.match(/pq-\d{8}-[0-9a-f]{6}/)?.[0];
+  if (dup) return json({ ok: true, protocol: dup.toUpperCase(), duplicate: true });
+
   const ip = request.headers.get('x-forwarded-for')?.split(',')[0].trim() || 'local';
   const ipHash = await sha256Hex(`contact:${ip}`);
-  const svc = serviceClient();
   const { count } = await svc.from('contact_requests').select('id', { count: 'exact', head: true })
     .eq('ip_hash', ipHash).gte('created_at', new Date(Date.now() - 3600_000).toISOString());
   if ((count || 0) >= 3) throw new HttpError(429, 'Recebemos seus envios. Aguarde nosso retorno.');

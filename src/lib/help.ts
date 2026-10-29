@@ -257,7 +257,8 @@ export const ARTICLES: Article[] = [
     problems: [['Posso usar sem formatar?', 'O método oficial exige restauração de fábrica. Em alguns aparelhos sem contas existe configuração técnica por cabo sem restauração, mas depende do fabricante e é avaliada pela equipe.'],
       ['O que funciona sem internet?', 'O aparelho continua travado com a última configuração. Recebimentos, entregas e comprovantes só são confirmados com conexão.'],
       ['Como libero para manutenção?', 'Em Detalhes, “Abrir manutenção” com prazo: termina sozinha. Sem internet no aparelho, use um código de recuperação de uso único.'],
-      ['Como retiro o gerenciamento?', 'Use “Desativar gerenciamento” com o aparelho on-line. Em alguns modelos, voltar ao uso comum pode exigir restauração de fábrica.']],
+      ['Como retiro o gerenciamento?', 'Use “Desativar gerenciamento” com o aparelho on-line. Em alguns modelos, voltar ao uso comum pode exigir restauração de fábrica.'],
+      ['Quantos aparelhos posso cadastrar?', 'Até 20 aparelhos ativos por condomínio, em qualquer plano (limite técnico). Aparelhos com desativação pendente ainda contam; só os desativados liberam a vaga. Ao chegar a 20, desative um aparelho para cadastrar outro.']],
     next: ['portaria-exclusiva-porteiro'],
   },
   {

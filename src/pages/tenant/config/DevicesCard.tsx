@@ -6,7 +6,7 @@ import { useTenant } from '../../../lib/tenant';
 import { dateTime } from '../../../lib/format';
 import { Alert, Badge, Button, Card, Field, Input, Modal, Select, Spinner, useAction, toast } from '../../../components/ui';
 import { QRCodeDisplay } from '../../../components/VisualCodes';
-import { COMMAND_LABEL, COMMAND_STATUS, LOCK_FEATURES, RESTRICTIONS, START_PATHS, STATE_LABEL, generateRecoveryCodes, provisioningPayload } from '../../../lib/mdm';
+import { COMMAND_LABEL, COMMAND_STATUS, DEVICE_LIMIT, DEVICE_LIMIT_MSG, LOCK_FEATURES, RESTRICTIONS, START_PATHS, STATE_LABEL, countsTowardLimit, generateRecoveryCodes, provisioningPayload } from '../../../lib/mdm';
 
 /**
  * Configurações → Dispositivos e quiosque. Aparelhos institucionais com o app nativo
@@ -57,6 +57,8 @@ export function DevicesCard() {
   const load = useCallback(async () => setData(await rpc('mdm_overview', { p_tenant: t.tenant.id })), [t.tenant.id]);
   useEffect(() => { load().catch((e) => toast.error(e.message)); }, [load]);
   if (!data) return <Spinner />;
+  const used = countsTowardLimit(data.devices);
+  const full = used >= DEVICE_LIMIT;
   return (
     <div className="space-y-4" data-tour="config-dispositivos">
       <Alert>
@@ -67,8 +69,12 @@ export function DevicesCard() {
       <Card className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h2 className="font-semibold">Aparelhos</h2>
-          <Button onClick={() => setAdding(true)}><Plus className="w-4 h-4" /> Adicionar dispositivo</Button>
+          <div className="flex items-center gap-3">
+            <span className="text-sm text-muted" id="devices-limit">{used} de {DEVICE_LIMIT} aparelhos</span>
+            <Button onClick={() => setAdding(true)} disabled={full} aria-describedby="devices-limit"><Plus className="w-4 h-4" /> Adicionar dispositivo</Button>
+          </div>
         </div>
+        {full && <Alert tone="warning">{DEVICE_LIMIT_MSG}</Alert>}
         {data.devices.length === 0 ? <p className="text-sm text-muted">Nenhum aparelho gerenciado. Cadastre um tablet da portaria para começar.</p> : (
           <div className="overflow-x-auto -mx-4 px-4">
             <table className="w-full text-sm min-w-[720px]">

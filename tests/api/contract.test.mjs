@@ -102,6 +102,17 @@ test('minutas: versão rascunho (contrato 0.2 com Modo Portaria Exclusiva), marc
   assert.deepEqual(lineDiff('a\nb\nc', 'a\nx\nc').map(l => l.op + l.text), [' a', '-b', '+x', ' c']);
 });
 
+test('/contratar e /planos: sem contrato publicado, avisam que a contratação eletrônica só existe após publicação e que o aceite não foi feito', async () => {
+  const { readFileSync } = await import('node:fs');
+  const contratar = readFileSync('src/pages/ContratarPage.tsx', 'utf8');
+  assert.match(contratar, /!quote\.document \? <Alert[^>]*>O contrato ainda não foi publicado[^<]*A contratação eletrônica fica disponível após a publicação\./);
+  const planos = readFileSync('src/pages/PlanosPage.tsx', 'utf8');
+  assert.match(planos, /!legal\.published && <Alert[^>]*><strong>Minuta em revisão — não vigente\.<\/strong>/);
+  assert.match(planos, /!legal\?\.published && <> <strong>O aceite ainda não foi feito:<\/strong> a contratação eletrônica só fica disponível depois que a Portaria Prime publicar/);
+  assert.match(planos, /!legal\.published && ' Enquanto o contrato estiver em minuta, a contratação eletrônica não está disponível e nenhum aceite é registrado\.'/);
+  assert.match(planos, /não substitui o aceite formal/);
+});
+
 test('template contract_copy escapa dados e cita versão/hash', () => {
   const ctx = { tenant_name: '<b>Cond</b>', tenant_slug: 'cond-a', timezone: 'America/Sao_Paulo',
     contract: { document_version: '1.0', document_sha256: 'f'.repeat(64), accepted_at: '2026-10-23T12:00:00Z', plan_name: 'Profissional', cycle: 'monthly', amount_cents: 14900 } };

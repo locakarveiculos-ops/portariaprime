@@ -78,6 +78,20 @@ class CoreTest {
         assertTrue(Backoff.nextDelaySeconds(300, 20) <= 1800)
     }
 
+    @Test fun dominioAnteriorAceitoNaTransicaoSemAbrirOutrasOrigens() {
+        val g = NavigationGuard("https://portariaprime.com.br", emptySet(), legacyOrigins = setOf("https://portariaprime.vercel.app"))
+        val ok = NavigationGuard.Decision.ALLOW; val no = NavigationGuard.Decision.BLOCK
+        assertEquals(ok, g.navigation("https://portariaprime.com.br/c/cond-a/portaria", "cond-a"))
+        assertEquals("link antigo", ok, g.navigation("https://portariaprime.vercel.app/c/cond-a/portaria", "cond-a"))
+        assertEquals("regras de rota valem na origem antiga", no, g.navigation("https://portariaprime.vercel.app/admin", "cond-a"))
+        assertEquals(no, g.navigation("https://portariaprime.vercel.app/c/cond-b/portaria", "cond-a"))
+        for (bad in listOf("https://www.portariaprime.com.br/c/cond-a/portaria", "http://portariaprime.com.br/c/cond-a/portaria",
+            "https://outro.vercel.app/c/cond-a/portaria", "https://portariaprime.com.br.evil.example/c/cond-a/portaria"))
+            assertEquals(bad, no, g.navigation(bad, "cond-a"))
+        assertTrue(g.mayUseCamera("https://portariaprime.vercel.app"))
+        assertEquals("https://portariaprime.com.br/c/cond-a/portaria", g.startUrl("cond-a", "portaria"))
+    }
+
     @Test fun soOCondominioInscritoEAreasDeOperacao() {
         val g = NavigationGuard("https://portariaprime.vercel.app", emptySet())
         val ok = NavigationGuard.Decision.ALLOW; val no = NavigationGuard.Decision.BLOCK

@@ -129,7 +129,9 @@ async function run(request: Request) {
         pdf = { filename: `contrato-portaria-prime-${String(ctx.contract?.document_version || '').replace(/[^A-Za-z0-9.-]/g, '')}.pdf`, content };
       }
       if (job.channel === 'email') {
-        res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined);
+        // Avisos do condomínio saem com o nome dele; cobrança, suporte e contrato são da Portaria Prime.
+        const own = !/^(trial_reminder|billing_order|billing_paid|support_reply|quote_sent|contract_copy)$/.test(job.event);
+        res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined, own ? ctx?.tenant_name : null);
       } else if (job.channel === 'whatsapp' && job.event === 'portal_welcome') {
         // Condomínio recém-criado ainda não tem WhatsApp: usa o canal da plataforma, se configurado.
         const platform = optionalEnv('PLATFORM_WHATSAPP_INSTANCE');

@@ -299,3 +299,21 @@ test('manutenção pedida que expira sem o aparelho aplicar não deixa o painel 
   assert.ok(det.maintenance[0].ended_at, 'sessão encerrada');
   db.setNow(NOW);
 });
+
+test('teto técnico: 20 aparelhos não desativados por condomínio; 21º recusado; desativação pendente não libera, desativado libera', async () => {
+  const create = (name) => db.rpc(admin2, 'mdm_device_create', { p_tenant: T2, p_name: name, p_purpose: 'portaria', p_concierge: null });
+  const ids = [other];
+  for (let i = 2; i <= 20; i++) ids.push((await create(`Tablet ${i}`)).device_id);
+  await rejects(create('Tablet 21'), /Limite de 20 aparelhos gerenciados por condomínio/);
+  const live = async () => (await db.rpc(admin2, 'mdm_overview', { p_tenant: T2 })).devices.filter((d) => d.raw_state !== 'deactivated').length;
+  assert.equal(await live(), 20, 'painel conta o mesmo que o servidor');
+  // Limite é por condomínio: T continua cadastrando.
+  assert.ok((await db.rpc(admin, 'mdm_device_create', { p_tenant: T, p_name: 'Outro cond', p_purpose: 'portaria', p_concierge: null })).device_id);
+  await enroll(ids[1], admin2);
+  await asFresh(admin2, 'mdm_command_create', { p_device: ids[1], p_action: 'deactivate', p_params: '{}', p_idempotency_key: uuid(), p_secret: null });
+  await rejects(create('Tablet 21'), /Limite de 20/, 'desativação pendente ainda ocupa vaga');
+  await asFresh(admin2, 'mdm_deactivation_confirm_local', { p_device: ids[1], p_statement: 'Restaurado de fábrica pelo síndico para troca.' });
+  assert.equal(await live(), 19);
+  assert.ok((await create('Tablet 21')).device_id, 'vaga liberada pelo desativado');
+  await rejects(create('Tablet 22'), /Limite de 20/);
+});

@@ -27,7 +27,7 @@ const sha = (s) => createHash('sha256').update(s).digest('hex');
 const login = async (u) => { const c = createClient(url, anon, { auth: { persistSession: false } }); await c.auth.signInWithPassword({ email: u.email, password: u.password }); return c; };
 const post = (path, body, headers = {}) => fetch(`${API}${path}`, { method: 'POST', body, headers: { 'content-type': 'application/json', ...headers } });
 
-const ui = () => { execFileSync(ADB, ['shell', 'uiautomator', 'dump', '/sdcard/ui.xml']); return execFileSync(ADB, ['shell', 'cat', '/sdcard/ui.xml'], { encoding: 'utf8' }); };
+const ui = () => { execFileSync(ADB, ['shell', 'uiautomator', 'dump', '/data/local/tmp/ui.xml']); return execFileSync(ADB, ['shell', 'cat', '/data/local/tmp/ui.xml'], { encoding: 'utf8' }); };
 const tap = (text) => {
   const node = [...ui().matchAll(/<node [^>]*>/g)].map((m) => m[0]).find((n) => n.includes(`text="${text}"`) || n.includes(`hint="${text}"`));
   assert.ok(node, `elemento ${text}`);

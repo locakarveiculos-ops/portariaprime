@@ -7,6 +7,7 @@ set -u
 export MSYS_NO_PATHCONV=1
 # Helpers de toque/UI (tapText, typeText). Carregado ANTES das funções abaixo, que têm prioridade.
 . /j/android-toolchain/lab/ui.sh
+# typeChecked (ui.sh): digita e confere o campo antes de enviar; sem isso, um caractere perdido pelo teclado do emulador vira "código errado".
 ADB=${ADB:-/j/android-toolchain/sdk/platform-tools/adb.exe}
 PKG=br.com.portariaprime.kiosk
 pass=0; fail=0
@@ -69,11 +70,11 @@ codes=$(node --env-file=.env.stack.local --import tsx tests/e2e/kiosk-lab-cmd.mj
 kick; sleep 10   # aparelho recebe os hashes antes de ficar offline
 c1=$(echo "$codes" | sed -n 1p)
 net off; sleep 2
-tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeText "$c1"; tapText "VALIDAR" >/dev/null; sleep 5
+tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeChecked "$c1"; tapText "VALIDAR" >/dev/null; sleep 5
 [ "$(lock)" = NONE ] && ok "código válido offline → manutenção" || ko "código offline: $(lock)"
 $ADB shell am start -n $PKG/.KioskActivity >/dev/null 2>&1; sleep 2; tapText "Encerrar manutenção agora" >/dev/null; sleep 4
 [ "$(lock)" = LOCKED ] && ok "encerrada no aparelho → LOCKED" || ko "encerrar offline: $(lock)"
-tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeText "$c1"; tapText "VALIDAR" >/dev/null; sleep 4
+tapText "Manutenção" >/dev/null; sleep 2; tapText "Código de recuperação" >/dev/null; typeChecked "$c1"; tapText "VALIDAR" >/dev/null; sleep 4
 [ "$(lock)" = LOCKED ] && ok "mesmo código não vale duas vezes" || ko "código reutilizado liberou"
 net on; kick; sleep 12
 cmd events 8 | grep -q "maintenance.offline_start" && ok "evento offline sincronizado ao reconectar" || ko "evento offline não chegou"

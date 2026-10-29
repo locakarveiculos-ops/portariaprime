@@ -11,10 +11,21 @@ export type SendResult = { status: 'accepted' | 'failed' | 'disabled'; ref?: str
 
 export type Attachment = { filename: string; content: Uint8Array };
 
-export async function sendEmail(to: string, subject: string, html: string, attachment?: Attachment): Promise<SendResult> {
+/**
+ * Remetente: o endereço é sempre o de RESEND_FROM_EMAIL (domínio verificado); só o nome de exibição pode
+ * identificar o condomínio ("Condomínio X via Portaria Prime"). Sem caracteres que quebrem o cabeçalho.
+ */
+export function fromHeader(base: string, displayName?: string | null): string {
+  const addr = base.match(/<([^<>\s]+@[^<>\s]+)>/)?.[1] || base.trim();
+  const name = String(displayName || '').replace(/["<>\\\r\n]/g, '').replace(/\s+/g, ' ').trim().slice(0, 60);
+  return name ? `"${name} via Portaria Prime" <${addr}>` : base;
+}
+
+export async function sendEmail(to: string, subject: string, html: string, attachment?: Attachment, senderName?: string | null): Promise<SendResult> {
   const key = optionalEnv('RESEND_API_KEY');
-  const from = optionalEnv('RESEND_FROM_EMAIL');
-  if (!key || !from) return { status: 'disabled', error: 'Resend não configurado' };
+  const base = optionalEnv('RESEND_FROM_EMAIL');
+  if (!key || !base) return { status: 'disabled', error: 'Resend não configurado' };
+  const from = fromHeader(base, senderName);
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
