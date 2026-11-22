@@ -22,6 +22,7 @@ function PortalBranded({ slug, title, subtitle, children }: { slug: string; titl
 }
 import { track } from '../../lib/funnel';
 import { isKioskApp } from '../../lib/kiosk-shift';
+import { PASSWORD_MIN } from '../../lib/resident-signup';
 
 const origin = () => location.origin;
 
@@ -114,7 +115,7 @@ function AccountSignup() {
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 10) return setError('Use uma senha com pelo menos 10 caracteres.');
+    if (password.length < PASSWORD_MIN) return setError(`Use uma senha com pelo menos ${PASSWORD_MIN} caracteres.`);
     if (!accepted) return setError('É preciso aceitar os termos e a política de privacidade.');
     setBusy(true);
     setError(null);
@@ -144,7 +145,7 @@ function AccountSignup() {
       <form onSubmit={submit} className="space-y-4">
         <Field label="Seu nome"><Input required autoComplete="name" value={name} onChange={(e) => setName(e.target.value)} maxLength={120} /></Field>
         <Field label="E-mail"><Input type="email" required autoComplete="email" value={email} onChange={(e) => setEmail(e.target.value)} /></Field>
-        <Field label="Senha" hint="Mínimo de 10 caracteres."><Input type="password" required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+        <Field label="Senha" hint={`Mínimo de ${PASSWORD_MIN} caracteres.`}><Input type="password" required autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
         <label className="flex gap-2 text-sm text-muted">
           <input type="checkbox" className="mt-1 w-4 h-4" checked={accepted} onChange={(e) => setAccepted(e.target.checked)} />
           <span>Li e aceito os <a href="/termos" target="_blank" className="underline">Termos de Uso</a> e a <a href="/privacidade" target="_blank" className="underline">Política de Privacidade</a>.</span>
@@ -188,7 +189,7 @@ export function NewPasswordPage() {
   const { session, loading } = useSession();
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (password.length < 10) return setError('Use pelo menos 10 caracteres.');
+    if (password.length < PASSWORD_MIN) return setError(`Use pelo menos ${PASSWORD_MIN} caracteres.`);
     setBusy(true);
     const { error } = await supabase.auth.updateUser({ password });
     setBusy(false);
@@ -200,7 +201,7 @@ export function NewPasswordPage() {
     <AuthLayout title="Nova senha">
       {!session ? <Alert tone="warning">Link inválido ou expirado. Peça um novo em “Esqueci minha senha”.</Alert> : (
         <form onSubmit={submit} className="space-y-4">
-          <Field label="Nova senha" hint="Mínimo de 10 caracteres."><Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
+          <Field label="Nova senha" hint={`Mínimo de ${PASSWORD_MIN} caracteres.`}><Input type="password" autoComplete="new-password" value={password} onChange={(e) => setPassword(e.target.value)} /></Field>
           {error && <Alert tone="danger">{error}</Alert>}
           <Button type="submit" loading={busy} className="w-full">Salvar senha</Button>
         </form>

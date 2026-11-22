@@ -91,12 +91,12 @@ export function TeamCard() {
 
 const PERMS: [string, string][] = [['team', 'Gerenciar equipe'], ['approve', 'Aprovar moradores'], ['settings', 'Configurações e marca'], ['billing', 'Assinatura e pagamentos']];
 
-/** Senha: 10+ caracteres com letras e números (o servidor confere de novo). */
+/** Senha: 6+ caracteres com letras e números (o servidor confere de novo). */
 function PasswordFields({ value, onChange }: { value: [string, string]; onChange: (v: [string, string]) => void }) {
   const [show, setShow] = useState(false);
   return <>
-    <Field label="Senha" hint="Mínimo de 10 caracteres, com letras e números.">
-      <Input type={show ? 'text' : 'password'} autoComplete="new-password" required minLength={10} maxLength={72} value={value[0]} onChange={(e) => onChange([e.target.value, value[1]])} /></Field>
+    <Field label="Senha" hint="Mínimo de 6 caracteres, com letras e números.">
+      <Input type={show ? 'text' : 'password'} autoComplete="new-password" required minLength={6} maxLength={72} value={value[0]} onChange={(e) => onChange([e.target.value, value[1]])} /></Field>
     <Field label="Confirme a senha" error={value[1] && value[0] !== value[1] ? 'As senhas não conferem.' : null}>
       <Input type={show ? 'text' : 'password'} autoComplete="new-password" required value={value[1]} onChange={(e) => onChange([value[0], e.target.value])} /></Field>
     <label className="flex gap-2 items-center text-sm min-h-9"><input type="checkbox" checked={show} onChange={(e) => setShow(e.target.checked)} /> Mostrar senha</label>

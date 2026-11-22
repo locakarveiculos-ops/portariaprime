@@ -48,8 +48,8 @@ export function PorterSignupPage({ slug }: { slug: string }) {
     </div>
     <Field label="Telefone (com DDD)"><Input required type="tel" inputMode="tel" autoComplete="tel" value={f.phone} onChange={(e) => setF({ ...f, phone: e.target.value })} /></Field>
     <Field label="E-mail" hint="Usado para recuperar a senha."><Input required type="email" autoComplete="email" value={f.email} onChange={(e) => setF({ ...f, email: e.target.value })} /></Field>
-    <Field label="Senha" hint="Mínimo de 10 caracteres, com letras e números. Sempre exigida junto da verificação facial.">
-      <Input required type="password" autoComplete="new-password" minLength={10} maxLength={72} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
+    <Field label="Senha" hint="Mínimo de 6 caracteres, com letras e números. Sempre exigida junto da verificação facial.">
+      <Input required type="password" autoComplete="new-password" minLength={6} maxLength={72} value={f.password} onChange={(e) => setF({ ...f, password: e.target.value })} /></Field>
     <Field label="Confirme a senha" error={f.confirm && f.password !== f.confirm ? 'As senhas não conferem.' : null}>
       <Input required type="password" autoComplete="new-password" value={f.confirm} onChange={(e) => setF({ ...f, confirm: e.target.value })} /></Field>
     <section className="space-y-2">

@@ -11,6 +11,8 @@ export function maskPhone(v: string) {
 }
 
 /** Celular → E.164 (+55DD9NNNNNNNN) ou null se inválido. Mesma regra do banco (app.phone_e164). */
+/** Senha: mínimo de 6 para todos (morador, síndico, equipe e porteiro). Equipe/porteiro também exigem letras e números (servidor: _team.ts). */
+export const PASSWORD_MIN = 6;
 export const fullName = (v: string) => v.trim().replace(/\s+/g, ' ');
 export const validFullName = (v: string) => /^\S{2,}(\s+\S+)+$/.test(fullName(v));
 
@@ -32,7 +34,7 @@ export function validate(f: SignupForm, hasBlocks: boolean, units: UnitOpt[], ha
   else if (f.unit === OTHER) { if (!f.unitFree.trim()) e.unitFree = 'Informe a sua unidade.'; }
   else if (units.length && !units.some((u) => (u.block || '') === (hasBlocks ? f.block : '') && u.label === f.unit)) e.unit = 'Escolha uma unidade da lista.';
   if (!RELATIONS.some(([k]) => k === f.relation)) e.relation = 'Escolha o seu perfil na unidade.';
-  if (account && f.password.length < 10) e.password = 'Use pelo menos 10 caracteres.';
+  if (account && f.password.length < PASSWORD_MIN) e.password = `Use pelo menos ${PASSWORD_MIN} caracteres.`;
   if (account && f.password2 !== f.password) e.password2 = 'As senhas não conferem.';
   if (!hasTerm) e.term = 'Termo de dados indisponível no momento. Tente novamente em instantes.';
   else if (!f.accepted) e.accepted = 'Marque a ciência do termo de tratamento de dados.';

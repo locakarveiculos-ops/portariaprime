@@ -23,6 +23,9 @@ test('formulário: obrigatórios, bloco quando há blocos, unidade da lista, sen
   const units = [{ block: 'A', label: '101' }, { block: 'A', label: '102' }, { block: 'B', label: '201' }];
   const ok = { name: 'Ana Souza', email: 'ana@x.com', phone: '(11) 98888-7777', block: 'A', unit: '101', unitFree: '', relation: 'proprietario', password: 'SenhaForte1', password2: 'SenhaForte1', accepted: true };
   assert.deepEqual(validate(ok, true, units, true), {});
+  assert.deepEqual(validate({ ...ok, password: 'Abc123', password2: 'Abc123' }, true, units, true), {}, '6 caracteres aceitos');
+  assert.deepEqual(validate({ ...ok, password: '729481', password2: '729481' }, true, units, true), {}, 'morador pode usar 6 dígitos');
+  assert.match(validate({ ...ok, password: 'Abc12', password2: 'Abc12' }, true, units, true).password, /6 caracteres/, '5 caracteres recusados');
   const e = validate({ ...ok, name: 'Ana', email: 'x', phone: '1', block: '', unit: '', password: 'curta', password2: 'outra', accepted: false }, true, units, true);
   assert.deepEqual(Object.keys(e).sort(), ['accepted', 'block', 'email', 'name', 'password', 'password2', 'phone', 'unit']);
   assert.ok(validate({ ...ok, relation: '' }, true, units, true).relation, 'perfil obrigatório');

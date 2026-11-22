@@ -8,7 +8,7 @@ import { applyTheme, publicLogoUrl } from '../lib/theme';
 import { Alert, Button, Field, Input, Select, Spinner } from '../components/ui';
 import { InstallApp } from '../components/InstallApp';
 import { DEFAULT_UNIT_LABELS } from '../lib/format';
-import { BLOCK_PARAM, RELATIONS, blocksOf, Errors, fullName, maskPhone, normEmail, OTHER, phoneE164, SignupForm, UnitOpt, unitsOf, unitValue, validate } from '../lib/resident-signup';
+import { BLOCK_PARAM, PASSWORD_MIN, RELATIONS, blocksOf, Errors, fullName, maskPhone, normEmail, OTHER, phoneE164, SignupForm, UnitOpt, unitsOf, unitValue, validate } from '../lib/resident-signup';
 
 export interface Portal { slug: string; name: string; logo_path: string | null; color_primary: string | null; color_secondary: string | null; color_accent: string | null; status: string }
 
@@ -252,7 +252,7 @@ function ResidentForm({ slug, account, initial, notice, onDone }: {
       <Field label="Seu perfil na unidade" error={errors.relation}>
         <Select value={f.relation} onChange={set('relation')}><option value="">Selecione</option>{RELATIONS.map(([k, l]) => <option key={k} value={k}>{l}</option>)}</Select></Field>
       {account && <>
-        <Field label="Senha" hint="Mínimo de 10 caracteres." error={errors.password}><Input type="password" autoComplete="new-password" value={f.password} onChange={set('password')} /></Field>
+        <Field label="Senha" hint={`Mínimo de ${PASSWORD_MIN} caracteres.`} error={errors.password}><Input type="password" autoComplete="new-password" value={f.password} onChange={set('password')} /></Field>
         <Field label="Confirme a senha" error={errors.password2}><Input type="password" autoComplete="new-password" value={f.password2} onChange={set('password2')} /></Field>
       </>}
 

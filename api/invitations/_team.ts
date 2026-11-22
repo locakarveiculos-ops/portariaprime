@@ -14,10 +14,10 @@ const PERMS = new Set(['team', 'approve', 'settings', 'billing']);
 
 /** Senha forte o bastante para conta compartilhada de portaria (sem expor regra fraca ao navegador). */
 export function passwordProblem(p: unknown): string | null {
-  if (typeof p !== 'string' || p.length < 10) return 'Use uma senha com pelo menos 10 caracteres.';
+  if (typeof p !== 'string' || p.length < 6) return 'Use uma senha com pelo menos 6 caracteres.';
   if (p.length > 72) return 'Use no máximo 72 caracteres.';
   if (!/[A-Za-z]/.test(p) || !/\d/.test(p)) return 'Use letras e números na senha.';
-  if (/^(.)\1+$/.test(p) || /^(0123456789|1234567890|senha|password)/i.test(p)) return 'Senha fácil demais. Escolha outra.';
+  if (/^(.)\1+$/.test(p) || /^(012345|123456|senha|password)/i.test(p)) return 'Senha fácil demais. Escolha outra.';
   return null;
 }
 
