@@ -141,7 +141,16 @@ Equipe Portaria Prime`,
         lines: [['Motivo informado', r.reason]], cta: ['Abrir o portal', portal],
       };
     }
-    case 'resident_invite': {
+    case 'resident_training': {
+const portal = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}`;
+return {
+subject: `Como usar o aplicativo — ${ctx.tenant_name}`,
+intro: 'Assista ao treinamento dos moradores do Portaria Prime.',
+whatsapp: `Seu acesso ao *${wa(ctx.tenant_name)}* já está liberado!\n\nAssista ao vídeo para aprender a acompanhar encomendas, usar o QR Code de retirada e informar palavras-chave.\n\nAcesse: ${portal}`,
+lines: [], cta: ['Acessar o aplicativo', portal],
+};
+}
+case 'resident_invite': {
       // Convite do pré-cadastro: só primeiro nome e unidade; o token abre o cadastro já preenchido (aprovação continua).
       const r = ctx.resident || {};
       const url = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}?invite=${encodeURIComponent(String(payload?.token || ''))}`;

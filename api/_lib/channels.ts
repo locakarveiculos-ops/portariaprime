@@ -122,6 +122,32 @@ export async function sendWhatsApp(instance: string, phone: string, text: string
   }
 }
 
+/**
+ * Vídeo por URL pública (a Evolution baixa o arquivo; o servidor não carrega o vídeo na memória).
+ * Evolution v2: POST /message/sendMedia/{instance} com mediatype "video".
+ */
+export async function sendWhatsAppVideo(instance: string, phone: string, url: string, caption: string, fileName: string): Promise<SendResult> {
+  const base = optionalEnv('EVOLUTION_API_URL');
+  const key = optionalEnv('EVOLUTION_API_KEY');
+  if (!base || !key) return { status: 'disabled', error: 'Evolution não configurada' };
+  const digits = phone.replace(/\D/g, '');
+  const number = digits.startsWith('55') ? digits : `55${digits}`;
+  try {
+    const r = await fetch(`${base.replace(/\/$/, '')}/message/sendMedia/${encodeURIComponent(instance)}`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', apikey: key },
+      body: JSON.stringify({ number, mediatype: 'video', mimetype: 'video/mp4', media: url, fileName, caption }),
+      signal: AbortSignal.timeout(45000),
+    });
+    const d: any = await r.json().catch(() => ({}));
+    if (r.ok) return { status: 'accepted', ref: d?.key?.id };
+    return { status: 'failed', error: `Evolution HTTP ${r.status} (vídeo)` };
+  } catch (e: any) {
+    if (e?.name === 'TimeoutError') return { status: 'failed', error: 'ambiguous: tempo esgotado no envio do vídeo' };
+    return { status: 'failed', error: `rede: ${e?.message || 'indisponível'}` };
+  }
+}
+
 /** Documento (PDF) em base64 — Evolution v2: POST /message/sendMedia/{instance}. */
 export async function sendWhatsAppDocument(instance: string, phone: string, caption: string, doc: Attachment): Promise<SendResult> {
   const base = optionalEnv('EVOLUTION_API_URL');

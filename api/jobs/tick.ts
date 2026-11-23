@@ -11,7 +11,7 @@ import { env, appUrl, optionalEnv } from '../_lib/env.js';
 import { serviceClient } from '../_lib/supabase.js';
 import { verifyAndApply } from '../_lib/payments.js';
 import { render, emailHtml, emailText } from '../_lib/templates.js';
-import { sendEmail, sendWhatsApp, sendWhatsAppDocument, sendPush, whatsAppState, SendResult, Attachment } from '../_lib/channels.js';
+import { sendEmail, sendWhatsApp, sendWhatsAppDocument, sendWhatsAppVideo, sendPush, whatsAppState, SendResult, Attachment } from '../_lib/channels.js';
 import { renderReceiptPdf, RECEIPT_TEMPLATE_VERSION } from '../_lib/receipt-pdf.js';
 import { createHash } from 'node:crypto';
 
@@ -173,6 +173,10 @@ async function run(request: Request) {
       // Identidade visual sempre do tenant do job (resolvida no banco); logo vira URL pública absoluta aqui.
       const ctx = { ...rawCtx, logo_url: rawCtx?.logo_path ? publicLogo(rawCtx.logo_path) : null };
       const m: any = render(job.event, ctx, job.payload, base);
+      // Job independente das boas-vindas: timeout/falha do vídeo não reenvia o texto já aceito.
+      const sendMessage = (instance: string) => job.event === 'resident_training'
+        ? sendWhatsAppVideo(instance, job.recipient, `${base}/video/treinamento-moradores.mp4`, m.whatsapp, 'treinamento-moradores-portaria-prime.mp4')
+        : sendWhatsApp(instance, job.recipient, m.whatsapp);
       // Retirada: canais com anexo exigem o PDF pronto (o job só sai de "hold" depois dele).
       let pdf: Attachment | null = null;
       if (job.event === 'package_picked_up' && job.channel !== 'push') {
@@ -198,18 +202,18 @@ async function run(request: Request) {
         res = await sendEmail(job.recipient, m.subject, emailHtml(ctx, m), pdf || undefined, own ? ctx?.tenant_name : null,
           { text: emailText(ctx, m), idempotencyKey: `job-${job.id}` });
       } else if (job.channel === 'whatsapp' && (job.event === 'portal_welcome'
-        || ((job.event === 'access_received' || job.event === 'access_decision' || job.event === 'resident_invite') && !(ctx.whatsapp?.enabled && ctx.whatsapp.instance)))) {
+        || ((job.event === 'access_received' || job.event === 'access_decision' || job.event === 'resident_invite' || job.event === 'resident_training') && !(ctx.whatsapp?.enabled && ctx.whatsapp.instance)))) {
         // Sem WhatsApp do condomínio (recém-criado ou não conectado): canal central da plataforma, se configurado.
         // Nunca simula envio: sem canal, o job fica "disabled" com o motivo.
         const platform = optionalEnv('PLATFORM_WHATSAPP_INSTANCE');
         if (!m.whatsapp) res = { status: 'disabled', error: 'Evento sem mensagem de WhatsApp' };
-        else if (platform) res = await sendWhatsApp(platform, job.recipient, m.whatsapp);
+        else if (platform) res = await sendMessage(platform);
         // Condomínio tem WhatsApp, só está desconectado agora: espera a reconexão em vez de descartar.
         else if (ctx.whatsapp?.instance && !ctx.whatsapp.enabled && !(await revived(job.tenant_id, ctx.whatsapp.instance)) && await waitWhatsApp(job)) continue;
         else if (ctx.whatsapp?.instance && waRevived.get(ctx.whatsapp.instance) && m.whatsapp) {
           // Reconectado agora: envia pelo WhatsApp do próprio condomínio.
           const { data: allowed } = await svc.rpc('consume_whatsapp', { p_tenant: job.tenant_id });
-          res = !allowed ? { status: 'disabled', error: 'Franquia de WhatsApp esgotada' } : await sendWhatsApp(ctx.whatsapp.instance, job.recipient, m.whatsapp);
+          res = !allowed ? { status: 'disabled', error: 'Franquia de WhatsApp esgotada' } : await sendMessage(ctx.whatsapp.instance);
         }
         else res = { status: 'disabled', error: 'WhatsApp não conectado neste condomínio e canal da plataforma não configurado' };
       } else if (job.channel === 'whatsapp') {
@@ -227,7 +231,7 @@ async function run(request: Request) {
             const { data: allowed } = await svc.rpc('consume_whatsapp', { p_tenant: job.tenant_id });
             res = !allowed ? { status: 'disabled', error: 'Franquia de WhatsApp esgotada' }
               : pdf ? await sendWhatsAppDocument(wa.instance, job.recipient, m.whatsapp, pdf)
-              : await sendWhatsApp(wa.instance, job.recipient, m.whatsapp);
+              : await sendMessage(wa.instance);
           }
         }
       } else {
