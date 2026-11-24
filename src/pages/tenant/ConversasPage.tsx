@@ -6,6 +6,7 @@ import { useRefreshWhileVisible, useTenant } from '../../lib/tenant';
 import { navigate } from '../../lib/router';
 import { DEMO } from '../../demo/mode';
 import { Alert, Button, Empty, Input, Spinner, toast } from '../../components/ui';
+import { matches } from '../../lib/chat-search';
 
 interface Chat { jid: string; name: string | null; unit: string | null; phone: string | null; unread: number; at: number; last: { text: string; media: string | null; fromMe: boolean } | null }
 interface Msg { id: string; fromMe: boolean; at: number; text: string; media: string | null; fileName: string | null }
@@ -32,8 +33,8 @@ export function ConversasPage() {
   useRefreshWhileVisible(load, 30000);
   if (!DEMO && !t.overview?.entitlements?.feature_whatsapp) return <Alert tone="warning">As conversas do WhatsApp fazem parte dos planos com WhatsApp. Veja em Configurações › Plano e assinatura.</Alert>;
 
-  const s = q.trim().toLowerCase();
-  const shown = (chats || []).filter((c) => !s || `${c.name || ''} ${c.unit || ''} ${c.phone || ''}`.toLowerCase().includes(s));
+  // Mais recentes primeiro (o servidor já ordena; reforça caso a lista venha de cache).
+  const shown = (chats || []).filter((c) => matches(c, q)).sort((a, b) => b.at - a.at);
   return (
     <div className="space-y-4">
       <div className="flex flex-wrap items-end justify-between gap-2">
@@ -49,7 +50,7 @@ export function ConversasPage() {
           <label className="relative block p-3 border-b border-line">
             <span className="sr-only">Buscar conversa</span>
             <Search className="w-4 h-4 absolute left-6 top-1/2 -translate-y-1/2 text-muted" aria-hidden />
-            <Input className="pl-9" placeholder="Nome, unidade ou telefone" value={q} onChange={(e) => setQ(e.target.value)} />
+            <Input className="pl-9" placeholder="Nome, unidade, telefone ou mensagem" value={q} onChange={(e) => setQ(e.target.value)} />
           </label>
           {!chats && !error ? <Spinner /> : shown.length === 0 ? <Empty title="Nenhuma conversa">{q ? 'Nada encontrado para a busca.' : 'As conversas aparecem aqui quando o WhatsApp do condomínio envia ou recebe mensagens.'}</Empty> : (
             <ul className="divide-y divide-line max-h-[70vh] overflow-y-auto">

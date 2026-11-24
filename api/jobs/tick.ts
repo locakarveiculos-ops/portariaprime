@@ -128,6 +128,10 @@ async function run(request: Request) {
     if (chatFiles.length < 1000) break;
   }
 
+  // Conversas guardadas no Portaria Prime: 90 dias.
+  const { data: chatGone, error: cre } = await svc.rpc('whatsapp_chat_messages_retention', { p_limit: 5000 });
+  report.chat_messages_deleted = cre ? { error: cre.message } : chatGone;
+
   report.receipts = await processReceipts(svc, base);
 
   const { data: jobs, error: je } = await svc.rpc('claim_notification_jobs', { p_limit: 50 });

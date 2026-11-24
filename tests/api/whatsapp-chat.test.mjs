@@ -9,13 +9,23 @@ const T = '11111111-2222-4333-8444-555555555555', OTHER = '99999999-2222-4333-84
 const JID = '123456789012345@lid';
 const ENV = { SUPABASE_URL: 'https://sb.test', SUPABASE_ANON_KEY: 'anon', SUPABASE_SERVICE_ROLE_KEY: 'svc', EVOLUTION_API_URL: 'https://evo.test', EVOLUTION_API_KEY: 'k' };
 
-async function run(action, body, { gate = null, chats = [{ remoteJid: JID }], state = 'open' } = {}) {
-  const saved = { ...process.env }; Object.assign(process.env, ENV);
+async function run(action, body, { gate = null, chats = [{ remoteJid: JID }], state = 'open', stored = [], hook = null, hookCur = null } = {}) {
+  const saved = { ...process.env }; Object.assign(process.env, { ...ENV, APP_URL: 'https://portariaprime.com.br' });
   const fetch0 = globalThis.fetch;
-  const log = { gates: [], evo: [], removed: [] };
+  const log = { gates: [], evo: [], removed: [], kept: [], hooks: [] };
   globalThis.fetch = async (url, init = {}) => {
     const u = String(url); const b = init.body && typeof init.body === 'string' ? JSON.parse(init.body) : null;
     if (u.endsWith('/auth/v1/user')) return Response.json({ id: 'u1' });
+    if (u.includes('/rest/v1/whatsapp_chat_messages')) {
+      if (init.method === 'POST') { log.kept.push(b); return new Response(null, { status: 201 }); }
+      return Response.json(stored);
+    }
+    if (u.includes('/rest/v1/whatsapp_chat_hooks')) {
+      if (init.method === 'POST') { log.hooks.push(b); return new Response(null, { status: 201 }); }
+      return Response.json(hook ? [hook] : []);
+    }
+    if (u.startsWith('https://evo.test/webhook/find/')) return Response.json(hookCur);
+    if (u.startsWith('https://evo.test/webhook/set/')) { log.evo.push({ p: u.slice('https://evo.test'.length), b }); return Response.json({ ok: true }); }
     if (u.includes('/rpc/whatsapp_chat_gate')) { log.gates.push(b.p_action); return gate && gate[b.p_action] ? Response.json(gate[b.p_action], { status: 400 }) : Response.json(true); }
     if (u.includes('/rpc/whatsapp_chat_who')) return Response.json([{ ref: 'R1', phone: '+5511988887777', full_name: 'Ana', unit: 'A 101' }]);
     if (u.includes('/storage/v1/object/tenant-chat/') && (init.method || 'GET') === 'GET') return new Response(new Blob([new Uint8Array([1, 2, 3])], { type: 'image/jpeg' }));
@@ -25,7 +35,7 @@ async function run(action, body, { gate = null, chats = [{ remoteJid: JID }], st
       if (p.startsWith('/instance/connectionState/')) return Response.json({ instance: { state } });
       if (p.startsWith('/chat/findChats/')) return Response.json(b?.where?.remoteJid ? chats.filter((c) => c.remoteJid === b.where.remoteJid) : [{ remoteJid: JID, pushName: 'Ana W', unreadCount: 2, updatedAt: '2026-11-17T10:00:00Z', lastMessage: { key: { id: 'X', fromMe: false }, messageType: 'conversation', message: { conversation: 'oi' }, messageTimestamp: 1763373600 } }]);
       if (p.startsWith('/chat/findMessages/')) return Response.json({ messages: { total: 1, pages: 1, records: [{ key: { id: 'R1', fromMe: true, remoteJid: JID }, messageType: 'conversation', message: { conversation: 'aviso' }, messageTimestamp: 1763370000 }] } });
-      if (p.startsWith('/message/')) return Response.json({ key: { id: 'NEW1' } });
+      if (p.startsWith('/message/')) return Response.json({ key: { id: '3EB0NEW1AA' } });
     }
     return Response.json({ message: 'unexpected ' + u }, { status: 500 });
   };
@@ -88,4 +98,50 @@ test('resumo da mensagem da Evolution', () => {
     { id: 'A', fromMe: false, at: 10000, text: 'cx', media: 'image', fileName: null, status: null });
   assert.equal(summarize({ key: { id: 'B' }, messageType: 'interactiveMessage', message: { interactiveMessage: { body: { text: 'aviso' } } } }).text, 'aviso');
   assert.equal(summarize({ key: { id: 'C' }, messageType: 'documentMessage', message: { documentMessage: { fileName: 'c.pdf' } } }).fileName, 'c.pdf');
+});
+
+// ---------------------------------------------------------------- histórico guardado no Portaria Prime
+test('lista: mais recentes primeiro, usando a mensagem guardada (a Evolution parou de gravar)', async () => {
+  const OLD = '222222222222222@lid';
+  const r = await run('chat-list', {}, { stored: [
+    { id: 'NOVA1', jid: JID, alt_jid: null, from_me: true, at: '2026-11-24T12:00:00Z', text: 'enviada agora pelo painel', media: null, push_name: null },
+  ] });
+  assert.equal(r.status, 200);
+  const c = r.body.chats[0];
+  assert.equal(c.last.text, 'enviada agora pelo painel', 'última mensagem é a guardada, não a congelada da Evolution');
+  assert.equal(c.at, Date.parse('2026-11-24T12:00:00Z'));
+  assert.ok(OLD);
+});
+
+test('lista: liga o webhook das conversas só na instância do condomínio e sem sobrescrever outro webhook', async () => {
+  const novo = await run('chat-list', {}, { hookCur: null });
+  const set = novo.log.evo.find((e) => e.p.startsWith('/webhook/set/'));
+  assert.equal(set.p, '/webhook/set/pp-11111111-5555');
+  assert.equal(set.b.webhook.url, 'https://portariaprime.com.br/api/webhooks/evolution-chat');
+  assert.deepEqual(set.b.webhook.events, ['MESSAGES_UPSERT', 'SEND_MESSAGE']);
+  assert.match(set.b.webhook.headers['x-pp-secret'], /^[0-9a-f]{64}$/);
+  assert.equal(novo.log.hooks[0].instance, 'pp-11111111-5555');
+  const outro = await run('chat-list', {}, { hookCur: { url: 'https://outro-sistema.example/hook', enabled: true, events: ['MESSAGES_UPSERT'] } });
+  assert.ok(!outro.log.evo.some((e) => e.p.startsWith('/webhook/set/')), 'webhook de outra integração não é trocado');
+  assert.equal(outro.status, 200, 'lista funciona mesmo assim');
+  const ok = await run('chat-list', {}, { hook: { secret: 'a'.repeat(64) },
+    hookCur: { url: 'https://portariaprime.com.br/api/webhooks/evolution-chat', enabled: true, headers: { 'x-pp-secret': 'a'.repeat(64) }, events: ['MESSAGES_UPSERT', 'SEND_MESSAGE'] } });
+  assert.ok(!ok.log.evo.some((e) => e.p.startsWith('/webhook/set/')), 'já configurado: não mexe');
+});
+
+test('envio guarda a mensagem na hora (aparece sem esperar o webhook)', async () => {
+  const r = await run('chat-send', { jid: JID, text: 'Olá, sua encomenda chegou' });
+  assert.equal(r.status, 200);
+  assert.equal(r.log.kept.length, 1);
+  assert.deepEqual([r.log.kept[0].id, r.log.kept[0].jid, r.log.kept[0].from_me, r.log.kept[0].text, r.log.kept[0].tenant_id],
+    ['3EB0NEW1AA', JID, true, 'Olá, sua encomenda chegou', T]);
+});
+
+test('mensagens: guardadas + antigas da Evolution, sem duplicar e mais recentes primeiro', async () => {
+  const r = await run('chat-messages', { jid: JID }, { stored: [
+    { id: 'NOVA2', from_me: false, at: '2026-11-24T13:00:00Z', text: 'resposta do morador', media: null, file_name: null },
+    { id: 'R1', from_me: true, at: '2025-11-17T09:00:00Z', text: 'aviso', media: null, file_name: null },
+  ] });
+  assert.equal(r.status, 200);
+  assert.deepEqual(r.body.messages.map((m) => m.id), ['NOVA2', 'R1'], 'R1 aparece uma vez só');
 });
