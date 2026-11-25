@@ -9,7 +9,7 @@ test('resident_bot: identidade por OTP, ações do app, pré-cadastro, senha 7d,
   const db = await createDb();
   // Colunas reais do GoTrue usadas pelo provisionamento (o shim de testes só tem o mínimo).
   await db.sql(`alter table auth.users add column if not exists encrypted_password text,
-    add column if not exists raw_app_meta_data jsonb default '{}'::jsonb, add column if not exists created_at timestamptz default now()`);
+    add column if not exists raw_app_meta_data jsonb default '{}'::jsonb, add column if not exists created_at timestamptz default now(), add column if not exists last_sign_in_at timestamptz`);
   await db.sql('update plans set published = true');
   const svc = async (fn, args) => {
     const keys = Object.keys(args);
@@ -198,12 +198,12 @@ test('resident_bot: identidade por OTP, ações do app, pré-cadastro, senha 7d,
   assert.deepEqual(await svc('resident_bot_email_verify', { p_tenant: A, p_who: NEW_WHO, p_code: cNew.code }), { ok: true, status: 'new' });
 
   const acc0 = await svc('resident_bot_account', { p_tenant: A, p_who: NEW_WHO });
-  assert.deepEqual(acc0, { email: 'novo@bot.invalid', user_id: null, confirmed: false });
+  assert.deepEqual(acc0, { email: 'novo@bot.invalid', user_id: null, confirmed: false, bot_provisioned: false });
 
-  // Cria usuário como o backend faz (sem senha, email confirmado, marcador resident_bot_provisioned = true).
+  // Cria usuário como o backend faz. O Supabase Auth grava um hash aleatório mesmo sem senha (causa do erro em produção).
   const [{ id: novoUser }] = await db.sql(
     `insert into auth.users (email, email_confirmed_at, encrypted_password, raw_app_meta_data, raw_user_meta_data, created_at)
-     values ('novo@bot.invalid', now(), null, '{"resident_bot_provisioned":true}'::jsonb, '{"full_name":"Caio Rocha"}'::jsonb, now()) returning id`
+     values ('novo@bot.invalid', now(), '$2a$10$senhaaleatoriadoauth', '{"resident_bot_provisioned":true}'::jsonb, '{"full_name":"Caio Rocha"}'::jsonb, now()) returning id`
   );
   // Tentar vincular conta existente com senha ou sem marcador falha.
   await assert.rejects(svc('resident_bot_account_bind', { p_tenant: A, p_who: NEW_WHO, p_user: ze }), /42501|não elegível/);
@@ -254,7 +254,10 @@ test('resident_bot: identidade por OTP, ações do app, pré-cadastro, senha 7d,
   await db.sql(`update auth.users set encrypted_password = '$2a$10$existinghash' where id = $1`, [novoUser]);
   assert.equal((await svc('resident_password_link_peek', { p_token: pwToken })).unavailable, true, 'conta com senha não pode usar link');
   assert.equal((await svc('resident_password_link_use', { p_token: pwToken })).unavailable, true);
-  await db.sql(`update auth.users set encrypted_password = null where id = $1`, [novoUser]);
+  await db.sql(`update auth.users set encrypted_password = '$2a$10$senhaaleatoriadoauth' where id = $1`, [novoUser]);
+  await db.sql(`update auth.users set last_sign_in_at = now() where id = $1`, [novoUser]);
+  assert.equal((await svc('resident_password_link_peek', { p_token: pwToken })).unavailable, true, 'conta que já entrou no app não usa link');
+  await db.sql(`update auth.users set last_sign_in_at = null where id = $1`, [novoUser]);
 
   // Uso único do link.
   const used1 = await svc('resident_password_link_use', { p_token: pwToken });

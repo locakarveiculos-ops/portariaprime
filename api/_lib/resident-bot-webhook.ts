@@ -55,22 +55,36 @@ export async function residentWebhook(svc: SupabaseClient, box: ResidentInbox, k
 }
 
 /** Pré-cadastro: conta nova sem senha (marcada como criada pelo bot) ou conta existente confirmada; mesmo request_access do portal. */
-async function submitSignup(svc: SupabaseClient, ctx: { tenantId: string; who: string; appUrl: string; slug: string }, d: Record<string, string>): Promise<{ ok: boolean; text: string }> {
+export async function submitSignup(svc: SupabaseClient, ctx: { tenantId: string; who: string; appUrl: string; slug: string }, d: Record<string, string>): Promise<{ ok: boolean; text: string }> {
   const portal = `${ctx.appUrl}/c/${ctx.slug}`;
   const { data: acc, error: ae } = await svc.rpc('resident_bot_account', { p_tenant: ctx.tenantId, p_who: ctx.who });
   if (ae || !acc?.email) return { ok: false, text: 'Confirme seu e-mail novamente para enviar o cadastro.' };
-  if (!acc.user_id) {
+  // Conta nova, ou conta criada pelo bot numa tentativa anterior e nunca usada: vincula a esta conversa (e-mail já confirmado).
+  let userId: string | null = acc.user_id || null;
+  if (!userId) {
     const { data: created, error: ce } = await svc.auth.admin.createUser({
       email: acc.email, email_confirm: true, app_metadata: { resident_bot_provisioned: true }, user_metadata: { full_name: d.name },
     });
-    if (ce || !created?.user) return { ok: false, text: `Não foi possível criar sua conta agora. Tente de novo mais tarde ou cadastre-se pelo portal: ${portal}` };
-    const { error: be } = await svc.rpc('resident_bot_account_bind', { p_tenant: ctx.tenantId, p_who: ctx.who, p_user: created.user.id });
-    if (be) return { ok: false, text: `Não foi possível concluir. Cadastre-se pelo portal: ${portal}` };
+    if (ce || !created?.user) {
+      console.error('[resident-bot] criar conta', ce?.message || 'sem usuário');
+      return { ok: false, text: `Não foi possível criar sua conta agora. Tente de novo mais tarde ou cadastre-se pelo portal: ${portal}` };
+    }
+    userId = created.user.id;
+  }
+  if (!acc.user_id || acc.bot_provisioned) {
+    const { error: be } = await svc.rpc('resident_bot_account_bind', { p_tenant: ctx.tenantId, p_who: ctx.who, p_user: userId });
+    if (be) {
+      console.error('[resident-bot] vincular conta', be.message);
+      return { ok: false, text: `Não foi possível concluir. Cadastre-se pelo portal: ${portal}` };
+    }
   } else if (!acc.confirmed) {
     return { ok: false, text: `Já existe uma conta com este e-mail aguardando confirmação. Conclua o cadastro pelo portal: ${portal}` };
   }
   const { error } = await svc.rpc('resident_bot_signup', { p_tenant: ctx.tenantId, p_who: ctx.who, p_full_name: d.name, p_phone: d.phone,
     p_block: d.block || null, p_unit: d.unit, p_privacy_hash: d.privacy_hash });
-  if (error) return { ok: false, text: `${error.message || 'Não foi possível enviar o cadastro.'}\n\nSe preferir, use o portal: ${portal}` };
+  if (error) {
+    console.error('[resident-bot] cadastro', error.message);
+    return { ok: false, text: `${error.message || 'Não foi possível enviar o cadastro.'}\n\nSe preferir, use o portal: ${portal}` };
+  }
   return { ok: true, text: 'Solicitação enviada. A administração vai analisar seu cadastro. Quando aprovado, você recebe aqui e por e-mail um link pessoal para criar sua senha (válido por 7 dias) e acessar o aplicativo do condomínio.' };
 }

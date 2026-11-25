@@ -16,6 +16,25 @@ const EMAIL = { id: 'rb:email', title: 'Informar e-mail' };
 const clean = (value: unknown) => String(value ?? '').replace(/[*_~`]/g, '').slice(0, 200);
 const date = (value: unknown) => value ? new Date(String(value)).toLocaleString('pt-BR', { timeZone: 'America/Sao_Paulo' }) : '—';
 const nonce = () => randomBytes(8).toString('hex');
+/** Itens por página nas listas (lista do WhatsApp: até 10 linhas, com Anterior/Próximos/Trocar/Encerrar). */
+const PAGE = 6;
+const collator = new Intl.Collator('pt-BR', { numeric: true, sensitivity: 'base' });
+const naturalCmp = (a: string, b: string) => collator.compare(a, b);
+// Mesma ideia de src/lib/unit-match.ts: ignora "bloco", "apto", "quadra", "lote"… como palavra inteira; "08" = "8".
+const PREFIX = /\b(?:apartamento|apto|apt|ap|unidade|un|bloco|bl|torre|tr|quadra|qd|lote|lt|casa|cs|chacara|numero|num|n)\b\.?/g;
+const normUnit = (v: string) => v.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(PREFIX, ' ')
+  .replace(/[^a-z0-9]+/g, ' ').replace(/\b0+(\d)/g, '$1').replace(/\s+/g, ' ').trim();
+const unitKey = (v: string) => normUnit(v).replace(/\s+/g, '');
+function findUnits<T extends { block: string | null; label: string }>(units: T[], q: string): T[] {
+  const parts = normUnit(q).split(' ').filter(Boolean);
+  if (!parts.length) return [];
+  // Cada termo bate com o bloco ou a unidade inteiros (8A não casa com 18A; 12 não casa com 120).
+  return units.filter((u) => {
+    const tokens = new Set([...normUnit(u.block || '').split(' '), ...normUnit(u.label).split(' '), unitKey(u.block || ''), unitKey(u.label)].filter(Boolean));
+    // "8a12" (tudo junto) também vale.
+    return parts.every((p) => tokens.has(p)) || unitKey(q) === unitKey(`${u.block || ''} ${u.label}`);
+  });
+}
 export function residentActive(ev: Incoming, s: BotSession, now = Date.now()): boolean {
   return ev.kind !== 'ignored' && ((ev.kind === 'text' && START.test(ev.text.trim()))
     || (ev.kind === 'action' && ev.id.startsWith('rb:')) || (s.until || 0) > now);
@@ -76,21 +95,58 @@ export async function residentReply(svc: Svc, ctx: Context, ev: Incoming, saved:
       } else if (s.step === 'pending') return output('Cadastro aguardando aprovação. Para consultar novamente, informe seu e-mail.', [EMAIL, EXIT]);
       const info = await rpc('resident_bot_signup_info');
       if (!info?.term?.hash) return output(`Cadastro indisponível agora. Use o portal: ${ctx.appUrl}/c/${ctx.slug}`, [EMAIL, EXIT]);
-      const units: { block: string | null; label: string }[] = (info.units?.units || []).filter((u: any) => u.label);
-      const blocks = [...new Set(units.map((u) => u.block || ''))];
-      const blockPage = (page = 0) => {
-        const opts = blocks.slice(page * 7, page * 7 + 7).map((b, i) => ({ id: `rb:sb:${page * 7 + i}`, title: b || 'Sem bloco' }));
+      // Todas as unidades ativas cadastradas pelo síndico, em ordem natural (1A, 1B, 2A… 10A; 01, 02… 24).
+      const units: { block: string | null; label: string }[] = (info.units?.units || []).filter((u: any) => u.label)
+        .sort((a: any, b: any) => naturalCmp(a.block || '', b.block || '') || naturalCmp(a.label, b.label));
+      const blocks = [...new Set(units.map((u) => u.block || ''))].sort(naturalCmp);
+      const hasBlocks = blocks.some(Boolean);
+      const blockPage = (page = 0, prefix = '') => {
+        const pages = Math.max(1, Math.ceil(blocks.length / PAGE));
+        const opts = blocks.slice(page * PAGE, page * PAGE + PAGE).map((b, i) => ({ id: `rb:sb:${page * PAGE + i}`, title: b || 'Sem bloco' }));
         if (page > 0) opts.push({ id: `rb:bp:${page - 1}`, title: 'Anterior' });
-        if ((page + 1) * 7 < blocks.length) opts.push({ id: `rb:bp:${page + 1}`, title: 'Próximos' });
-        return output('Selecione seu bloco, torre, quadra ou rua.', [...opts, EXIT], { step: 'signup_block' });
+        if (page + 1 < pages) opts.push({ id: `rb:bp:${page + 1}`, title: 'Próximos' });
+        return output(`${prefix}Selecione seu bloco, torre, quadra ou rua (${blocks.length} no condomínio · página ${page + 1} de ${pages}).\nOu digite bloco e unidade, por exemplo: ${example()}`,
+          [...opts, EXIT], { step: 'signup_block' });
       };
-      const unitPage = (page = 0) => {
+      const unitPage = (page = 0, prefix = '') => {
         const choices = units.filter((u) => (u.block || '') === (s.draft?.block || ''));
-        const opts = choices.slice(page * 7, page * 7 + 7).map((u, i) => ({ id: `rb:su:${page * 7 + i}`, title: u.label }));
+        const pages = Math.max(1, Math.ceil(choices.length / PAGE));
+        const opts = choices.slice(page * PAGE, page * PAGE + PAGE).map((u, i) => ({ id: `rb:su:${page * PAGE + i}`, title: u.label }));
         if (page > 0) opts.push({ id: `rb:up:${page - 1}`, title: 'Anterior' });
-        if ((page + 1) * 7 < choices.length) opts.push({ id: `rb:up:${page + 1}`, title: 'Próximas' });
-        return output('Selecione seu apartamento, casa ou lote.', [...opts, EXIT], { step: 'signup_unit' });
+        if (page + 1 < pages) opts.push({ id: `rb:up:${page + 1}`, title: 'Próximas' });
+        if (hasBlocks) opts.push({ id: 'rb:bp:0', title: 'Trocar bloco' });
+        return output(`${prefix}${s.draft?.block ? `Bloco ${clean(s.draft.block)}: ` : ''}selecione seu apartamento, casa ou lote (${choices.length} unidades · página ${page + 1} de ${pages}).\nOu digite o número da unidade.`,
+          [...opts, EXIT], { step: 'signup_unit' });
       };
+      const example = () => { const u = units[Math.min(units.length - 1, 1)]; return u ? `${u.block ? `${u.block} ` : ''}${u.label}` : '8A 12'; };
+      const review = (unit: { block: string | null; label: string }) => {
+        const n = nonce();
+        const draft = s.draft || {};
+        return output(`Confira seu cadastro:\nNome: ${clean(draft.name)}\nCelular: ${clean(draft.phone)}\nUnidade: ${clean(unit.block)} ${clean(unit.label)}\n\nLeia o termo de dados (versão ${clean(info.term.version)}):\n${ctx.appUrl}/c/${ctx.slug}/termo-dados\n\nAo tocar em Aceitar e solicitar, você confirma os dados e o aceite do termo. O síndico precisa aprovar seu acesso.`,
+          [{ id: `rb:accept:${n}`, title: 'Aceitar e solicitar' }, { id: 'rb:bp:0', title: 'Trocar unidade' }, EXIT],
+          { step: 'signup_term', nonce: n, draft: { name: draft.name, phone: draft.phone, block: unit.block || '', unit: unit.label, privacy_hash: info.term.hash } });
+      };
+      // Texto digitado no bloco/unidade: busca em TODAS as unidades do condomínio.
+      if (text && (s.step === 'signup_block' || s.step === 'signup_unit')) {
+        const inBlock = s.step === 'signup_unit' ? units.filter((u) => (u.block || '') === (draft.block || '')) : units;
+        const found = findUnits(inBlock, text);
+        if (found.length === 1) return review(found[0]);
+        const blockHit = s.step === 'signup_block' ? blocks.find((b) => b && unitKey(b) === unitKey(text)) : undefined;
+        if (blockHit) { s.draft = { ...draft, block: blockHit }; return unitPage(); }
+        if (found.length > 1) {
+          s.draft = { ...draft, matches: JSON.stringify(found.slice(0, PAGE)) };
+          return output(`Encontrei ${found.length} unidades para "${clean(text)}". Selecione a sua:`,
+            [...found.slice(0, PAGE).map((u, i) => ({ id: `rb:sm:${i}`, title: `${u.block ? `${u.block} · ` : ''}${u.label}` })), { id: 'rb:bp:0', title: 'Ver blocos' }, EXIT],
+            { step: s.step });
+        }
+        const msg = `Não encontrei "${clean(text)}" entre as unidades cadastradas pelo condomínio. Confira e tente de novo.\n\n`;
+        return s.step === 'signup_unit' ? unitPage(0, msg) : blockPage(0, msg);
+      }
+      if (id.startsWith('rb:sm:') && draft.matches) {
+        const m = (JSON.parse(draft.matches) as { block: string | null; label: string }[])[Number(id.slice(6))];
+        const unit = m && units.find((u) => (u.block || '') === (m.block || '') && u.label === m.label);
+        if (unit) return review(unit);
+      }
       if (id.startsWith('rb:accept:') && s.step === 'signup_term' && id === `rb:accept:${s.nonce}`) {
         if (draft.privacy_hash !== info.term.hash) return output('O termo foi atualizado. Reinicie o cadastro para ler e aceitar a versão vigente.', [EMAIL, EXIT]);
         return { ...output('Solicitação em processamento.', [EXIT]), submitSignup: true };
@@ -101,17 +157,13 @@ export async function residentReply(svc: Svc, ctx: Context, ev: Incoming, saved:
       }
       if (id.startsWith('rb:su:') && s.step === 'signup_unit') {
         const unit = units.filter((u) => (u.block || '') === (draft.block || ''))[Number(id.slice(6))];
-        if (unit) {
-          const n = nonce();
-          return output(`Confira seu cadastro:\nNome: ${clean(draft.name)}\nCelular: ${clean(draft.phone)}\nUnidade: ${clean(unit.block)} ${clean(unit.label)}\n\nLeia o termo de dados (versão ${clean(info.term.version)}):\n${ctx.appUrl}/c/${ctx.slug}/termo-dados\n\nAo tocar em Aceitar e solicitar, você confirma os dados e o aceite do termo. O síndico precisa aprovar seu acesso.`,
-            [{ id: `rb:accept:${n}`, title: 'Aceitar e solicitar' }, EMAIL, EXIT],
-            { step: 'signup_term', nonce: n, draft: { ...draft, unit: unit.label, privacy_hash: info.term.hash } });
-        }
+        if (unit) return review(unit);
       }
-      if (id.startsWith('rb:bp:') && s.step === 'signup_block') return blockPage(Number(id.slice(6)));
+      if (id.startsWith('rb:bp:')) return hasBlocks ? blockPage(Number(id.slice(6))) : (s.draft = { ...draft, block: '' }, unitPage());
       if (id.startsWith('rb:up:') && s.step === 'signup_unit') return unitPage(Number(id.slice(6)));
-      if (s.step === 'signup_term') return output('Leia o termo e use o botão de aceite apresentado. Para corrigir seus dados, reinicie pelo e-mail.', [{ id: `rb:accept:${s.nonce}`, title: 'Aceitar e solicitar' }, EMAIL, EXIT]);
+      if (s.step === 'signup_term') return output('Leia o termo e use o botão de aceite apresentado.', [{ id: `rb:accept:${s.nonce}`, title: 'Aceitar e solicitar' }, { id: 'rb:bp:0', title: 'Trocar unidade' }, EXIT]);
       if (!units.length) return output(`Nenhuma unidade disponível para seleção. Solicite pelo portal: ${ctx.appUrl}/c/${ctx.slug}`, [EMAIL, EXIT]);
+      if (!hasBlocks) { s.draft = { ...s.draft, block: '' }; return unitPage(); }
       return s.step === 'signup_unit' ? unitPage() : blockPage();
     }
   }

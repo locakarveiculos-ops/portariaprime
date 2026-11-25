@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import { residentReply, residentActive } from '../../api/_lib/resident-bot.ts';
-import { residentWho, residentWebhook } from '../../api/_lib/resident-bot-webhook.ts';
+import { residentWho, residentWebhook, submitSignup } from '../../api/_lib/resident-bot-webhook.ts';
 import { render } from '../../api/_lib/templates.ts';
 
 const ctx = { tenantId: 'T', who: '5511988887777', appUrl: 'https://app.test', slug: 'aurora', tenantName: 'Aurora' };
@@ -183,4 +183,114 @@ test('sem conta confirmada na sessão (vínculo caiu) volta a pedir e-mail; nada
   const r = await residentReply(db, ctx, action('rb:w:0'), session({ options: ['rb:w:0'] }));
   assert.equal(r.session.step, 'email');
   assert.ok(!db.calls.some((c) => c.fn === 'resident_bot_call'));
+});
+
+// ---------------------------------------------------------------- unidades reais (formato do Azaléia: 30 blocos x 12 + extras)
+const AZ_BLOCKS = [...Array.from({ length: 15 }, (_, i) => [`${i + 1}A`, `${i + 1}B`]).flat()];
+const AZ_UNITS = [...AZ_BLOCKS.flatMap((b) => ['01', '02', '03', '04', '11', '12', '13', '14', '21', '22', '23', '24'].map((label) => ({ block: b, label }))),
+  { block: '1', label: '11' }, { block: 'QA', label: '01' }];
+function signupDb() {
+  return svc({ resident_bot_signup_info: () => ({ slug: 'aurora', units: { has_blocks: true, units: AZ_UNITS }, term: { hash: 'h', version: '1' } }) });
+}
+const atBlock = session({ authenticated: false, step: 'signup_block', draft: { name: 'Ana Souza', phone: '5511988887777' } });
+
+test('cadastro: percorre TODOS os blocos do condomínio em ordem natural, sem cortar nenhum', async () => {
+  const db = signupDb();
+  let r = await residentReply(db, ctx, text('qualquer coisa que não existe'), atBlock);
+  assert.match(r.card.text, /Não encontrei/);
+  assert.match(r.card.text, /32 no condomínio/);
+  const seen = [];
+  for (let i = 0; i < 10; i++) {
+    seen.push(...r.card.sections[0].rows.filter((x) => x.id.startsWith('rb:sb:')).map((x) => x.title));
+    const next = r.options.find((o) => o.startsWith('rb:bp:') && Number(o.slice(6)) > (r.session.page ?? -1) && r.card.sections[0].rows.find((x) => x.id === o)?.title === 'Próximos');
+    if (!next) break;
+    r = await residentReply(db, ctx, action(next), r.session);
+  }
+  assert.equal(seen.length, 32, 'todos os blocos aparecem');
+  assert.deepEqual(seen.slice(0, 4), ['1', '1A', '1B', '2A'], 'ordem natural');
+  assert.ok(seen.indexOf('2A') < seen.indexOf('10A'), '2A antes de 10A');
+  assert.ok(r.card.sections[0].rows.length <= 10, 'lista do WhatsApp tem no máximo 10 linhas');
+});
+
+test('cadastro: todas as 12 unidades do bloco aparecem (com páginas) e o bloco escolhido é o certo', async () => {
+  const db = signupDb();
+  const blocks = await residentReply(db, ctx, text('nada'), atBlock);
+  const id8a = await (async () => {
+    let r = blocks;
+    for (;;) {
+      const row = r.card.sections[0].rows.find((x) => x.title === '8A');
+      if (row) return { id: row.id, r };
+      const next = r.card.sections[0].rows.find((x) => x.title === 'Próximos');
+      r = await residentReply(db, ctx, action(next.id), r.session);
+    }
+  })();
+  let r = await residentReply(db, ctx, action(id8a.id), id8a.r.session);
+  assert.match(r.card.text, /Bloco 8A/); assert.match(r.card.text, /12 unidades/);
+  const labels = [];
+  for (let i = 0; i < 5; i++) {
+    labels.push(...r.card.sections[0].rows.filter((x) => x.id.startsWith('rb:su:')).map((x) => x.title));
+    const next = r.card.sections[0].rows.find((x) => x.title === 'Próximas');
+    if (!next) break;
+    r = await residentReply(db, ctx, action(next.id), r.session);
+  }
+  assert.deepEqual(labels, ['01', '02', '03', '04', '11', '12', '13', '14', '21', '22', '23', '24']);
+});
+
+test('cadastro: digitar bloco e unidade encontra direto (8A 12, bl 8a ap 12, 8a12); 8A não confunde com 18A', async () => {
+  for (const q of ['8A 12', 'bl 8a ap 12', '8a12', 'Bloco 8A apto 12']) {
+    const r = await residentReply(signupDb(), ctx, text(q), atBlock);
+    assert.match(r.card.text, /Unidade: 8A 12/, q);
+    assert.equal(r.session.draft.block, '8A'); assert.equal(r.session.draft.unit, '12');
+    assert.ok(r.options.some((o) => o.startsWith('rb:accept:')), q);
+  }
+  const blockOnly = await residentReply(signupDb(), ctx, text('10b'), atBlock);
+  assert.match(blockOnly.card.text, /Bloco 10B/);
+  const many = await residentReply(signupDb(), ctx, text('12'), atBlock);
+  assert.match(many.card.text, /Encontrei \d+ unidades/);
+  const pick = await residentReply(signupDb(), ctx, action(many.options[0]), many.session);
+  assert.match(pick.card.text, /Confira seu cadastro/);
+  const none = await residentReply(signupDb(), ctx, text('99Z 77'), atBlock);
+  assert.match(none.card.text, /Não encontrei/);
+});
+
+function signupSvc({ account, bindError = null, signupError = null }) {
+  const log = { rpc: [], created: [] };
+  return { log, svc: {
+    rpc: async (fn, args) => {
+      log.rpc.push(fn);
+      if (fn === 'resident_bot_account') return { data: account, error: null };
+      if (fn === 'resident_bot_account_bind') return { data: null, error: bindError };
+      if (fn === 'resident_bot_signup') return { data: { request_id: 'R', status: 'pending' }, error: signupError };
+      return { data: null, error: { message: fn } };
+    },
+    auth: { admin: { createUser: async (u) => { log.created.push(u); return { data: { user: { id: 'NEW' } }, error: null }; } } },
+  } };
+}
+const d = { name: 'Ana Souza', phone: '5511988887777', block: '8A', unit: '12', privacy_hash: 'h' };
+
+test('pré-cadastro: conta nova criada sem senha, marcada pelo servidor, vinculada e pedido enviado', async () => {
+  const { svc: s, log } = signupSvc({ account: { email: 'a@x.test', user_id: null, confirmed: false } });
+  const r = await submitSignup(s, ctx, d);
+  assert.equal(r.ok, true, r.text);
+  assert.equal(log.created.length, 1);
+  assert.equal(log.created[0].password, undefined, 'nunca define senha');
+  assert.deepEqual(log.created[0].app_metadata, { resident_bot_provisioned: true });
+  assert.deepEqual(log.rpc, ['resident_bot_account', 'resident_bot_account_bind', 'resident_bot_signup']);
+});
+
+test('pré-cadastro: nova tentativa com a conta criada pelo bot antes (erro anterior) reaproveita a conta', async () => {
+  const { svc: s, log } = signupSvc({ account: { email: 'a@x.test', user_id: 'OLD', confirmed: true, bot_provisioned: true } });
+  const r = await submitSignup(s, ctx, d);
+  assert.equal(r.ok, true, r.text);
+  assert.equal(log.created.length, 0, 'não cria outra conta');
+  assert.ok(log.rpc.includes('resident_bot_account_bind'));
+});
+
+test('pré-cadastro: conta comum já existente pede acesso sem nada de senha; recusa do banco aparece ao morador', async () => {
+  const ok = signupSvc({ account: { email: 'a@x.test', user_id: 'U', confirmed: true, bot_provisioned: false } });
+  assert.equal((await submitSignup(ok.svc, ctx, d)).ok, true);
+  assert.ok(!ok.log.rpc.includes('resident_bot_account_bind'));
+  const bad = signupSvc({ account: { email: 'a@x.test', user_id: null }, bindError: { message: 'Conta não elegível' } });
+  const r = await submitSignup(bad.svc, ctx, d);
+  assert.equal(r.ok, false); assert.match(r.text, /portal/);
 });
