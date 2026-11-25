@@ -32,6 +32,8 @@ async function withEnv(fn, { gate = null, channel = null, motor = {}, links = []
     if (u.includes('/rest/v1/assistant_messages')) { log.messages++; return new Response(null, { status: 201 }); }
     if (u.includes('/rest/v1/assistant_sessions')) return init.method === 'GET' || !init.method ? Response.json(null) : new Response(null, { status: 201 });
     if (u.includes('/rpc/assistant_read')) return Response.json({ waiting: 1, overdue_7d: 0, oldest: [] });
+    if (u.includes('/rpc/resident_bot_resolve')) return Response.json({ status: 'unknown', active: true, slug: 'cond-a', tenant_name: 'Cond A', state: {}, links: [] });
+    if (u.includes('/rpc/resident_bot_save')) { log.botSaved = (log.botSaved || 0) + 1; return Response.json(null); }
     if (u.startsWith('https://wh.test/')) {
       const path = u.slice('https://wh.test'.length);
       log.motor.push({ path, method: init.method || 'GET', key: init.headers?.['x-api-key'], body });
@@ -113,11 +115,22 @@ test('webhook do condomínio: segredo de outra instância = 401; autorizado rece
   }, { channel: row, links: ['5511999990001'] });
 });
 
-test('webhook do condomínio: morador (não autorizado) não recebe nada e o telefone não é gravado', async () => {
+test('webhook do condomínio: morador respondendo aviso não recebe nada e o telefone não é gravado', async () => {
   await withEnv(async (log) => {
-    const r = await hook(msg('W0003', '5511977776666'));
-    assert.deepEqual(await r.json(), { ignored: true });
-    assert.equal(log.sent.length, 0); assert.equal(log.messages, 0);
+    const r = await hook({ ...msg('W0003', '5511977776666'), message: { conversation: 'Obrigado, já peguei!' } });
+    assert.deepEqual(await r.json(), { ok: true, ignored: 'silent' });
+    assert.equal(log.sent.length, 0); assert.equal(log.messages, 0); assert.equal(log.botSaved, undefined);
+  }, { channel: row, links: [] });
+});
+
+test('webhook do condomínio: morador que escreve "oi" abre o atendimento do morador (pede e-mail), não a IA', async () => {
+  await withEnv(async (log) => {
+    const r = await hook(msg('W0005', '5511977776666'));
+    assert.equal(r.status, 200);
+    assert.equal(log.sent.length, 1);
+    assert.match(log.sent[0].text, /e-mail/);
+    assert.ok(!/Portaria Prime IA/.test(log.sent[0].text), 'morador não fala com a IA da equipe');
+    assert.equal(log.botSaved, 1);
   }, { channel: row, links: [] });
 });
 

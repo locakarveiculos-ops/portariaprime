@@ -96,6 +96,9 @@ async function run(request: Request) {
   // Assistente no WhatsApp: confirmações vencidas e ids de mensagem antigos.
   const { data: assistant, error: ae } = await svc.rpc('assistant_housekeeping');
   report.assistant = ae ? { error: ae.message } : assistant;
+  // Atendimento do morador: códigos, links do QR, conversas paradas e links de senha vencidos.
+  const { data: residentBot, error: rbe } = await svc.rpc('resident_bot_housekeeping');
+  report.resident_bot = rbe ? { error: rbe.message } : residentBot;
 
   // Dispositivos gerenciados: retenção (eventos 180 dias, tokens vencidos, senhas Wi-Fi não entregues).
   const { data: mdm, error: me } = await svc.rpc('mdm_retention');

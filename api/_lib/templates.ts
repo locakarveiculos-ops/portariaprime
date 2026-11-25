@@ -23,6 +23,10 @@ export interface MessageCtx {
     picked_up_by?: string | null; storage_code?: string | null; unit?: string; protocol?: string | null; id?: string; pdf_path?: string | null;
   } | null;
   support?: { ticket_id?: string; protocol?: string } | null;
+  /** Código de 6 dígitos do atendimento pelo WhatsApp (só enquanto válido). */
+  bot_code?: string | null;
+  /** Cadastro feito pelo WhatsApp e aprovado: link pessoal para criar a senha (7 dias, uso único). */
+  password_link?: { token?: string; expires_at?: string } | null;
   contract?: {
     id?: string; document_version?: string; document_sha256?: string; accepted_at?: string; plan_name?: string; cycle?: string;
     amount_cents?: number; representative_name?: string; pdf_path?: string | null; pdf_sha256?: string | null;
@@ -129,6 +133,18 @@ Equipe Portaria Prime`,
       const r = ctx.resident || {};
       const portal = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}`;
       const name = r.name || 'morador(a)';
+      const pw = /^[0-9a-f]{64}$/.test(ctx.password_link?.token || '') ? ctx.password_link! : null;
+      if (ok && pw) {
+        // Cadastro feito pelo WhatsApp: a conta ainda não tem senha. Token no fragmento (#): fora de logs e do Referer.
+        const url = `${portal}/criar-senha#${pw.token}`;
+        const until = fmt(pw.expires_at, ctx.timezone).split(',')[0];
+        return {
+          subject: `Cadastro aprovado — crie sua senha — ${ctx.tenant_name}`,
+          intro: `Olá, ${name}. Seu cadastro no ${ctx.tenant_name} foi aprovado! Crie sua senha pelo link pessoal abaixo (válido até ${until}, uso único) e entre no aplicativo do condomínio com seu e-mail e a nova senha.`,
+          whatsapp: `Olá, ${wa(name)}! 👋\n\nSeu cadastro no *${wa(ctx.tenant_name)}* foi aprovado.\n\nCrie sua senha pelo link pessoal (válido até ${until}, uso único):\n${url}\n\nDepois, acesse o aplicativo: ${portal}\nEntre com seu e-mail e a senha criada. Não compartilhe este link.`,
+          lines: [['Condomínio', ctx.tenant_name], ['Unidade', r.unit], ['Link válido até', until]], cta: ['Criar minha senha', url],
+        };
+      }
       return ok ? {
         subject: `Bem-vindo ao ${ctx.tenant_name}!`,
         intro: `Olá, ${name}. Seu cadastro no ${ctx.tenant_name} foi aprovado! Agora você pode acessar o aplicativo do condomínio para acompanhar suas encomendas e correspondências. Utilize seu e-mail e a senha cadastrada.`,
@@ -162,6 +178,17 @@ case 'resident_invite': {
           + (r.unit ? `Unidade: ${wa(r.unit)}\n\n` : '')
           + `Confirme seus dados e crie sua senha (link pessoal, vale 30 dias):\n${url}\n\nApós o envio, a administração aprova o cadastro.`,
         lines: [['Condomínio', ctx.tenant_name], ['Unidade', r.unit]], cta: ['Confirmar meu cadastro', url],
+      };
+    }
+    case 'resident_bot_code': {
+      const code = /^\d{6}$/.test(ctx.bot_code || '') ? ctx.bot_code! : null;
+      // Sem código válido (já usado ou vencido): o envio falha em vez de mandar e-mail vazio.
+      if (!code) throw new Error('Código do WhatsApp indisponível');
+      const portal = `${appUrl}/c/${encodeURIComponent(ctx.tenant_slug)}`;
+      return {
+        subject: `Código de acesso pelo WhatsApp — ${ctx.tenant_name}`,
+        intro: `Seu código para o atendimento do ${ctx.tenant_name} no WhatsApp é ${code}. Digite-o na conversa. Ele vale por 10 minutos e só pode ser usado uma vez. Se você não pediu, ignore este e-mail; ninguém da administração vai pedir este código.`,
+        lines: [['Código', code], ['Validade', '10 minutos']], cta: ['Abrir o aplicativo', portal],
       };
     }
     case 'ops_alert':

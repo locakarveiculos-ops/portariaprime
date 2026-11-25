@@ -61,6 +61,10 @@ const RequestAccess = lazy(() => import('./pages/PortalPage').then(m => ({ defau
 const PorterSignup = lazy(() => import('./pages/PorterSignupPage').then(m => ({ default: m.PorterSignupPage })));
 const PorterLogin = lazy(() => import('./pages/PorterLoginPage').then(m => ({ default: m.PorterLoginPage })));
 const PorterAudit = lazy(() => import('./pages/tenant/PorterAuditPage').then(m => ({ default: m.PorterAuditPage })));
+const residentBotPages = () => import('./pages/ResidentBotPages');
+const ResidentQr = lazy(() => residentBotPages().then(m => ({ default: m.ResidentQrPage })));
+const ResidentTerm = lazy(() => residentBotPages().then(m => ({ default: m.ResidentTermPage })));
+const ResidentPassword = lazy(() => residentBotPages().then(m => ({ default: m.ResidentPasswordPage })));
 
 const RESIDENT_AREAS = new Set(['inicio', 'historico', 'notificacoes', 'conta', 'encomenda', 'comprovante', 'morador', 'avisos', 'visitantes']);
 
@@ -97,6 +101,9 @@ function Routes() {
   if (porterSignupMatch) return <PorterSignup slug={porterSignupMatch[1]} />;
   const porterLoginMatch = path.match(/^\/c\/([a-z0-9-]+)\/equipe\/entrar\/?$/);
   if (porterLoginMatch) return <PorterLogin slug={porterLoginMatch[1]} />;
+  if (path === '/qr') return <ResidentQr />;
+  if (route?.area === 'termo-dados') return <ResidentTerm slug={route.slug} />;
+  if (route?.area === 'criar-senha') return <ResidentPassword slug={route.slug} />;
   if (configError) return <main className="max-w-lg mx-auto p-6"><PortariaPrimeLogo /><Alert tone="danger">{configError}</Alert></main>;
   // /totem: equipe logada vai ao totem da equipe (OCR, entrega); sem login segue o totem público pareado.
   if (route?.area === 'totem') {

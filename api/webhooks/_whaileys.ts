@@ -3,8 +3,9 @@
  *   1. corpo bruto limitado + HMAC x-whaileys-signature com o segredo DA INSTÂNCIA (janela de 5 min, tempo constante) → senão 401;
  *      instâncias aceitas: a da plataforma (WHAILEYS_INSTANCE) e as ppia-<condomínio> conectadas no painel do síndico;
  *   2. remetente com número real; no número da plataforma, desconhecido recebe recusa genérica (não revela nada);
- *      no número do condomínio, só os autorizados DAQUELE condomínio são atendidos e o resto fica em silêncio
- *      (o chip pode ser o mesmo da Evolution: moradores respondendo avisos não falam com a IA);
+ *      no número do condomínio, a equipe autorizada DAQUELE condomínio vai para a IA; os demais vão para o atendimento do
+ *      morador (resident-bot-webhook), que só abre com palavra de início ou botão e fica em silêncio fora dele
+ *      (o chip pode ser o mesmo da Evolution: moradores respondendo avisos não recebem nada automático);
  *   3. id da mensagem gravado ANTES de processar (entrega "pelo menos uma vez": repetida = sem efeito);
  *   4. responde e envia a resposta pela mesma instância. Mutação só depois de ✅ (assistant_confirm).
  */
@@ -14,6 +15,7 @@ import { optionalEnv } from '../_lib/env.js';
 import { CHANNEL_RE, parseIncoming, sender, verifyWhaileysSignature, whaileysEnabled, whaileysKnownPhones, whaileysSend, type Channel, type IncomingKey } from '../_lib/whaileys.js';
 import { mainMenu, respond, type Link } from '../_lib/assistant.js';
 import { numberedCard } from '../_lib/whaileys.js';
+import { residentWebhook } from '../_lib/resident-bot-webhook.js';
 
 interface Payload { instanceKey?: string; key?: IncomingKey; message?: unknown; media?: { mimetype?: string; data?: string } }
 type Svc = ReturnType<typeof serviceClient>;
@@ -53,6 +55,8 @@ export async function whaileysWebhook(request: Request): Promise<Response> {
       if (box.tenantId) q = q.eq('tenant_id', box.tenantId);
       const { data } = await q.limit(50);
       if (data?.length) await whaileysKnownPhones(data.map((r) => r.phone), box.ch).catch(() => {});
+      // Número do condomínio: o morador continua atendido pelo LID (identidade confirmada por e-mail + código).
+      if (box.tenantId) return json(await residentWebhook(svc, { ch: box.ch, tenantId: box.tenantId }, body.key!, body.message, msgId));
     }
     return json({ ignored: true });
   }
@@ -60,8 +64,9 @@ export async function whaileysWebhook(request: Request): Promise<Response> {
   const { data: links } = await svc.rpc('assistant_resolve', { p_phone: who.phone });
   // Número do condomínio: só os vínculos dele (o mesmo telefone pode estar autorizado em outro condomínio).
   const list = ((links || []) as Link[]).filter((l) => !box.tenantId || l.tenant_id === box.tenantId);
-  // Desconhecido no número do condomínio: silêncio, sem gravar o telefone de quem só respondeu um aviso.
-  if (!list.length && box.tenantId) return json({ ignored: true });
+  // Quem não é equipe no número do condomínio: atendimento do morador (botões, sem IA). Fora de um atendimento aberto,
+  // silêncio, sem gravar o telefone de quem só respondeu um aviso.
+  if (!list.length && box.tenantId) return json(await residentWebhook(svc, { ch: box.ch, tenantId: box.tenantId }, body.key!, body.message, msgId));
 
   // Dedupe por id do provedor (unique). Repetida não processa de novo.
   const { error: dup } = await svc.from('assistant_messages').insert({ provider_id: msgId, phone: who.phone });

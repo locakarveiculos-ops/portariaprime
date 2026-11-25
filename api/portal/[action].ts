@@ -8,6 +8,7 @@
 import { handler, json, HttpError } from '../_lib/http.js';
 import { serviceClient } from '../_lib/supabase.js';
 import { appUrl, envAny } from '../_lib/env.js';
+import { isResidentBotPageAction, residentBotPage } from '../_lib/resident-bot-pages.js';
 import { esc } from '../_lib/templates.js';
 
 const SLUG = /^[a-z0-9][a-z0-9-]{1,46}[a-z0-9]$/;
@@ -32,6 +33,7 @@ export const GET = handler(async (request) => {
   const url = new URL(request.url);
   // Após o rewrite da Vercel o pathname pode ser o original (/c/slug/...); a ação vem na query.
   const action = url.searchParams.get('a') || url.pathname.split('/').pop();
+  if (isResidentBotPageAction(action)) return residentBotPage(request, action!);
   const slug = url.searchParams.get('slug');
   const base = appUrl();
 
@@ -84,3 +86,9 @@ export const GET = handler(async (request) => {
   }
   throw new HttpError(404, 'Ação desconhecida.');
 });
+
+export const POST = handler(async (request) => {
+  const url = new URL(request.url);
+  return residentBotPage(request, url.searchParams.get('a') || url.pathname.split('/').pop() || '');
+});
+
