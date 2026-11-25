@@ -102,7 +102,7 @@ test('resumo da mensagem da Evolution', () => {
 
 // ---------------------------------------------------------------- histórico guardado no Portaria Prime
 test('lista: mais recentes primeiro, usando a mensagem guardada (a Evolution parou de gravar)', async () => {
-  const OLD = '222222222222222@lid';
+  const NEW = '222222222222222@lid';
   const r = await run('chat-list', {}, { stored: [
     { id: 'NOVA1', jid: JID, alt_jid: null, from_me: true, at: '2026-11-24T12:00:00Z', text: 'enviada agora pelo painel', media: null, push_name: null },
   ] });
@@ -110,7 +110,11 @@ test('lista: mais recentes primeiro, usando a mensagem guardada (a Evolution par
   const c = r.body.chats[0];
   assert.equal(c.last.text, 'enviada agora pelo painel', 'última mensagem é a guardada, não a congelada da Evolution');
   assert.equal(c.at, Date.parse('2026-11-24T12:00:00Z'));
-  assert.ok(OLD);
+  const fresh = await run('chat-list', {}, { stored: [
+    { id: '3EB0FRESH123', jid: NEW, from_me: false, at: '2026-11-24T13:00:00Z', text: 'conversa nova', media: null, push_name: 'Nova pessoa' },
+  ] });
+  assert.equal(fresh.body.chats[0].jid, NEW, 'conversa só do webhook aparece no topo');
+  assert.equal(fresh.body.chats[0].last.text, 'conversa nova');
 });
 
 test('lista: liga o webhook das conversas só na instância do condomínio e sem sobrescrever outro webhook', async () => {

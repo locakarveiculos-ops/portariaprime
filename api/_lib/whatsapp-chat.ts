@@ -90,7 +90,7 @@ export async function ensureChatHook(tenantId: string): Promise<'ok' | 'other' |
   const svc = serviceClient();
   const { data: row } = await svc.from('whatsapp_chat_hooks').select('secret').eq('tenant_id', tenantId).maybeSingle();
   const url = `${appUrl()}/api/webhooks/evolution-chat`;
-  const cur = await evo(`/webhook/find/${encodeURIComponent(inst)}`, null, 10000, 'GET').catch(() => null);
+  const cur = await evo(`/webhook/find/${encodeURIComponent(inst)}`, null, 10000, 'GET');
   const own = cur?.url === url && row && cur?.headers?.['x-pp-secret'] === row.secret && cur?.enabled
     && CHAT_EVENTS.every((e) => (cur.events || []).includes(e));
   if (own) return 'ok';
@@ -145,7 +145,11 @@ export async function whatsappChat(client: SupabaseClient, tenantId: string, op:
     // Desconectado: a Evolution só responde erro genérico; avisa o motivo antes de subir o anexo para ela.
     if (await whatsAppState(instanceOf(tenantId)) === 'closed') throw new HttpError(409, 'WhatsApp do condomínio desconectado. Reconecte lendo o QR em Configurações › Integrações e envie de novo.');
     const chats: any[] = await evo(`/chat/findChats/${inst}`, { where: { remoteJid: jid } }, 10000);
-    if (!Array.isArray(chats) || !chats.some((c) => c?.remoteJid === jid)) throw new HttpError(404, 'Conversa não encontrada neste WhatsApp.');
+    if (!Array.isArray(chats) || !chats.some((c) => c?.remoteJid === jid)) {
+      const { data: known, error } = await serviceClient().from('whatsapp_chat_messages').select('id')
+        .eq('tenant_id', tenantId).eq('jid', jid).limit(1);
+      if (error || !known?.length) throw new HttpError(404, 'Conversa não encontrada neste WhatsApp.');
+    }
     await gate(kind);
   }
   const svc = serviceClient();
@@ -176,7 +180,12 @@ export async function whatsappChat(client: SupabaseClient, tenantId: string, op:
     const { data: who, error: we } = refs.length ? await client.rpc('whatsapp_chat_who', { p_tenant: tenantId, p_refs: refs }) : { data: [], error: null };
     if (we) rpcError(we);
     const byRef = new Map<string, any>((who || []).map((w: any) => [w.ref, w]));
-    const rows = (Array.isArray(chats) ? chats : []).filter((c) => JID.test(String(c?.remoteJid || ''))).map((c) => {
+    const conversations = new Map<string, any>((Array.isArray(chats) ? chats : [])
+      .filter((c) => JID.test(String(c?.remoteJid || ''))).map((c) => [c.remoteJid, c]));
+    for (const [jid, m] of lastStored) {
+      if (!conversations.has(jid)) conversations.set(jid, { remoteJid: jid, pushName: m.push_name, updatedAt: m.at });
+    }
+    const rows = [...conversations.values()].map((c) => {
       const w = (byJid.get(c.remoteJid) || []).map((id) => byRef.get(id)).find(Boolean);
       const evoLast = c.lastMessage ? summarize(c.lastMessage) : null;
       const st = lastStored.get(c.remoteJid);
@@ -197,16 +206,18 @@ export async function whatsappChat(client: SupabaseClient, tenantId: string, op:
   if (op === 'messages') {
     const page = Math.min(Math.max(Number(body.page) || 1, 1), 50);
     // Guardadas no Portaria Prime + as antigas da Evolution (até ela parar de gravar), mescladas por id, mais recentes primeiro.
-    const [{ data: own }, d] = await Promise.all([
-      svc.from('whatsapp_chat_messages').select('id, from_me, at, text, media, file_name').eq('tenant_id', tenantId).eq('jid', jid)
+    const [{ data: own, count: ownCount, error: ownError }, d] = await Promise.all([
+      svc.from('whatsapp_chat_messages').select('id, from_me, at, text, media, file_name', { count: 'exact' }).eq('tenant_id', tenantId).eq('jid', jid)
         .order('at', { ascending: false }).range(0, page * PAGE - 1),
       evo(`/chat/findMessages/${inst}`, { where: { key: { remoteJid: jid } }, offset: page * PAGE, page: 1 }).catch(() => null),
     ]);
+    if (ownError) throw new HttpError(503, 'Não foi possível carregar o histórico. Tente novamente.');
     const merged = new Map<string, any>();
     for (const r of (d?.messages?.records || []).map(summarize)) if (r.id) merged.set(r.id, r);
     for (const r of own || []) merged.set(r.id, { id: r.id, fromMe: r.from_me, at: Date.parse(r.at), text: r.text, media: r.media, fileName: r.file_name, status: null });
     const all = [...merged.values()].sort((a, b) => b.at - a.at);
-    const total = Math.max(all.length, Number(d?.messages?.total) || 0);
+    const overlap = (own || []).filter((r) => (d?.messages?.records || []).some((old: any) => old?.key?.id === r.id)).length;
+    const total = Math.max(all.length, (ownCount ?? own?.length ?? 0) + (Number(d?.messages?.total) || 0) - overlap);
     return json({ messages: all.slice((page - 1) * PAGE, page * PAGE), pages: Math.max(1, Math.ceil(total / PAGE)), page });
   }
 
